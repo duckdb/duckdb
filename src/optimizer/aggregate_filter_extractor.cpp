@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/aggregate_filter_extractor.hpp"
 
+#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/removed_subtree_effects.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -57,7 +58,8 @@ unique_ptr<Expression> AggregateFilterExtractor::Extract(const vector<idx_t> &ag
 	for (auto aggregate_idx : aggregate_indices) {
 		auto &aggregate = aggr.expressions[aggregate_idx]->Cast<BoundAggregateExpression>();
 		auto &filter = aggregate.GetFilter();
-		if (!filter || aggregate.IsVolatile() || ExpressionBarrier::Contains(*filter)) {
+		if (!filter || aggregate.IsVolatile() || ExpressionBarrier::Contains(*filter) ||
+		    !FilterCombiner::CanMatchExpression(*filter)) {
 			return nullptr;
 		}
 		bool can_throw = false;

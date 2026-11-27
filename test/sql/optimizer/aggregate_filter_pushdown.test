@@ -308,3 +308,20 @@ query I
 SELECT current_setting('enable_logging');
 ----
 0
+
+# Predicate equality must not conflate signed zeros while factoring an input filter.
+statement ok
+CREATE TABLE aggregate_filter_identity AS SELECT i::DOUBLE AS x FROM range(1, 5) t(i);
+
+statement ok
+SET disabled_optimizers='common_subexpressions';
+
+query II
+SELECT sum(x) FILTER (WHERE signbit(atan2('0.0'::DOUBLE, x)) AND x = 1),
+       count(*) FILTER (WHERE signbit(atan2('-0.0'::DOUBLE, x)) AND x = 2)
+FROM aggregate_filter_identity;
+----
+NULL	1
+
+statement ok
+RESET disabled_optimizers;
