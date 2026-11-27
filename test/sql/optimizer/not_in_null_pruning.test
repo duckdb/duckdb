@@ -17,18 +17,18 @@ SELECT count(*) FROM not_in_null WHERE k NOT IN (42, 84, NULL, 23, 57);
 query II
 EXPLAIN SELECT * FROM not_in_null WHERE k NOT IN (42, 84, NULL, 23, 57);
 ----
-physical_plan	<REGEX>:.*EMPTY_RESULT.*
+physical_plan	<REGEX>:.*Empty Result.*
 
 # The location of NULL and duplicate constants do not change the proof.
 query II
 EXPLAIN SELECT * FROM not_in_null WHERE k NOT IN (NULL, 42, 42);
 ----
-physical_plan	<REGEX>:.*EMPTY_RESULT.*
+physical_plan	<REGEX>:.*Empty Result.*
 
 query II
 EXPLAIN SELECT * FROM not_in_null WHERE NOT (k IN (42, 84, NULL));
 ----
-physical_plan	<REGEX>:.*EMPTY_RESULT.*
+physical_plan	<REGEX>:.*Empty Result.*
 
 # Inclusion still admits matching values; exclusion without NULL admits non-matches.
 query I
@@ -74,7 +74,7 @@ CREATE TABLE not_in_null_strings AS SELECT * FROM (VALUES ('a'), ('b'), ('z'), (
 query II
 EXPLAIN SELECT * FROM not_in_null_strings WHERE s NOT IN ('a', 'z', NULL);
 ----
-physical_plan	<REGEX>:.*EMPTY_RESULT.*
+physical_plan	<REGEX>:.*Empty Result.*
 
 query TT
 SELECT s, s NOT IN ('a', 'z', NULL) FROM not_in_null_strings ORDER BY s NULLS FIRST;
