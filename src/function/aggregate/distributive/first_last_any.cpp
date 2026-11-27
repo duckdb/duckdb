@@ -205,15 +205,6 @@ struct FirstFunction : public FirstFunctionBase {
 			target = source;
 		}
 	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || !state.value_is_valid) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
 };
 
 template <bool LAST, bool SKIP_NULLS>
@@ -396,10 +387,10 @@ AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
 	    AggregateFunction({type}, type, AggregateFunction::StateSize<FirstState<T>>,
 	                      AggregateFunction::StateInitialize<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
 	                      AggregateFunction::UnaryScatterUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
-	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
-	                      AggregateFunction::StateFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>, nullptr,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
 	AggregateFunction::WireStructStateType<FirstState<T>>(result);
+	AggregateFunction::UseStateLayoutFinalize<FirstState<T>>(result);
 	return result;
 }
 

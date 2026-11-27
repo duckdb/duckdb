@@ -1,0 +1,131 @@
+# name: test/sql/cte/recursive_cte_key_state_projection_logging.test
+# description: Keyed recursive payloads read the finalized value from the state exactly for state-layout-finalized aggregates
+# group: [cte]
+
+statement ok
+SET max_execution_time=10000;
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+# sum lives in core_functions, count/min/max/first/last/any_value in the core library. All of them finalize
+# through their state layout (UseStateLayoutFinalize), so every payload of this key reads from its state.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query IIIRIIIII
+WITH RECURSIVE t(k, c, s, h, d, lo, hi, f, l, a) USING KEY
+	(k, count(c), sum(s), sum(h), sum(d), min(lo), max(hi), first(f), last(l), any_value(a)) AS (
+	SELECT i, 1, i::BIGINT, i::HUGEINT, i::DOUBLE, i, i, i, i, i FROM range(4) r(i)
+	UNION
+	SELECT n.k, 1, 1::BIGINT, 1::HUGEINT, 0.5::DOUBLE, n.lo - 1, n.hi + 1, 99, n.l + 10, 123
+	FROM t n WHERE n.hi < n.k + 2
+)
+SELECT k, c, s, h, d, lo, hi, f, l FROM t ORDER BY k;
+----
+0	3	2	2	1.0	-2	2	0	20
+1	3	3	3	2.0	-1	3	1	21
+2	3	4	4	3.0	0	4	2	22
+3	3	5	5	4.0	1	5	3	23
+
+query II
+SELECT count(*) > 0, bool_and(info.state_projected_payloads::UBIGINT=9)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalRecursiveCTE' AND event='RuntimeMetrics';
+----
+true	true
+
+# A core_functions sum alone: the function-identity check holds across the library boundary.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+WITH RECURSIVE t(k, s) USING KEY (k, sum(s)) AS (
+	SELECT 0, 1::BIGINT
+	UNION
+	SELECT n.k, 1::BIGINT FROM t n JOIN recurring.t r USING (k) WHERE r.s < 4
+)
+SELECT k, s FROM t;
+----
+0	4
+
+query II
+SELECT count(*) > 0, bool_and(info.state_projected_payloads::UBIGINT=1)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalRecursiveCTE' AND event='RuntimeMetrics';
+----
+true	true
+
+# The UHUGEINT sum accumulates in its result type and projects like the HUGEINT sum.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+WITH RECURSIVE t(k, s) USING KEY (k, sum(s)) AS (
+	SELECT 0, 1::UHUGEINT
+	UNION
+	SELECT n.k, 1::UHUGEINT FROM t n JOIN recurring.t r USING (k) WHERE r.s < 4
+)
+SELECT k, s FROM t;
+----
+0	4
+
+query II
+SELECT count(*) > 0, bool_and(info.state_projected_payloads::UBIGINT=1)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalRecursiveCTE' AND event='RuntimeMetrics';
+----
+true	true
+
+# Aggregates with their own finalize keep a region slot: avg divides, fsum compensates, the decimal sum
+# checks for overflow, and the string min returns a non-constant-size value.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query IRRRI
+WITH RECURSIVE t(k, m, ks, sd, sm) USING KEY (k, avg(m), fsum(ks), sum(sd), min(sm)) AS (
+	SELECT i % 2, i::DOUBLE, i::DOUBLE, i::DECIMAL(4,1), i::VARCHAR FROM range(4) r(i)
+	UNION
+	SELECT k, 1.0::DOUBLE, 1.0::DOUBLE, 0.5::DECIMAL(4,1), 'z' FROM t WHERE ks < 6
+)
+SELECT k, m, ks, sd, sm FROM t ORDER BY k;
+----
+0	1.0	6.0	4.0	0
+1	1.5	6.0	5.0	1
+
+query II
+SELECT count(*) > 0, bool_and(info.state_projected_payloads::UBIGINT=0)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalRecursiveCTE' AND event='RuntimeMetrics';
+----
+true	true
+
+# Mixed payload: only the sum projects, the avg keeps its slot.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query IIR
+WITH RECURSIVE t(k, s, m) USING KEY (k, sum(s), avg(m)) AS (
+	SELECT i % 2, i::BIGINT, i::DOUBLE FROM range(4) r(i)
+	UNION
+	SELECT k, 3::BIGINT, 1.0::DOUBLE FROM t WHERE s < 10
+)
+SELECT k, s, m FROM t ORDER BY k;
+----
+0	11	1.0
+1	10	1.5
+
+query II
+SELECT count(*) > 0, bool_and(info.state_projected_payloads::UBIGINT=1)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalRecursiveCTE' AND event='RuntimeMetrics';
+----
+true	true
+
+statement ok
+CALL disable_logging();

@@ -537,4 +537,40 @@ struct AggregateStateLayout {
 	bool spill_opaque_arena_memory = false;
 };
 
+struct AggregateFinalizeInputData;
+
+//! The finalized value of a state whose layout is a constant-size value, possibly wrapped in optionals and
+//! single-field structs: the value bytes at value_offset, NULL when any flag byte is zero. A function finalized
+//! by this read (see AggregateFunction::UseStateLayoutFinalize) lets readers of frozen states perform it directly.
+struct AggregateStateValueRead {
+	static constexpr idx_t MAX_FLAGS = 2;
+	//! The finalize performing the read, specialized for its width and flag count
+	typedef void (*finalize_t)(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                           idx_t count, idx_t offset);
+
+	idx_t value_offset = 0;
+	//! Byte width of the value, zero when the layout has no such read
+	idx_t value_width = 0;
+	idx_t flag_count = 0;
+	idx_t flag_offsets[MAX_FLAGS] = {};
+	finalize_t finalize = nullptr;
+
+	bool IsValid() const {
+		return value_width != 0;
+	}
+	DUCKDB_API static AggregateStateValueRead FromField(const AggregateStateField &field);
+
+	//! Copies the value of the state at state_ptr to target; returns false when the value is NULL
+	template <idx_t WIDTH, idx_t FLAG_COUNT>
+	inline bool Read(const_data_ptr_t state_ptr, data_ptr_t target) const {
+		for (idx_t flag_idx = 0; flag_idx < FLAG_COUNT; flag_idx++) {
+			if (state_ptr[flag_offsets[flag_idx]] == 0) {
+				return false;
+			}
+		}
+		memcpy(target, state_ptr + value_offset, WIDTH);
+		return true;
+	}
+};
+
 } // namespace duckdb

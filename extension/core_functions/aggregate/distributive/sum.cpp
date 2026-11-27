@@ -135,15 +135,6 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		LOCAL_OP::template Execute<STATE>(local, input, count);
 	}
 
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
-
 	template <class STATE_TYPE, class INPUT_TYPE>
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
@@ -425,10 +416,11 @@ template <class OP>
 struct DecimalSumOperation : public OP {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		OP::template Finalize<T, STATE>(state, target, finalize_data);
 		if (!state.is_set) {
+			finalize_data.ReturnNull();
 			return;
 		}
+		target = state.value;
 		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
 		if (target >= max_value || target <= -max_value) {
 			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",

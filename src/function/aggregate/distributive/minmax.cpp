@@ -118,15 +118,6 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 		state.value = REDUCE_OP::template Operation<INPUT_TYPE>(state.value, input);
 	}
 
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {

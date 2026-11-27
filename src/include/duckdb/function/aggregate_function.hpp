@@ -339,6 +339,8 @@ public:
 	aggregate_rewrite_cost_t rewrite_cost = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
+	//! The plain read of the finalized value, set by UseStateLayoutFinalize
+	optional_ptr<const AggregateStateValueRead> state_value_read;
 
 	//! Explicit state export/import callbacks for states a static field layout cannot describe (e.g. a hash map).
 	//! Must be set together; export acts as the finalize in state-export mode.
@@ -467,6 +469,10 @@ public: // Callbacks
 	auto HasStateFinalizeCallback() const -> bool { return callbacks.finalize != nullptr; }
 	auto GetStateFinalizeCallback() const -> aggregate_finalize_t { return callbacks.finalize; }
 	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { callbacks.finalize = callback; }
+
+	auto GetStateValueRead() const -> optional_ptr<const AggregateStateValueRead> { return callbacks.state_value_read; }
+	//! Whether the finalize is the plain read of GetStateValueRead
+	auto HasStateLayoutFinalize() const -> bool { return callbacks.state_value_read && callbacks.finalize == callbacks.state_value_read->finalize; }
 
 	auto HasInitLocalStateFinalizeCallback() const -> bool { return callbacks.init_local_state_finalize != nullptr; }
 	auto GetInitLocalStateFinalizeCallback() const -> aggregate_init_local_state_finalize_t { return callbacks.init_local_state_finalize; }
@@ -699,13 +705,45 @@ public:
 		}
 	}
 
+	//! Finalizes a function by the plain read its STATE layout describes; the layout must describe the finalized
+	//! value. Used for operations that define no Finalize.
+	template <class STATE>
+	static void UseStateLayoutFinalize(AggregateFunction &function) {
+		auto &read = StateValueRead<STATE>();
+		function.callbacks.state_value_read = &read;
+		function.callbacks.finalize = read.finalize;
+	}
+	//! The read of STATE, derived from its layout once
+	template <class STATE>
+	static const AggregateStateValueRead &StateValueRead() {
+		static_assert(HasStructStateType<STATE>::value || HasPrimitiveLogicalType<STATE>::value,
+		              "UseStateLayoutFinalize needs a state layout describing the finalized value");
+		if constexpr (HasStructStateType<STATE>::value) {
+			static const auto read = AggregateStateValueRead::FromField(BuildStateField<typename STATE::STATE_TYPE>());
+			return read;
+		} else {
+			static const auto read = AggregateStateValueRead::FromField(BuildStateField<STATE>());
+			return read;
+		}
+	}
+
+	template <class STATE, class RESULT_TYPE, class OP>
+	static void WireFinalize(AggregateFunction &result) {
+		if constexpr (OperationHasFinalize<STATE, RESULT_TYPE, OP>::value) {
+			result.callbacks.finalize = AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>;
+		} else {
+			UseStateLayoutFinalize<STATE>(result);
+		}
+	}
+
 	template <class STATE, class RESULT_TYPE, class OP>
 	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
-		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryClusterUpdate<STATE, OP>);
+		    AggregateFunction::StateCombine<STATE, OP>, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+		    AggregateFunction::NullaryClusterUpdate<STATE, OP>);
+		WireFinalize<STATE, RESULT_TYPE, OP>(result);
 		WireStructStateType<STATE>(result);
 		return result;
 	}
@@ -718,9 +756,9 @@ public:
 		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-		                         AggregateFunction::StateCombine<STATE, OP>,
-		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                         AggregateFunction::StateCombine<STATE, OP>, nullptr, null_handling,
 		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
+		WireFinalize<STATE, RESULT_TYPE, OP>(result);
 		// automatically wire up the destructor if the operation defines a Destroy method
 		if constexpr (OperationHasDestroy<STATE, OP>::value) {
 			result.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
@@ -781,6 +819,16 @@ public:
 	struct OperationHasInitialize : std::false_type {};
 	template <class STATE, class OP>
 	struct OperationHasInitialize<STATE, OP, initialize_void_t<decltype(OP::Initialize(std::declval<STATE &>()))>>
+	    : std::true_type {};
+
+	//! Detects whether "OP" provides a "Finalize<RESULT_TYPE, STATE>(STATE &, RESULT_TYPE &, AggregateFinalizeData &)"
+	template <class STATE, class RESULT_TYPE, class OP, class = void>
+	struct OperationHasFinalize : std::false_type {};
+	template <class STATE, class RESULT_TYPE, class OP>
+	struct OperationHasFinalize<
+	    STATE, RESULT_TYPE, OP,
+	    initialize_void_t<decltype(OP::template Finalize<RESULT_TYPE, STATE>(
+	        std::declval<STATE &>(), std::declval<RESULT_TYPE &>(), std::declval<AggregateFinalizeData &>()))>>
 	    : std::true_type {};
 
 	//! Detects whether "OP" provides a "Destroy(STATE &, AggregateInputData &)" method

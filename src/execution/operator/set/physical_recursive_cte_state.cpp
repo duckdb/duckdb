@@ -227,6 +227,9 @@ RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalR
 		for (const auto &entry : op_p.ParamsToString()) {
 			identity->operator_parameters.emplace_back(entry.first, entry.second);
 		}
+		for (auto &projection : op_p.keyed.state_projections) {
+			state_projected_payloads += projection.IsValid() ? 1 : 0;
+		}
 	}
 }
 
@@ -344,7 +347,8 @@ void RecursiveCTEMetrics::Log(const vector<unique_ptr<RecursiveCTEPartialKeyInde
 	            {"final_state_rows", to_string(final_state_rows)},
 	            {"retained_build_executions", to_string(retained_build_executions)},
 	            {"retained_cte_materializations", to_string(retained_cte_materializations)},
-	            {"retained_cte_reuses", to_string(retained_cte_reuses)}});
+	            {"retained_cte_reuses", to_string(retained_cte_reuses)},
+	            {"state_projected_payloads", to_string(state_projected_payloads)}});
 }
 
 void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const {

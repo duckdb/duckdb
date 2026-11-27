@@ -85,6 +85,104 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 	}
 }
 
+namespace {
+
+template <idx_t WIDTH, idx_t FLAG_COUNT>
+void StateLayoutFinalizeLoop(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+                             idx_t count, idx_t offset) {
+	auto &read = *finalize_input_data.function.GetStateValueRead();
+	D_ASSERT(read.value_width == WIDTH && read.flag_count == FLAG_COUNT);
+	D_ASSERT(WIDTH == GetTypeIdSize(result.GetType().InternalType()));
+	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
+		auto state = *ConstantVector::GetData<data_ptr_t>(states);
+		if (!read.Read<WIDTH, FLAG_COUNT>(state, ConstantVector::GetData(result))) {
+			ConstantVector::SetNull(result, count_t(count));
+		}
+		return;
+	}
+	D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto sdata = FlatVector::GetData<data_ptr_t>(states);
+	auto rdata = FlatVector::GetDataMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto result_idx = i + offset;
+		if (!read.Read<WIDTH, FLAG_COUNT>(sdata[i], rdata + result_idx * WIDTH)) {
+			FlatVector::SetNull(result, result_idx, true);
+		}
+	}
+}
+
+template <idx_t WIDTH>
+AggregateStateValueRead::finalize_t StateLayoutFinalizeLoopForFlags(idx_t flag_count) {
+	switch (flag_count) {
+	case 0:
+		return StateLayoutFinalizeLoop<WIDTH, 0>;
+	case 1:
+		return StateLayoutFinalizeLoop<WIDTH, 1>;
+	case 2:
+		return StateLayoutFinalizeLoop<WIDTH, 2>;
+	default:
+		return nullptr;
+	}
+}
+
+AggregateStateValueRead::finalize_t StateLayoutFinalizeLoopFor(idx_t width, idx_t flag_count) {
+	switch (width) {
+	case 1:
+		return StateLayoutFinalizeLoopForFlags<1>(flag_count);
+	case 2:
+		return StateLayoutFinalizeLoopForFlags<2>(flag_count);
+	case 4:
+		return StateLayoutFinalizeLoopForFlags<4>(flag_count);
+	case 8:
+		return StateLayoutFinalizeLoopForFlags<8>(flag_count);
+	case 16:
+		return StateLayoutFinalizeLoopForFlags<16>(flag_count);
+	default:
+		return nullptr;
+	}
+}
+
+} // namespace
+
+AggregateStateValueRead AggregateStateValueRead::FromField(const AggregateStateField &root) {
+	AggregateStateValueRead result;
+	// Optional wrappers share their parent's base, struct members are relative to the struct's base
+	idx_t base = 0;
+	reference<const AggregateStateField> field = root;
+	while (true) {
+		auto &current = field.get();
+		switch (current.kind) {
+		case AggregateFieldKind::OPTIONAL_VALUE:
+			if (result.flag_count == MAX_FLAGS || current.children.size() != 1) {
+				throw InternalException("AggregateStateValueRead: unsupported optional nesting");
+			}
+			result.flag_offsets[result.flag_count++] = base + current.field_offset;
+			field = current.children[0];
+			continue;
+		case AggregateFieldKind::STRUCT:
+			if (current.children.size() != 1) {
+				throw InternalException("AggregateStateValueRead: the state has more than one field");
+			}
+			base += current.field_offset;
+			field = current.children[0];
+			continue;
+		case AggregateFieldKind::PRIMITIVE:
+			result.value_offset = base + current.field_offset;
+			result.value_width = current.field_size;
+			result.finalize = StateLayoutFinalizeLoopFor(result.value_width, result.flag_count);
+			if (!result.finalize) {
+				throw InternalException("AggregateStateValueRead: unsupported value width %llu", result.value_width);
+			}
+			return result;
+		default:
+			throw InternalException("AggregateStateValueRead: the state holds no plain value");
+		}
+	}
+}
+
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity &&
@@ -104,8 +202,8 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       serialize == rhs.serialize && deserialize == rhs.deserialize && direct_rewrite == rhs.direct_rewrite &&
 	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
 	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&
-	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
-	       import_aggregate_state == rhs.import_aggregate_state;
+	       get_state_type == rhs.get_state_type && state_value_read == rhs.state_value_read &&
+	       export_aggregate_state == rhs.export_aggregate_state && import_aggregate_state == rhs.import_aggregate_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
