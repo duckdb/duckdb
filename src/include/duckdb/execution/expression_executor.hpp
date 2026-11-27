@@ -133,6 +133,8 @@ protected:
 	void Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 
+	void ExecuteCaseChecks(const BoundCaseExpression &expr, ExpressionState &state, const SelectionVector *sel,
+	                       idx_t count, Vector &result);
 	void Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,

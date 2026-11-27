@@ -46,9 +46,6 @@ public:
 		parameter_names = std::move(names);
 	}
 
-	//! A generated simple CASE can inline its inputs once subqueries have become plan references.
-	bool inline_after_subqueries = false;
-
 	string ToString() const override;
 	bool Equals(const BaseExpression &other) const override;
 	unique_ptr<Expression> Copy() const override;

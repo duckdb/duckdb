@@ -1,0 +1,55 @@
+# name: test/sql/function/generic/simple_case_native.test
+# description: Native simple CASE preserves per-row scope through nested selections
+# group: [generic]
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE SEQUENCE outer_s
+
+statement ok
+CREATE SEQUENCE inner_s
+
+query III
+SELECT count(*) FILTER (WHERE actual IS DISTINCT FROM expected), currval('outer_s'), currval('inner_s')
+FROM (
+    SELECT CASE WHEN i % 2 = 0 THEN
+               CASE nextval('outer_s') % 2
+                    WHEN 1 THEN i
+                    WHEN 0 THEN CASE nextval('inner_s') % 2
+                                     WHEN 1 THEN i + 10 WHEN 0 THEN i + 20 END
+               END END actual,
+           CASE i % 8 WHEN 0 THEN i WHEN 4 THEN i WHEN 2 THEN i + 10 WHEN 6 THEN i + 20 END expected
+    FROM range(10000) t(i)
+) t
+----
+0	5000	2500
+
+statement ok
+CREATE SEQUENCE all_null
+
+query II
+SELECT sum(CASE nextval('all_null') WHEN NULL THEN 1 WHEN NULL THEN 2 ELSE 0 END), currval('all_null')
+FROM range(100)
+----
+0	100
+
+query T
+SELECT CASE '01' || repeat('x', (random()*0)::INTEGER)
+       WHEN '1' THEN 'text' WHEN 1 THEN 'number' END
+----
+number
+
+query I
+SELECT CASE ('ABC' || repeat('x', (random()*0)::INTEGER)) COLLATE nocase
+       WHEN 'other' THEN 0 WHEN 'abc' THEN 1 ELSE 2 END
+----
+1
+
+query I
+SELECT TRY(CASE (SELECT CAST(i AS INTEGER)) WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 0 END)
+FROM (VALUES ('bad'), ('2')) t(i)
+----
+NULL
+20

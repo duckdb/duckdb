@@ -5,33 +5,12 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
 namespace {
 
-static bool RequiresOrderedExecution(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
-		// Lambda bodies have their own input scope and are skipped by EnumerateChildren.
-		auto &body = expr.Cast<BoundLambdaExpression>().LambdaExpr();
-		return body && RequiresOrderedExecution(*body);
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	    expr.Cast<BoundFunctionExpression>().Function().RequiresOrderedExecution()) {
-		return true;
-	}
-	bool ordered = false;
-	ExpressionIterator::EnumerateChildren(
-	    expr, [&](const Expression &child) { ordered = ordered || RequiresOrderedExecution(child); });
-	return ordered;
-}
-
 static void PropagateLambdaProperties(BoundScalarFunction &function, const Expression &lambda_expr) {
-	if (RequiresOrderedExecution(lambda_expr)) {
-		function.SetRequiresOrderedExecution(true);
-	}
 	if (lambda_expr.IsVolatile()) {
 		function.SetVolatile();
 	}

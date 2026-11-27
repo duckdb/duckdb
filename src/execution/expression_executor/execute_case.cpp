@@ -15,6 +15,8 @@ struct CaseExpressionState : public ExpressionState {
 	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
 	}
 
+	//! Indices for the existing WHEN/THEN/ELSE children stay the same with the operand appended last.
+	unique_ptr<DataChunk> selected_input;
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 };
@@ -28,6 +30,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 	}
 	result->AddChild(expr.Else());
 
+	if (expr.Operand()) {
+		result->AddChild(*expr.Operand());
+	}
 	result->Finalize();
 	return std::move(result);
 }
@@ -37,6 +42,42 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	auto &state = state_p->Cast<CaseExpressionState>();
 
 	state.intermediate_chunk.Reset();
+
+	if (!expr.Operand()) {
+		ExecuteCaseChecks(expr, state, sel, count, result);
+		return;
+	}
+
+	// A selected input can contain the same source row more than once. Number the selected
+	// occurrences densely so subsequent WHEN selections index the corresponding saved values.
+	struct OperandScope {
+		ExpressionExecutor &executor;
+		DataChunk *input;
+		ExpressionExecutorState &root;
+		optional_ptr<Vector> previous_operand;
+		~OperandScope() {
+			executor.chunk = input;
+			root.case_operand = previous_operand;
+		}
+	};
+	OperandScope scope {*this, chunk, state.root, state.root.case_operand};
+	auto &saved = state.intermediate_chunk.data.back();
+	if (sel && chunk && chunk->ColumnCount()) {
+		if (!state.selected_input) {
+			state.selected_input = make_uniq<DataChunk>();
+			state.selected_input->InitializeEmpty(chunk->GetTypes());
+		}
+		state.selected_input->Slice(*chunk, *sel, count);
+		chunk = state.selected_input.get();
+	}
+	Execute(*expr.Operand(), state.child_states.back().get(), nullptr, count, saved);
+	state.root.case_operand = &saved;
+	ExecuteCaseChecks(expr, state, nullptr, count, result);
+}
+
+void ExpressionExecutor::ExecuteCaseChecks(const BoundCaseExpression &expr, ExpressionState &state_p,
+                                           const SelectionVector *sel, idx_t count, Vector &result) {
+	auto &state = state_p.Cast<CaseExpressionState>();
 
 	// first execute the check expression
 	auto current_true_sel = &state.true_sel;
@@ -75,7 +116,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		}
 	}
 	if (current_count > 0) {
-		auto else_state = state.child_states.back().get();
+		auto else_state = state.child_states[expr.CaseChecks().size() * 2].get();
 		if (current_count == count) {
 			// everything was false, we can just evaluate the else expression directly
 			Execute(expr.Else(), else_state, sel, count, result);

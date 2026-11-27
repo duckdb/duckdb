@@ -609,7 +609,7 @@ private:
 			return false;
 		}
 		auto &case_expr = child.Cast<BoundCaseExpression>();
-		if (case_expr.CaseChecks().size() != 1) {
+		if (case_expr.Operand() || case_expr.CaseChecks().size() != 1) {
 			return false;
 		}
 		auto &when_expr = *case_expr.CaseChecks()[0].when_expr;

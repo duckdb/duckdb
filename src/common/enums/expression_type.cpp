@@ -133,6 +133,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "QUANTIFIER";
 	case ExpressionType::ANCHOR:
 		return "ANCHOR";
+	case ExpressionType::CASE_OPERAND:
+		return "CASE_OPERAND";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionType::BOUND_COLUMN_REF:
@@ -236,6 +238,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_PARAMETER";
 	case ExpressionClass::PATTERN:
 		return "PATTERN";
+	case ExpressionClass::BOUND_CASE_OPERAND:
+		return "BOUND_CASE_OPERAND";
 	case ExpressionClass::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionClass::BOUND_SUBQUERY:

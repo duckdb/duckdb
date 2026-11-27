@@ -9,8 +9,6 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
-#include "duckdb/planner/expression/bound_lambda_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -636,42 +634,6 @@ static bool HasJoinConditionExpressions(LogicalOperatorType type) {
 	}
 }
 
-//! The scalar binder types the comparisons using a lambda-local subject. Once its subquery
-//! inputs have been planned, the ordinary CASE can use the resulting columns directly.
-static bool IsDeferredSimpleCase(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return false;
-	}
-	auto &args = expr.Cast<BoundFunctionExpression>().GetChildren();
-	return !args.empty() && args[0]->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA &&
-	       args[0]->Cast<BoundLambdaExpression>().inline_after_subqueries;
-}
-
-static unique_ptr<Expression> InlineSimpleCase(BoundFunctionExpression &invoke);
-
-static void SubstituteCaseInputs(unique_ptr<Expression> &expr, const vector<unique_ptr<Expression>> &args) {
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		auto index = expr->Cast<BoundReferenceExpression>().Index();
-		D_ASSERT(index < args.size() - 1);
-		expr = args[index + 1]->Copy();
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&](unique_ptr<Expression> &child) { SubstituteCaseInputs(child, args); });
-	if (IsDeferredSimpleCase(*expr)) {
-		expr = InlineSimpleCase(expr->Cast<BoundFunctionExpression>());
-	}
-}
-
-static unique_ptr<Expression> InlineSimpleCase(BoundFunctionExpression &invoke) {
-	auto &args = invoke.GetChildrenMutable();
-	auto body = std::move(args[0]->Cast<BoundLambdaExpression>().LambdaExprMutable());
-	SubstituteCaseInputs(body, args);
-	body->SetAlias(invoke.GetAlias());
-	body->SetQueryLocation(invoke.GetQueryLocation());
-	return body;
-}
-
 void RecursiveDependentJoinPlanner::PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr,
                                                        JoinSide uncorrelated_side) {
 	if (!expr) {
@@ -679,10 +641,6 @@ void RecursiveDependentJoinPlanner::PlanJoinSubqueries(LogicalJoin &join, unique
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { PlanJoinSubqueries(join, child, uncorrelated_side); });
-	if (IsDeferredSimpleCase(*expr)) {
-		expr = InlineSimpleCase(expr->Cast<BoundFunctionExpression>());
-		return;
-	}
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_SUBQUERY) {
 		return;
 	}
@@ -1120,15 +1078,6 @@ void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOpera
 	planner.PlanOperator(op);
 }
 
-unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundFunctionExpression &expr,
-                                                                   unique_ptr<Expression> *expr_ptr) {
-	if (!IsDeferredSimpleCase(expr)) {
-		return nullptr;
-	}
-	VisitExpressionChildren(expr);
-	return InlineSimpleCase(expr);
-}
-
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,
                                                                    unique_ptr<Expression> *expr_ptr) {
 	return binder.PlanSubquery(expr, root);
@@ -1212,11 +1161,6 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	auto &expr = *expr_ptr;
 	// first visit the children of the node, if any
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { PlanSubqueries(expr, root); });
-
-	if (IsDeferredSimpleCase(expr)) {
-		expr_ptr = InlineSimpleCase(expr.Cast<BoundFunctionExpression>());
-		return;
-	}
 
 	// check if this is a subquery node
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {

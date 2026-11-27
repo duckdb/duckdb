@@ -266,6 +266,8 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_PARAMETER:
 		result = VisitReplace(expr.Cast<BoundParameterExpression>(), expression);
 		break;
+	case ExpressionClass::BOUND_CASE_OPERAND:
+		return;
 	case ExpressionClass::BOUND_REF:
 		result = VisitReplace(expr.Cast<BoundReferenceExpression>(), expression);
 		break;

@@ -3,7 +3,21 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
+#include "duckdb/planner/expression_iterator.hpp"
+
 namespace duckdb {
+
+static void SubstituteOperand(unique_ptr<Expression> &expr, const Expression &value) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CASE_OPERAND) {
+		expr = value.Copy();
+		return;
+	}
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CASE && expr->Cast<BoundCaseExpression>().Operand()) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { SubstituteOperand(child, value); });
+}
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
@@ -14,6 +28,14 @@ CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundCaseExpression>();
+	// A planned scalar subquery already has one result column shared by all its uses.
+	if (root.Operand() && root.Operand()->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		for (auto &check : root.CaseChecksMutable()) {
+			SubstituteOperand(check.when_expr, *root.Operand());
+		}
+		root.OperandMutable().reset();
+		changes_made = true;
+	}
 	for (idx_t i = 0; i < root.CaseChecks().size(); i++) {
 		auto &case_check = root.CaseChecksMutable()[i];
 		if (case_check.when_expr->IsFoldable()) {
@@ -42,7 +64,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 			}
 		}
 	}
-	if (root.CaseChecks().empty()) {
+	if (root.CaseChecks().empty() && !root.Operand()) {
 		// no case checks left: return the ELSE expression
 		return Expression::PreserveReturnType(root.GetReturnType(), std::move(root.ElseMutable()));
 	}

@@ -123,10 +123,10 @@ SELECT CASE nextval('s') WHEN > 0 THEN (SELECT 42) END
 statement ok
 CREATE MACRO nested_subquery() AS (SELECT 2)
 
-statement error
+query I
 SELECT CASE random() WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE nested_subquery() END
 ----
-volatile operand and multiple comparisons cannot contain a subquery in a branch
+2
 
 statement ok
 CREATE SEQUENCE expanded
@@ -142,24 +142,11 @@ SELECT currval('expanded')
 ----
 2
 
-statement ok
-CREATE SEQUENCE branch_call
-
-# Binding an unsupported branch must not advance the operand or the branch sequence.
-statement error
-SELECT CASE nextval('branch_call') WHEN NULL THEN (SELECT nextval('branch_call')) WHEN 1 THEN 42 ELSE 0 END
-----
-volatile operand and multiple comparisons cannot contain a subquery in a branch
-
 query I
-SELECT nextval('branch_call')
+SELECT CASE random()+2 WHEN (SELECT i), 1 THEN i ELSE 0 END FROM range(2) t(i)
 ----
-1
-
-statement error
-SELECT CASE random() WHEN (SELECT i), 1 THEN i ELSE 0 END FROM range(3) t(i)
-----
-volatile operand and multiple comparisons cannot contain a subquery in a branch
+0
+0
 
 # Binding the branches never introduces a user-visible parameter.
 query I
@@ -318,3 +305,20 @@ query I
 SELECT CASE (SELECT 2) WHEN 1 THEN (SELECT CAST('unreached' AS INTEGER)) WHEN 2 THEN 20 END
 ----
 20
+
+statement ok
+RESET debug_verify_statement
+
+# With the optimizer enabled the unreachable branch subquery is discarded.
+statement ok
+CREATE SEQUENCE branch_call
+
+query I
+SELECT CASE nextval('branch_call') WHEN NULL THEN (SELECT nextval('branch_call')) WHEN 1 THEN 42 ELSE 0 END
+----
+42
+
+query I
+SELECT currval('branch_call')
+----
+1

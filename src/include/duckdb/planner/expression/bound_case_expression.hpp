@@ -12,6 +12,32 @@
 
 namespace duckdb {
 
+//! A reference to the operand of the enclosing simple CASE, used inside its WHEN comparisons.
+class BoundCaseOperandExpression : public Expression {
+public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CASE_OPERAND;
+
+	explicit BoundCaseOperandExpression(LogicalType type)
+	    : Expression(ExpressionType::CASE_OPERAND, TYPE, std::move(type)) {
+	}
+	bool IsFoldable() const override {
+		return false;
+	}
+	bool IsScalar() const override {
+		return false;
+	}
+	string ToString() const override {
+		return "<case operand>";
+	}
+	unique_ptr<Expression> Copy() const override {
+		auto result = make_uniq<BoundCaseOperandExpression>(return_type);
+		result->CopyProperties(*this);
+		return std::move(result);
+	}
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+};
+
 struct BoundCaseCheck {
 	unique_ptr<Expression> when_expr;
 	unique_ptr<Expression> then_expr;
@@ -30,6 +56,16 @@ public:
 	                    unique_ptr<Expression> else_expr);
 
 public:
+	bool UseLegacySerialization() const {
+		return operand != nullptr;
+	}
+	void LegacySerialize(Serializer &serializer) const;
+	const unique_ptr<Expression> &Operand() const {
+		return operand;
+	}
+	unique_ptr<Expression> &OperandMutable() {
+		return operand;
+	}
 	const vector<BoundCaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
@@ -57,6 +93,7 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
+	unique_ptr<Expression> operand;
 	vector<BoundCaseCheck> case_checks;
 	unique_ptr<Expression> else_expr;
 };

@@ -55,8 +55,13 @@ static void CollectTryErrorRethrowFlags(const Expression &expr, bool select_cont
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CASE:
+		if (expr.Cast<BoundCaseExpression>().Operand()) {
+			CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().Operand(), false, flags);
+		}
 		// only the first WHEN condition is evaluated unconditionally, and it is evaluated as a selection
-		CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().CaseChecks()[0].when_expr, true, flags);
+		if (!expr.Cast<BoundCaseExpression>().CaseChecks().empty()) {
+			CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().CaseChecks()[0].when_expr, true, flags);
+		}
 		return;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		if (select_context) {

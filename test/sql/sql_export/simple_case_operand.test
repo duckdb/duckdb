@@ -1,0 +1,129 @@
+# name: test/sql/sql_export/simple_case_operand.test
+# description: Native SQL reconstruction of shared simple CASE operands
+# group: [sql_export]
+
+require skip_reload
+
+statement ok
+SET debug_verify_statement='explain_sql_strict'
+
+# '01' misses the text comparison and matches the numeric comparison.
+query T
+SELECT CASE '01' || repeat('x', (random()*0)::INTEGER)
+       WHEN '1' THEN 'text' WHEN 1 THEN 'number' END
+----
+number
+
+# A later numeric cast must stay inside its WHEN; casting the operand eagerly would throw.
+query I
+SELECT CASE 'x' || repeat('x', (random()*0)::INTEGER)
+       WHEN 'x' THEN 42 WHEN 1 THEN 0 END
+----
+42
+
+# Test folded Unicode keys and the original key functions on both sides.
+foreach disabled true false
+
+statement ok
+SET debug_disable_optimizer={disabled}
+
+query I
+SELECT CASE ('ÄBC' || repeat('x', (random()*0)::INTEGER)) COLLATE nocase
+       WHEN 'OTHER', 'äBc' THEN 1 ELSE 2 END
+----
+1
+
+# Only this WHEN supplies the collation. The preceding WHEN stays case-sensitive.
+query I
+SELECT CASE 'ÄBC' || repeat('x', (random()*0)::INTEGER)
+       WHEN 'äbc' THEN 0 WHEN v COLLATE nocase THEN 1 ELSE 2 END
+FROM (VALUES ('äBc')) t(v)
+----
+1
+
+# The operand belongs to each invocation of the enclosing list lambda.
+query T
+SELECT list_transform(['01','02'], lambda x: CASE x || repeat('x', (random()*0)::INTEGER)
+       WHEN '1' THEN 'text' WHEN 1 THEN 'number' ELSE x END)
+----
+[number, 02]
+
+endloop
+
+statement ok
+CREATE SEQUENCE s
+
+# The SQL spells the surviving comparisons as a simple CASE with one operand.
+query TT
+EXPLAIN (SQL) SELECT CASE nextval('s') WHEN NULL THEN 0 WHEN 1 THEN 42 WHEN 2 THEN 20 ELSE 0 END AS v
+----
+sql	<REGEX>:(?s)SELECT\s+CASE\s+\([^)]*nextval.*\)\s+WHEN.*END AS v.*
+
+# The optimizer removes the NULL comparison and its branch subquery.
+query I
+SELECT CASE nextval('s') WHEN NULL THEN (SELECT nextval('s')) WHEN 1 THEN 42 WHEN 2 THEN 20 ELSE 0 END
+----
+42
+
+query I
+SELECT currval('s')
+----
+1
+
+# One surviving comparison can use the single-comparison form for a repeatable operand.
+query I
+SELECT CASE length((SELECT s)) WHEN NULL THEN -1 WHEN 3 THEN 1 ELSE 0 END AS v
+FROM (VALUES ('abc'), ('xy')) t(s) ORDER BY v
+----
+0
+1
+
+# A sole comparison rebinds as searched CASE. The inner CASE has range [1,2],
+# so rebinding it against 5 would silently eliminate four nextval calls.
+statement error
+SELECT sum(CASE (CASE WHEN nextval('s') > 0 THEN 1 ELSE 2 END)
+           WHEN NULL THEN 2 WHEN 5 THEN 1 ELSE 0 END) FROM range(4)
+----
+A single remaining WHEN cannot preserve required CASE operand evaluation on rebind
+
+query I
+SELECT currval('s')
+----
+1
+
+# Other collation key transformations still require an explicit export rule.
+statement error
+SELECT CASE ('E' || repeat('x', (random()*0)::INTEGER)) COLLATE noaccent
+       WHEN 'x' THEN 0 WHEN 'É' THEN 1 ELSE 2 END
+----
+Cannot reconstruct this transformed simple CASE comparison
+
+# All checks disappeared, but the operand still has an observable effect.
+statement error
+SELECT CASE nextval('s') WHEN NULL THEN 1 WHEN NULL THEN 2 ELSE 42 END
+----
+Cannot render a simple CASE with no remaining WHEN
+
+query I
+SELECT currval('s')
+----
+1
+
+statement ok
+SET debug_verify_statement='none'
+
+query I
+SELECT sum(CASE (CASE WHEN nextval('s') > 0 THEN 1 ELSE 2 END)
+           WHEN NULL THEN 2 WHEN 5 THEN 1 ELSE 0 END) FROM range(4)
+----
+0
+
+query I
+SELECT CASE nextval('s') WHEN NULL THEN 1 WHEN NULL THEN 2 ELSE 42 END
+----
+42
+
+query I
+SELECT currval('s')
+----
+6

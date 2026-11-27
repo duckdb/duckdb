@@ -271,6 +271,8 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
                                                                 ExpressionExecutorState &state) {
 	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CASE_OPERAND:
+		return make_uniq<ExpressionState>(expr, state);
 	case ExpressionClass::BOUND_REF:
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
@@ -300,6 +302,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
 		// We do not initialize vector caches for these expressions.
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_CASE_OPERAND &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
 			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
@@ -316,9 +319,21 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		    result.GetType(), expr.GetReturnType());
 	}
 	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CASE_OPERAND:
+		if (!state->root.case_operand) {
+			throw InternalException("CASE operand reference outside its enclosing CASE");
+		}
+		if (sel) {
+			result.Slice(*state->root.case_operand, *sel, count);
+		} else {
+			result.Reference(*state->root.case_operand);
+		}
+		Verify(expr, result, count);
+		return;
 	case ExpressionClass::BOUND_REF:
 		Execute(expr.Cast<BoundReferenceExpression>(), state, sel, count, result);
-		break;
+		Verify(expr, result, count);
+		return;
 	case ExpressionClass::BOUND_CASE:
 		Execute(expr.Cast<BoundCaseExpression>(), state, sel, count, result);
 		break;
@@ -343,9 +358,8 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	default:
 		throw InternalException("Attempting to execute expression of unknown type!");
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF && result.size() != count_t(count)) {
-		// BoundReferenceExpression shares buffer with its source - we cannot resize it
-		// all other expressions produce a fresh result vector that we own
+	if (result.size() != count_t(count)) {
+		// References above share their source buffer. Other expressions own the result.
 		FlatVector::SetSize(result, count_t(count));
 	}
 	Verify(expr, result, count);
