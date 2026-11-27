@@ -32,6 +32,10 @@
 namespace duckdb {
 
 class TableRef;
+struct TestHelperState;
+shared_ptr<TestHelperState> CaptureTestHelperState();
+void RestoreTestHelperState(const TestHelperState &state);
+void ResetTestHelperState();
 
 void RegisterSqllogictests();
 void RegisterSqllogictests(const vector<string> &test_paths);

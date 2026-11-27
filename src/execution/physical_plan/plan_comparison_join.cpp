@@ -179,8 +179,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 	left.estimated_cardinality = lhs_cardinality;
 	right.estimated_cardinality = rhs_cardinality;
 	auto left_state = FindDirectRecursiveStateScan(left, recursive_cte_planning);

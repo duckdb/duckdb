@@ -1,0 +1,133 @@
+# name: test/sql/transactions/join_transaction_concurrent_churn.test_slow
+# description: Many short-lived connections join a shared transaction, work in it and leave it at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl(thread INTEGER, i INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+# every connection joins, appends and leaves with a commit
+concurrentloop threadid 0 64
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+INSERT INTO tbl SELECT {threadid}, range FROM range(1000)
+
+statement ok
+SELECT count(*) FROM tbl
+
+statement ok
+COMMIT
+
+# the connection can join again after it left
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+INSERT INTO tbl SELECT {threadid}, range FROM range(1000)
+
+statement ok
+COMMIT
+
+endloop
+
+query II
+SELECT count(*), count(DISTINCT thread) FROM tbl
+----
+128000	64
+
+statement ok
+COMMIT
+
+query II
+SELECT count(*), count(DISTINCT thread) FROM tbl
+----
+128000	64
+
+# connections that are closed without ending the transaction vote to roll it back
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 64
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+INSERT INTO tbl SELECT -1, range FROM range(1000)
+
+endloop
+
+statement error
+COMMIT
+----
+<REGEX>:.*a connection sharing the transaction rolled it back.*
+
+query II
+SELECT count(*), count(DISTINCT thread) FROM tbl
+----
+128000	64
+
+# the same with a mix of commits and rollbacks
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 32
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+INSERT INTO tbl SELECT -2, range FROM range(1000)
+
+statement ok
+SELECT count(*) FROM tbl
+
+statement ok
+ROLLBACK
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+INSERT INTO tbl SELECT -3, range FROM range(1000)
+
+statement ok
+COMMIT
+
+endloop
+
+statement error
+COMMIT
+----
+<REGEX>:.*a connection sharing the transaction rolled it back.*
+
+query II
+SELECT count(*), count(DISTINCT thread) FROM tbl
+----
+128000	64
+
+# the transaction cannot be joined anymore
+statement error
+JOIN TRANSACTION '{txid}'
+----
+<REGEX>:.*invalid transaction identifier.*

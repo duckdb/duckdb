@@ -171,7 +171,7 @@ static PhysicalOperator *TryCreateLimitedDistinct(PhysicalPlanGenerator &generat
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 	auto *limit_child = &plan;
 	auto total_limit = GetLimit(op.limit_val, op.offset_val);
 	bool zero_offset = op.offset_val.Type() == LimitNodeType::CONSTANT_VALUE && op.offset_val.GetConstantValue() == 0;

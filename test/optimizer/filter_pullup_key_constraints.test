@@ -1,0 +1,313 @@
+# name: test/optimizer/filter_pullup_key_constraints.test
+# description: Retain filters while exporting guaranteed key constraints through relational boundaries
+# group: [optimizer]
+
+statement ok
+CREATE TABLE key_source AS SELECT (i % 20)::INTEGER AS k, (i // 20)::INTEGER AS v FROM range(100) t(i);
+
+statement ok
+CREATE TABLE key_target AS SELECT (i % 20)::INTEGER AS k FROM range(2000) t(i);
+
+query I
+SELECT count(*) FROM (SELECT k, sum(v) AS n FROM key_source WHERE k <> 7 GROUP BY k) p JOIN key_target t USING (k);
+----
+1900
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(n) FROM (SELECT k, sum(v) AS n FROM key_source WHERE k <> 7 GROUP BY k) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+# Aggregate windows preserve their arguments and the complete surviving partitions.
+query I
+SELECT sum(n) FROM (SELECT k, sum(v) OVER (PARTITION BY k) AS n FROM key_source WHERE k <> 7) p JOIN key_target t USING (k);
+----
+95000
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(n) FROM (SELECT k, sum(v) OVER (PARTITION BY k) AS n FROM key_source WHERE k <> 7) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT k FROM key_source WHERE k <> 7) p JOIN key_target t USING (k);
+----
+1900
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT DISTINCT k FROM key_source WHERE k <> 7) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+# Only exact common facts escape UNION branches.
+query I
+SELECT count(*) FROM (SELECT k FROM key_source WHERE k <> 7 UNION ALL SELECT k FROM key_source WHERE k <> 7 AND v = 1) p JOIN key_target t USING (k);
+----
+11400
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k FROM key_source WHERE k <> 7 UNION ALL SELECT k FROM key_source WHERE k <> 7 AND v = 1) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+query I
+SELECT count(*) FROM (SELECT k FROM key_source WHERE k <> 7 UNION SELECT k FROM key_source WHERE k <> 7 AND v = 1) p JOIN key_target t USING (k);
+----
+1900
+
+query I
+SELECT count(*) FROM (SELECT k FROM key_source WHERE k <> 7 UNION ALL SELECT k FROM key_source WHERE k = 7) p JOIN key_target t USING (k);
+----
+10000
+
+# The set operation's facts must be visible through the enclosing projection in the same traversal.
+query I
+SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source WHERE k <> 7 EXCEPT ALL SELECT k FROM key_source WHERE v = 1)) p JOIN key_target t ON p.alias = t.k;
+----
+7600
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source WHERE k <> 7 EXCEPT ALL SELECT k FROM key_source WHERE v = 1)) p JOIN key_target t ON p.alias = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+statement ok
+CREATE TABLE nullable_keys(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO nullable_keys VALUES (NULL, 1), (NULL, 2), (1, 3), (2, 4);
+
+query II rowsort
+SELECT k, n FROM (SELECT k, sum(v) AS n FROM nullable_keys WHERE k IS NULL GROUP BY k) p;
+----
+NULL	3
+
+query I
+SELECT count(*) FROM (SELECT k FROM nullable_keys WHERE k IS NULL INTERSECT ALL SELECT k FROM nullable_keys) p JOIN nullable_keys t ON p.k IS NOT DISTINCT FROM t.k;
+----
+4
+
+query I
+SELECT count(*) FROM (SELECT k FROM nullable_keys INTERSECT ALL SELECT k FROM nullable_keys WHERE k IS NULL) p JOIN nullable_keys t ON p.k IS NOT DISTINCT FROM t.k;
+----
+4
+
+query I
+SELECT count(*) FROM (SELECT k FROM nullable_keys WHERE k IS NULL UNION ALL SELECT k FROM nullable_keys WHERE k IS NULL) p JOIN nullable_keys t ON p.k IS NOT DISTINCT FROM t.k;
+----
+8
+
+# OR constraints keep the NULL group as well as the selected non-NULL groups.
+query II rowsort
+SELECT k, n FROM (SELECT k, sum(v) OVER (PARTITION BY k) AS n FROM nullable_keys WHERE k IS NULL OR k = 2) p;
+----
+2	4
+NULL	3
+NULL	3
+
+query I
+SELECT count(*) FROM (SELECT k FROM nullable_keys WHERE k IS NULL OR k = 2 GROUP BY k) p JOIN nullable_keys t ON p.k IS NOT DISTINCT FROM t.k;
+----
+3
+
+# Empty grouping sets synthesize rows which need not satisfy input predicates.
+query II rowsort
+SELECT q.* FROM (SELECT k, count(*) FROM nullable_keys WHERE k IS NOT NULL GROUP BY GROUPING SETS ((k), ())) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+1	1
+2	1
+NULL	2
+
+query I
+SELECT q.* FROM (SELECT count(*) FROM (SELECT count(*) AS n FROM nullable_keys WHERE k > 100) p) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+1
+
+query III rowsort
+SELECT q.* FROM (SELECT k, v, count(*) FROM nullable_keys WHERE k = 1 GROUP BY GROUPING SETS ((k), (v))) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+1	NULL	1
+NULL	3	1
+
+# A filter must constrain every window partitioning, not just one window.
+query III rowsort
+SELECT q.* FROM (SELECT k, sum(v) OVER (PARTITION BY k), sum(v) OVER () FROM nullable_keys WHERE k IS NOT NULL) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+1	3	7
+2	4	7
+
+# Filters guarding fallible window arguments must stay below the window.
+statement ok
+CREATE TABLE guarded_keys(k INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO guarded_keys VALUES (7, 'bad'), (1, '2'), (1, '3');
+
+query I
+SELECT sum(n) FROM (SELECT k, sum(s::INTEGER) OVER (PARTITION BY k) n FROM guarded_keys WHERE k <> 7) p JOIN key_target t USING (k);
+----
+1000
+
+query I
+SELECT sum(n) FROM (SELECT k, sum(s::INTEGER) n FROM guarded_keys WHERE k <> 7 GROUP BY k) p JOIN key_target t USING (k);
+----
+500
+
+# Coercions precede UNION fact matching; INTEGER 1 and VARCHAR '1' share an output, not an input binding.
+query T rowsort
+SELECT q.* FROM (SELECT k FROM (SELECT k FROM (VALUES (1), (2)) t(k) WHERE k = 1 UNION ALL SELECT k FROM (VALUES ('1'), ('2')) t(k) WHERE k = '2')) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+1
+2
+
+# Equality keys must not make representation-sensitive predicates interchangeable.
+query T
+SELECT q.* FROM (SELECT CAST(k AS VARCHAR) FROM (SELECT k FROM (VALUES (-0.0::DOUBLE), (0.0::DOUBLE)) t(k) WHERE CAST(k AS VARCHAR) = '-0.0' GROUP BY k)) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+-0.0
+
+query T
+SELECT q.* FROM (SELECT s COLLATE nocase FROM (VALUES ('a'), ('A')) t(s) WHERE s = 'A' COLLATE "binary" GROUP BY s COLLATE nocase) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+A
+
+# DISTINCT set operations are lowered to SEMI/ANTI joins before filter pullup.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source WHERE k <> 7 EXCEPT SELECT k FROM key_source WHERE v = 1 AND k = 8)) p JOIN key_target t ON p.alias = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source INTERSECT SELECT k FROM key_source WHERE k <> 7)) p JOIN key_target t ON p.alias = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+query I
+SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source WHERE k <> 7 EXCEPT SELECT k FROM key_source WHERE v = 1 AND k = 8)) p JOIN key_target t ON p.alias = t.k;
+----
+1800
+
+query I
+SELECT count(*) FROM (SELECT k AS alias FROM (SELECT k FROM key_source INTERSECT SELECT k FROM key_source WHERE k <> 7)) p JOIN key_target t ON p.alias = t.k;
+----
+1900
+
+# NULL and Boolean facts can reach another input without replacing parts of unrelated expressions.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k FROM key_source WHERE k IN (2, 8) GROUP BY k) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k IN.*
+
+# The compared operand can be matched even when a DOUBLE constant remains in the comparison.
+statement ok
+CREATE TABLE floating_keys AS SELECT i::DOUBLE AS k FROM range(-20, 20) t(i);
+
+statement ok
+CREATE TABLE floating_targets AS SELECT k FROM floating_keys;
+
+# The integral output of floor can also yield the stronger bound k >= 8.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT floor(k) AS k FROM floating_keys WHERE floor(k) > 7.0::DOUBLE) p JOIN floating_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*floating_targets"[^}]*"Filters": [^}]*k (> 7\.0|>= 8\.0).*
+
+statement ok
+CREATE TABLE null_target AS SELECT * FROM nullable_keys;
+
+query I
+SELECT count(*) FROM null_target t SEMI JOIN (SELECT k FROM nullable_keys WHERE k IS NULL GROUP BY k) p ON p.k IS NOT DISTINCT FROM t.k;
+----
+2
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM null_target t SEMI JOIN (SELECT k FROM nullable_keys WHERE k IS NULL GROUP BY k) p ON p.k IS NOT DISTINCT FROM t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*null_target"[^}]*"Filters": [^}]*IS NULL.*
+
+query I
+SELECT count(*) FROM null_target t SEMI JOIN (SELECT k FROM nullable_keys WHERE k IS NULL OR k = 2 GROUP BY k) p ON p.k IS NOT DISTINCT FROM t.k;
+----
+3
+
+query I
+SELECT count(*) FROM (VALUES (0.0::DOUBLE)) t(k) SEMI JOIN (SELECT k FROM (VALUES (-0.0::DOUBLE)) s(k) WHERE CAST(k AS VARCHAR) = '-0.0' GROUP BY k) p ON p.k = t.k;
+----
+1
+
+# DISTINCT ON keeps its selected representative and its aggregate argument evaluation.
+query II
+SELECT q.* FROM (SELECT DISTINCT ON (k) k, v FROM nullable_keys WHERE k IS NULL ORDER BY k, v DESC) q CROSS JOIN (SELECT k FROM key_source WHERE k = 7 AND v = 0) witness;
+----
+NULL	2
+
+# Common grouping keys survive multiple nonempty grouping sets.
+query I
+SELECT count(*) FROM (SELECT k, v, count(*) n FROM key_source WHERE k <> 7 GROUP BY GROUPING SETS ((k), (k, v))) p JOIN key_target t USING (k);
+----
+11400
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT k, v, count(*) n FROM key_source WHERE k <> 7 GROUP BY GROUPING SETS ((k), (k, v))) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*
+
+# Computed keys compose with projection export and retain the unrelated input predicate.
+statement ok
+CREATE TABLE text_keys(s VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO text_keys VALUES ('a', 1), ('aa', 1), ('bb', 2), ('abc', 1), (NULL, 1);
+
+query I
+SELECT sum(n) FROM (SELECT length(s) AS k, sum(v) AS n FROM text_keys WHERE length(s) = 2 AND v = 1 GROUP BY length(s)) p JOIN key_target t USING (k);
+----
+100
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(n) FROM (SELECT length(s) AS k, sum(v) AS n FROM text_keys WHERE length(s) = 2 AND v = 1 GROUP BY length(s)) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*CAST\(k AS BIGINT\) = 2.*
+
+query I
+SELECT sum(n) FROM (SELECT length(s) AS k, sum(v) OVER (PARTITION BY length(s)) AS n FROM text_keys WHERE length(s) = 2 AND v = 1) p JOIN key_target t USING (k);
+----
+100
+
+# Throwing frame expressions also see only rows retained by the original input filter.
+query I
+SELECT sum(n) FROM (SELECT k, count(*) OVER (PARTITION BY k ORDER BY s::INTEGER ROWS BETWEEN s::INTEGER PRECEDING AND CURRENT ROW) AS n FROM guarded_keys WHERE k <> 7) p JOIN key_target t USING (k);
+----
+300
+
+# A fact expressed in the coerced output type can be shared by UNION branches.
+query T rowsort
+SELECT p.k FROM (SELECT k::VARCHAR AS k FROM (VALUES (1), (2)) t(k) WHERE k::VARCHAR <> '2' UNION ALL SELECT k FROM (VALUES ('1'), ('2')) t(k) WHERE k <> '2') p JOIN (VALUES ('1'), ('2')) t(k) USING (k);
+----
+1
+1
+
+# NULL tests on nested keys use the same key proof.
+query I
+SELECT count(*) FROM (SELECT k FROM (VALUES (NULL::INTEGER[]), ([1]), ([2])) t(k) WHERE k IS NULL GROUP BY k) p JOIN (VALUES (NULL::INTEGER[]), ([1])) t(k) ON p.k IS NOT DISTINCT FROM t.k;
+----
+1
+
+# Volatile window arguments remain an opaque boundary.
+statement ok
+CREATE SEQUENCE window_calls;
+
+query I
+SELECT sum(n) FROM (SELECT k, sum(nextval('window_calls')) OVER (PARTITION BY k) AS n FROM guarded_keys WHERE k <> 7) p JOIN key_target t USING (k);
+----
+600
+
+query I
+SELECT currval('window_calls');
+----
+2
+
+# Boolean and constant grouping keys must not hide the original comparison.
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(n) FROM (SELECT k, sum(v) AS n FROM key_source WHERE k <> 7 GROUP BY k, k <> 7, 7 + 0) p JOIN key_target t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*key_target"[^}]*"Filters": [^}]*k != 7.*

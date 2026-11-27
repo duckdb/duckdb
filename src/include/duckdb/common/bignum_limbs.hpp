@@ -11,6 +11,7 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/uint128_arithmetic.hpp"
 
 #include <cstring>
 
@@ -39,15 +40,7 @@ struct BignumLimb {
 	//! Divides high * 2^64 + low by a divisor larger than high, so that the quotient fits a digit; sets the remainder
 	static inline uint64_t DivRem(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
 		D_ASSERT(high < divisor);
-#ifdef _MSC_VER
-		// clang-cl has the 128-bit type but links no runtime support for dividing it
-		return DivRemPortable(high, low, divisor, remainder);
-#else
-		const twodigit_t numerator = (static_cast<twodigit_t>(high) << 64) | low;
-		const auto quotient = static_cast<uint64_t>(numerator / divisor);
-		remainder = static_cast<uint64_t>(numerator - static_cast<twodigit_t>(quotient) * divisor);
-		return quotient;
-#endif
+		return Uint128DivRem64(high, low, divisor, remainder);
 	}
 #else
 	using digit_t = uint32_t;
@@ -64,18 +57,7 @@ struct BignumLimb {
 
 	//! Returns the low 64 bits of a * b + add, and its high 64 bits in "high"; never overflows 128 bits
 	static inline uint64_t MultiplyAdd(uint64_t a, uint64_t b, uint64_t add, uint64_t &high) {
-		// portable 32-bit split
-		const uint64_t a_low = a & 0xFFFFFFFFULL;
-		const uint64_t a_high = a >> 32;
-		const uint64_t b_low = b & 0xFFFFFFFFULL;
-		const uint64_t b_high = b >> 32;
-		const uint64_t p0 = a_low * b_low;
-		const uint64_t p1 = a_low * b_high;
-		const uint64_t p2 = a_high * b_low;
-		const uint64_t p3 = a_high * b_high;
-		const uint64_t middle = (p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL);
-		uint64_t low = (p0 & 0xFFFFFFFFULL) | (middle << 32);
-		high = p3 + (p1 >> 32) + (p2 >> 32) + (middle >> 32);
+		uint64_t low = Uint64MultiplyFull(a, b, high);
 		low += add;
 		high += low < add ? 1 : 0;
 		return low;
@@ -85,47 +67,6 @@ struct BignumLimb {
 	//! Bytes and bits of a multiplication / division digit
 	static constexpr idx_t DIGIT_BYTES = sizeof(digit_t);
 	static constexpr idx_t DIGIT_BITS = DIGIT_BYTES * 8;
-
-	//! DivRem in two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division
-	static inline uint64_t DivRemPortable(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
-		D_ASSERT(high < divisor);
-		constexpr uint64_t HALF_BASE = static_cast<uint64_t>(1) << 32;
-		constexpr uint64_t HALF_MASK = HALF_BASE - 1;
-		// normalize so that the divisor has its top bit set; the quotient is unchanged, the remainder is scaled
-		const idx_t shift = LeadingZeros(divisor);
-		if (shift > 0) {
-			divisor <<= shift;
-			high = (high << shift) | (low >> (64 - shift));
-			low <<= shift;
-		}
-		const uint64_t divisor_high = divisor >> 32;
-		const uint64_t divisor_low = divisor & HALF_MASK;
-		const uint64_t low_high = low >> 32;
-		const uint64_t low_low = low & HALF_MASK;
-		// the high half of the quotient: an estimate from the top halves that is corrected down until it is exact
-		uint64_t q_high = high / divisor_high;
-		uint64_t rhat = high - q_high * divisor_high;
-		while (q_high >= HALF_BASE || q_high * divisor_low > ((rhat << 32) | low_high)) {
-			q_high--;
-			rhat += divisor_high;
-			if (rhat >= HALF_BASE) {
-				break;
-			}
-		}
-		// the partial remainder is below the divisor, so the wrapping arithmetic yields the exact value
-		const uint64_t middle = (high << 32) + low_high - q_high * divisor;
-		uint64_t q_low = middle / divisor_high;
-		rhat = middle - q_low * divisor_high;
-		while (q_low >= HALF_BASE || q_low * divisor_low > ((rhat << 32) | low_low)) {
-			q_low--;
-			rhat += divisor_high;
-			if (rhat >= HALF_BASE) {
-				break;
-			}
-		}
-		remainder = ((middle << 32) + low_low - q_low * divisor) >> shift;
-		return (q_high << 32) | q_low;
-	}
 
 	template <class T>
 	static inline T ToHostOrder(T value) {
@@ -239,11 +180,7 @@ struct BignumLimb {
 	//! The number of leading zero bits of a non-zero limb
 	static inline idx_t LeadingZeros(uint64_t value) {
 		D_ASSERT(value != 0);
-#if defined(__GNUC__) || defined(__clang__)
-		return static_cast<idx_t>(__builtin_clzll(value));
-#else
-		return CountZeros<uint64_t>::Leading(value);
-#endif
+		return Uint64LeadingZeros(value);
 	}
 	static inline idx_t LeadingZeros(uint32_t value) {
 		D_ASSERT(value != 0);

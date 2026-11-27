@@ -104,7 +104,8 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	// we need to search for any index creation entries
+	// statements of connections that share the transaction can add entries concurrently
+	lock_guard<mutex> guard(allocator.lock);
 	return allocator.head.get();
 }
 

@@ -3,23 +3,22 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
-//! Whether the filter compares what a column of that child is compared as with constants: it keeps or removes all the
-//! rows that the set operation treats as equal
-static bool ComparesSetOperationColumn(const Expression &filter, const vector<JoinCondition> &comparisons,
-                                       bool left_child) {
-	auto compared = FilterCombiner::GetComparedExpression(filter);
-	if (!compared) {
-		return false;
-	}
-	for (auto &comparison : comparisons) {
-		if ((left_child ? comparison.GetLHS() : comparison.GetRHS()).Equals(*compared)) {
-			return true;
-		}
-	}
-	return false;
+static unique_ptr<Expression> BindSetConstraint(unique_ptr<Expression> filter, LogicalSetOperation &setop,
+                                                const vector<ColumnBinding> &bindings) {
+	return ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(filter), [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.Depth() == 0);
+		    for (idx_t i = 0; i < bindings.size(); i++) {
+			    if (bindings[i] == colref.Binding()) {
+				    return colref.WithBinding(ColumnBinding(setop.table_index, ProjectionIndex(i)));
+			    }
+		    }
+		    throw InternalException("Filter of a set operation refers to a column that is not one of its child");
+	    });
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupSetOperation(unique_ptr<LogicalOperator> op) {
@@ -28,63 +27,94 @@ unique_ptr<LogicalOperator> FilterPullup::PullupSetOperation(unique_ptr<LogicalO
 		return FinishPullup(std::move(op));
 	}
 	auto &setop = op->Cast<LogicalSetOperation>();
-	// the children cannot get more columns to carry a filter
 	FilterPullup left_pullup(context, true, false);
 	FilterPullup right_pullup(context, op->type == LogicalOperatorType::LOGICAL_INTERSECT, false);
 	op->children[0] = left_pullup.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(std::move(op->children[1]));
 	auto comparisons = setop.GetComparisons(*context);
-
-	// EXCEPT and INTERSECT return some of the rows of the left child that they treat as equal. A filter of the left
-	// child may run above them if it keeps or removes all equal rows: one that compares a column with constants.
-	// A filter that stays below and can throw keeps the filters that guard it there
-	auto &left_filters = left_pullup.filters_expr_pullup;
-	bool keep_all = false;
-	for (auto &filter : left_filters) {
-		keep_all = keep_all || (filter->CanThrow() && !ComparesSetOperationColumn(*filter, comparisons, true));
+	vector<reference<const Expression>> left_keys, right_keys;
+	for (auto &comparison : comparisons) {
+		left_keys.push_back(comparison.GetLHS());
+		right_keys.push_back(comparison.GetRHS());
 	}
-	vector<unique_ptr<Expression>> kept_filters;
-	vector<unique_ptr<Expression>> pulled_filters;
-	for (auto &filter : left_filters) {
-		if (keep_all || !ComparesSetOperationColumn(*filter, comparisons, true)) {
-			kept_filters.push_back(std::move(filter));
-		} else {
-			pulled_filters.push_back(std::move(filter));
+	vector<unique_ptr<Expression>> constraints;
+	for (auto &filter : left_pullup.filters_expr_pullup) {
+		if (FilterCombiner::IsKeyConstraint(*filter, left_keys)) {
+			constraints.push_back(filter->Copy());
 		}
 	}
-	left_filters.clear();
-	if (!kept_filters.empty()) {
-		op->children[0] = GeneratePullupFilter(std::move(op->children[0]), kept_filters);
-	}
-	if (!right_pullup.filters_expr_pullup.empty()) {
-		// INTERSECT: a left row with an equal right row passes what the filters of the right child imply for it
-		vector<reference<const Expression>> right_filters;
-		for (auto &filter : right_pullup.filters_expr_pullup) {
-			right_filters.push_back(*filter);
+	for (auto &filter : right_pullup.filters_expr_pullup) {
+		if (!FilterCombiner::IsKeyConstraint(*filter, right_keys)) {
+			continue;
 		}
-		FilterCombiner::GenerateJoinFilters(
-		    comparisons, right_filters, JoinSide::LEFT,
-		    [&](unique_ptr<Expression> left_filter) { pulled_filters.push_back(std::move(left_filter)); });
-		op->children[1] = GeneratePullupFilter(std::move(op->children[1]), right_pullup.filters_expr_pullup);
-	}
-	if (pulled_filters.empty()) {
-		return op;
-	}
-	// the filters refer to the columns of the left child: above the set operation these are its columns
-	auto left_bindings = op->children[0]->GetColumnBindings();
-	for (auto &filter : pulled_filters) {
-		filter = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
-		    std::move(filter), [&](const BoundColumnRefExpression &colref) {
-			    D_ASSERT(colref.Depth() == 0);
-			    for (idx_t i = 0; i < left_bindings.size(); i++) {
-				    if (left_bindings[i] == colref.Binding()) {
-					    return colref.WithBinding(ColumnBinding(setop.table_index, ProjectionIndex(i)));
+		auto copy =
+		    ExpressionIterator::PreorderReplace(filter->Copy(), [&](const Expression &expr) -> unique_ptr<Expression> {
+			    for (auto &comparison : comparisons) {
+				    if (comparison.GetRHS().Equals(expr)) {
+					    return comparison.GetLHS().Copy();
 				    }
 			    }
-			    throw InternalException("Filter of a set operation refers to a column that is not one of its child");
+			    return nullptr;
 		    });
+		if (FilterCombiner::IsKeyConstraint(*copy, left_keys)) {
+			constraints.push_back(std::move(copy));
+		}
 	}
-	return GeneratePullupFilter(std::move(op), pulled_filters);
+	op->children[0] = GeneratePullupFilter(std::move(op->children[0]), left_pullup.filters_expr_pullup);
+	op->children[1] = GeneratePullupFilter(std::move(op->children[1]), right_pullup.filters_expr_pullup);
+	auto bindings = op->children[0]->GetColumnBindings();
+	for (auto &filter : constraints) {
+		filter = BindSetConstraint(std::move(filter), setop, bindings);
+	}
+	return ReturnConstraints(std::move(op), std::move(constraints));
+}
+
+unique_ptr<LogicalOperator> FilterPullup::PullupUnion(unique_ptr<LogicalOperator> op) {
+	if (!can_pullup) {
+		return FinishPullup(std::move(op));
+	}
+	auto &setop = op->Cast<LogicalSetOperation>();
+	vector<unique_ptr<Expression>> common;
+	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+		auto &child = op->children[child_idx];
+		FilterPullup child_pullup(context, true, false);
+		child = child_pullup.Rewrite(std::move(child));
+		auto bindings = child->GetColumnBindings();
+		child->ResolveOperatorTypes();
+		vector<unique_ptr<Expression>> key_expressions;
+		vector<reference<const Expression>> keys;
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto key = make_uniq<BoundColumnRefExpression>(child->types[i], bindings[i]);
+			key_expressions.push_back(std::move(key));
+			if (!setop.setop_all && context) {
+				ExpressionBinder::PushCollation(*context, key_expressions.back(), child->types[i]);
+			}
+			keys.push_back(*key_expressions.back());
+		}
+		vector<unique_ptr<Expression>> constraints;
+		// The binder has already coerced each branch to the UNION's output types.
+		for (auto &filter : child_pullup.filters_expr_pullup) {
+			if (FilterCombiner::IsKeyConstraint(*filter, keys) && FilterCombiner::CanMatchExpression(*filter)) {
+				constraints.push_back(BindSetConstraint(filter->Copy(), setop, bindings));
+			}
+		}
+		child = GeneratePullupFilter(std::move(child), child_pullup.filters_expr_pullup);
+		if (child_idx == 0) {
+			FilterCombiner::DeduplicateFilters(constraints);
+			common = std::move(constraints);
+			continue;
+		}
+		expression_set_t branch_constraints;
+		for (auto &filter : constraints) {
+			branch_constraints.insert(*filter);
+		}
+		for (idx_t i = 0; i < common.size(); i++) {
+			if (!branch_constraints.count(*common[i])) {
+				common.erase_at(i--);
+			}
+		}
+	}
+	return ReturnConstraints(std::move(op), std::move(common));
 }
 
 } // namespace duckdb

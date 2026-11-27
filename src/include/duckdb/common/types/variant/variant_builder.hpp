@@ -534,10 +534,11 @@ struct VariantBuilder {
 //===--------------------------------------------------------------------===//
 // Emit (source: a VariantNode-like cursor)
 //===--------------------------------------------------------------------===//
-//! Collect the (non-missing) object children of a node in lexicographic key order
+//! Collect the (non-missing) object children of a node - the key order of an object is not significant, so the
+//! children are emitted in the order they are stored
 template <class NODE>
 auto CollectObjectChildren(const NODE &it) {
-	auto object = it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC);
+	auto object = it.GetObjectChildren(VariantIterationOrder::INTERNAL);
 	using EntryT = std::decay_t<decltype(*object.begin())>;
 	vector<EntryT> children;
 	for (auto &entry : object) {

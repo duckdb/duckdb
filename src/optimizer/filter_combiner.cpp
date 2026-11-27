@@ -103,6 +103,75 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 	return FilterResult::SUCCESS;
 }
 
+bool FilterCombiner::CanMatchExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		// Expression equality must not conflate constants a function can distinguish, such as signed zeros.
+		return expr.GetReturnType().EqualValuesAreIdentical();
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		return false;
+	}
+	bool can_match = true;
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](const Expression &child) { can_match &= CanMatchExpression(child); });
+	return can_match;
+}
+
+bool FilterCombiner::CanCopyFilter(const Expression &filter) {
+	if (filter.IsVolatile() || filter.CanThrow() || filter.HasParameter()) {
+		return false;
+	}
+	auto compared = GetComparedExpression(filter);
+	const bool merged_comparison = BoundComparisonExpression::IsComparison(filter) ||
+	                               filter.GetExpressionType() == ExpressionType::COMPARE_BETWEEN;
+	return CanMatchExpression(compared && merged_comparison ? *compared : filter);
+}
+
+bool FilterCombiner::IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys) {
+	if (!CanCopyFilter(filter)) {
+		return false;
+	}
+	switch (filter.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::OPERATOR_NOT: {
+		bool valid = true;
+		ExpressionIterator::EnumerateChildren(filter,
+		                                      [&](const Expression &child) { valid &= IsKeyConstraint(child, keys); });
+		return valid;
+	}
+	default:
+		break;
+	}
+	auto compared = FilterCombiner::GetComparedExpression(filter);
+	if (filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL ||
+	    filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) { compared = &child; });
+	}
+	if (!compared) {
+		return false;
+	}
+	for (auto &key : keys) {
+		if (FilterCombiner::CanMatchExpression(key) && key.get().Equals(*compared)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void FilterCombiner::DeduplicateFilters(vector<unique_ptr<Expression>> &filters) {
+	expression_set_t seen;
+	vector<unique_ptr<Expression>> unique_filters;
+	for (auto &filter : filters) {
+		if (!filter->IsVolatile() && !filter->CanThrow() && CanMatchExpression(*filter) &&
+		    !seen.insert(*filter).second) {
+			continue;
+		}
+		unique_filters.push_back(std::move(filter));
+	}
+	filters = std::move(unique_filters);
+}
+
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
@@ -135,6 +204,10 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 	// collect every column reference that belongs to an equivalence set
 	vector<reference<const BoundColumnRefExpression>> candidate_columns;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(filter, [&](const BoundColumnRefExpression &col) {
+		// An arbitrary expression can distinguish equal values with different representations.
+		if (!col.GetReturnType().EqualValuesAreIdentical()) {
+			return;
+		}
 		auto entry = equivalence_set_map.find(col);
 		if (entry == equivalence_set_map.end()) {
 			return;
@@ -151,7 +224,8 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
-			if (item.get().Equals(col)) {
+			if (item.get().Equals(col) || item.get().CanThrow() || item.get().IsVolatile() ||
+			    !CanMatchExpression(item)) {
 				continue;
 			}
 			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
@@ -159,12 +233,142 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 	}
 }
 
+static optional_ptr<const Expression> GetConstraintKey(const Expression &filter) {
+	auto key = FilterCombiner::GetComparedExpression(filter);
+	if (key) {
+		return key;
+	}
+	switch (filter.GetExpressionType()) {
+	case ExpressionType::OPERATOR_IS_NULL:
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) { key = &child; });
+		break;
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::OPERATOR_NOT:
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) {
+			if (!key) {
+				key = GetConstraintKey(child);
+			}
+		});
+		break;
+	default:
+		break;
+	}
+	return key;
+}
+
+void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+                                               const std::function<bool(const Expression &)> &can_project,
+                                               const std::function<void(unique_ptr<Expression>)> &callback) {
+	FilterCombiner combiner(context);
+	auto &groups = combiner.equivalence_map;
+	auto &group_ids = combiner.equivalence_set_map;
+	for (auto &filter : filters) {
+		if (filter->GetExpressionType() != ExpressionType::COMPARE_EQUAL || !CanCopyFilter(*filter)) {
+			continue;
+		}
+		auto &comparison = filter->Cast<BoundFunctionExpression>();
+		if (BoundComparisonExpression::Left(comparison).IsScalar() ||
+		    BoundComparisonExpression::Right(comparison).IsScalar()) {
+			continue;
+		}
+		auto left = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::LeftMutable(comparison)));
+		auto right = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::RightMutable(comparison)));
+		if (left == right) {
+			continue;
+		}
+		// Merge smaller classes and discard old buckets: hidden chains must not retain quadratic state.
+		if (groups[left].size() < groups[right].size()) {
+			std::swap(left, right);
+		}
+		auto &target = groups[left];
+		for (auto &member : groups[right]) {
+			group_ids[member] = left;
+			target.push_back(member);
+		}
+		groups.erase(right);
+		combiner.constant_values.erase(right);
+	}
+	unordered_map<idx_t, reference<const Expression>> representatives;
+	for (auto &entry : groups) {
+		for (auto &member : entry.second) {
+			if (!can_project(member)) {
+				continue;
+			}
+			auto representative = representatives.find(entry.first);
+			if (representative == representatives.end()) {
+				representatives.emplace(entry.first, member.get());
+			} else {
+				// A star connects the visible members without generating pairs involving hidden keys.
+				callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+				                                           representative->second.get().Copy(), member.get().Copy()));
+			}
+		}
+	}
+	for (auto &filter : filters) {
+		auto key = GetConstraintKey(*filter);
+		if (!key || !IsKeyConstraint(*filter, {*key})) {
+			continue;
+		}
+		auto entry = group_ids.find(*key);
+		if (entry == group_ids.end()) {
+			continue;
+		}
+		auto representative = representatives.find(entry->second);
+		if (representative != representatives.end() && !key->Equals(representative->second)) {
+			callback(ExpressionIterator::ReplaceExpression(*filter, *key, representative->second));
+		}
+	}
+}
+
+void FilterCombiner::GenerateEquivalentKeyFilters(const Expression &filter,
+                                                  const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	if (!CanMatchExpression(filter)) {
+		return;
+	}
+	auto source = GetConstraintKey(filter);
+	if (!source || !IsKeyConstraint(filter, {*source})) {
+		return;
+	}
+	auto entry = equivalence_set_map.find(*source);
+	if (entry == equivalence_set_map.end()) {
+		return;
+	}
+	// Replace the whole key: repeated passes cannot form combinations of independent substitutions.
+	for (auto &target : equivalence_map[entry->second]) {
+		if (!source->Equals(target) && !target.get().CanThrow() && !target.get().IsVolatile() &&
+		    CanMatchExpression(target)) {
+			callback(ExpressionIterator::ReplaceExpression(filter, *source, target));
+		}
+	}
+}
+
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
-	// first loop over the remaining filters
+	vector<unique_ptr<Expression>> inferred;
+	{
+		expression_set_t seen;
+		for (auto &filter : remaining_filters) {
+			if (!filter->IsVolatile() && !filter->CanThrow() && CanMatchExpression(*filter)) {
+				seen.insert(*filter);
+			}
+		}
+		for (auto &filter : remaining_filters) {
+			GenerateEquivalentKeyFilters(*filter, [&](unique_ptr<Expression> copy) {
+				if (seen.insert(*copy).second) {
+					inferred.push_back(std::move(copy));
+				}
+			});
+		}
+	}
+	// Scan pushdown results refer to the unchanged prefix of original filters.
 	for (auto &filter : remaining_filters) {
 		callback(std::move(filter));
 	}
 	remaining_filters.clear();
+	for (auto &filter : inferred) {
+		callback(std::move(filter));
+	}
 	// now loop over the equivalence sets
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
@@ -380,7 +584,7 @@ void FilterCombiner::GenerateJoinFilters(const vector<JoinCondition> &conditions
                                          const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	D_ASSERT(target_side == JoinSide::LEFT || target_side == JoinSide::RIGHT);
 	for (auto &cond : conditions) {
-		// a comparison with constants is false for NULL, so NOT DISTINCT FROM acts as equality for it
+		// A matched row has the same key value, including NULL for NOT DISTINCT FROM.
 		if (!cond.IsComparison() || (cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
 		                             cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
 			continue;
@@ -393,8 +597,7 @@ void FilterCombiner::GenerateJoinFilters(const vector<JoinCondition> &conditions
 			continue;
 		}
 		for (auto &filter : filters) {
-			auto compared = GetComparedExpression(filter.get());
-			if (compared && compared->Equals(source)) {
+			if (CanMatchExpression(target) && IsKeyConstraint(filter, {source})) {
 				callback(ExpressionIterator::ReplaceExpression(filter.get(), source, target));
 			}
 		}
@@ -1157,6 +1360,7 @@ void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, con
 
 TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
                                                         vector<FilterPushdownResult> &pushdown_results) {
+	DeduplicateFilters(remaining_filters);
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {

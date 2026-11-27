@@ -27,7 +27,7 @@
 #include "fast_float/fast_float.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/bignum.hpp"
-#include "duckdb/common/bignum_limbs.hpp"
+#include "duckdb/common/uint128_arithmetic.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -3367,7 +3367,7 @@ static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint
 		const auto upper = static_cast<uint64_t>(input.upper);
 		const auto dropped_digits = NumericHelper::UnsignedLength<uint64_t>(upper);
 		mantissa =
-		    BignumLimb::DivRemPortable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
+		    Uint128DivRem64Portable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
 		exponent += dropped_digits;
 	}
 	// Eisel-Lemire; a truncated mantissa is only usable if mantissa + 1 rounds to the same float

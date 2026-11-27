@@ -5614,7 +5614,8 @@ namespace Catch {
                         Totals const& _totals,
                         std::string const& _stdOut,
                         std::string const& _stdErr,
-                        bool _aborting );
+                        bool _aborting,
+                        std::string const& _skipReason = "" );
 
         TestCaseStats( TestCaseStats const& )              = default;
         TestCaseStats( TestCaseStats && )                  = default;
@@ -5626,6 +5627,7 @@ namespace Catch {
         Totals totals;
         std::string stdOut;
         std::string stdErr;
+        std::string skipReason;
         bool aborting;
     };
 
@@ -10976,6 +10978,9 @@ namespace Catch {
         { SIGILL,  "SIGILL - Illegal instruction signal" },
         { SIGFPE,  "SIGFPE - Floating point error signal" },
         { SIGSEGV, "SIGSEGV - Segmentation violation signal" },
+#ifdef SIGBUS
+        { SIGBUS,  "SIGBUS - Bus error signal" },
+#endif
         { SIGTERM, "SIGTERM - Termination request signal" },
         { SIGABRT, "SIGABRT - Abort (abnormal termination) signal" }
     };
@@ -11244,11 +11249,13 @@ namespace Catch {
                                    Totals const& _totals,
                                    std::string const& _stdOut,
                                    std::string const& _stdErr,
-                                   bool _aborting )
+                                   bool _aborting,
+                                   std::string const& _skipReason )
     : testInfo( _testInfo ),
         totals( _totals ),
         stdOut( _stdOut ),
         stdErr( _stdErr ),
+        skipReason( _skipReason ),
         aborting( _aborting )
     {}
 
@@ -12903,7 +12910,8 @@ namespace Catch {
                                   deltaTotals,
                                   redirectedCout,
                                   redirectedCerr,
-                                  aborting()));
+                                  aborting(),
+                                  m_skippedTestReason));
 
         m_activeTestCase = nullptr;
         m_testCaseTracker = nullptr;

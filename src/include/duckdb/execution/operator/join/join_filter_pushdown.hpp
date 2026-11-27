@@ -39,20 +39,21 @@ enum class JoinFilterPushdownMode : uint8_t {
 
 struct JoinFilterPushdownColumn {
 	JoinFilterPushdownColumn() = default;
-	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other)
-	    : join_filter_idx(other.join_filter_idx), probe_column_index(other.probe_column_index),
-	      storage_type(other.storage_type), mode(other.mode),
-	      input_expression(other.input_expression ? other.input_expression->Copy() : nullptr) {
-	}
-	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) {
-		if (this != &other) {
-			JoinFilterPushdownColumn copy(other);
-			*this = std::move(copy);
-		}
-		return *this;
-	}
+	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other) = delete;
+	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) = delete;
 	JoinFilterPushdownColumn(JoinFilterPushdownColumn &&other) = default;
 	JoinFilterPushdownColumn &operator=(JoinFilterPushdownColumn &&other) = default;
+
+	//! Clone the owned expression only when changing a column or retaining it in a target.
+	JoinFilterPushdownColumn Copy() const {
+		JoinFilterPushdownColumn result;
+		result.join_filter_idx = join_filter_idx;
+		result.probe_column_index = probe_column_index;
+		result.storage_type = storage_type;
+		result.mode = mode;
+		result.input_expression = input_expression ? input_expression->Copy() : nullptr;
+		return result;
+	}
 
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;

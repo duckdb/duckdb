@@ -5,6 +5,7 @@ add_library_unity(
   variant_comparison.cpp
   variant_iterator.cpp
   variant_value_convert.cpp
+  variant_writer.cpp
   variant_binary_decoder.cpp
   parquet_variant_iterator.cpp
   parquet_variant_encoding.cpp)

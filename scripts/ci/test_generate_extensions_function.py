@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import re
+import os
 import runpy
 import sys
 import tempfile
+import subprocess
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
@@ -126,6 +128,79 @@ class ExtensionEntriesTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as error:
             self.regenerate({"iceberg"})
         self.assertEqual(error.exception.code, 1)
+
+    def test_absolute_shell_path_is_preserved(self):
+        shell = self.root / "shell with spaces" / "duckdb"
+        with mock.patch.object(sys, "argv", ["generate_extensions_function.py", "--shell", str(shell)]), mock.patch(
+            "os.chdir"
+        ):
+            namespace = runpy.run_path(str(REPO_ROOT / "scripts" / "generate_extensions_function.py"))
+        self.assertEqual(Path(namespace["DUCKDB_PATH"]), shell)
+
+    def test_query_disables_builtin_loading_and_passes_sql_as_an_argument(self):
+        sql = """SELECT 'quotes " and $()' AS value;"""
+        process = subprocess.CompletedProcess([], 0, stdout='value\n"quotes "" and $()"\n', stderr="")
+        with mock.patch.dict(self.generator, {"DUCKDB_PATH": "/shell path/duckdb"}), mock.patch(
+            "subprocess.run", return_value=process
+        ) as run:
+            rows = self.generator["get_query"](sql, "LOAD 'extension path';")
+        self.assertEqual(rows, [{"value": 'quotes " and $()'}])
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "/shell path/duckdb")
+        self.assertIn("-no-builtin-extensions", command)
+        self.assertEqual(command[-1], "LOAD 'extension path';" + sql)
+        self.assertNotIn("shell", run.call_args.kwargs)
+
+    def test_query_failure_reports_exit_code_and_stderr(self):
+        process = subprocess.CompletedProcess([], 7, stdout="partial output", stderr="extension dependency is missing")
+        with mock.patch("subprocess.run", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "exit 7") as error:
+                self.generator["get_query"]("SELECT 42;", "")
+        self.assertIn("extension dependency is missing", str(error.exception))
+        self.assertIn("partial output", str(error.exception))
+
+    def test_empty_query_output_fails_with_the_query(self):
+        process = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with mock.patch("subprocess.run", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "no CSV header") as error:
+                self.generator["get_query"]("SELECT 42;", "")
+        self.assertIn("SELECT 42", str(error.exception))
+
+    @unittest.skipUnless(os.environ.get("DUCKDB_TEST_BINARY"), "requires DUCKDB_TEST_BINARY")
+    def test_shell_catalog_baseline_excludes_json_until_explicit_load(self):
+        shell = Path(os.environ["DUCKDB_TEST_BINARY"]).resolve()
+        with mock.patch.dict(self.generator, {"DUCKDB_PATH": str(shell)}):
+            baseline, _ = self.generator["get_functions"]()
+            loaded, _ = self.generator["get_functions"]("LOAD json;")
+        read_json = self.generator["Function"]("read_json", self.generator["CatalogType"].TABLE)
+        self.assertNotIn(read_json, baseline)
+        self.assertIn(read_json, loaded)
+
+    @unittest.skipUnless(os.environ.get("DUCKDB_TEST_BINARY"), "requires DUCKDB_TEST_BINARY")
+    def test_shell_catalog_excludes_placeholders_and_exposes_shared_extension_overloads(self):
+        shell = Path(os.environ["DUCKDB_TEST_BINARY"]).resolve()
+        age = self.generator["Function"]("age", self.generator["CatalogType"].SCALAR)
+        with mock.patch.dict(self.generator, {"DUCKDB_PATH": str(shell)}):
+            baseline, _ = self.generator["get_functions"]()
+            core, core_overloads = self.generator["get_functions"]("LOAD core_functions;")
+            icu, icu_overloads = self.generator["get_functions"]("LOAD icu;")
+        self.assertNotIn(age, baseline)
+        self.assertIn(age, core)
+        self.assertIn(age, icu)
+        self.assertEqual(
+            {overload.parameter_types for overload in core_overloads[age]},
+            {
+                (self.generator["LogicalType"]("TIMESTAMP"),),
+                (self.generator["LogicalType"]("TIMESTAMP"), self.generator["LogicalType"]("TIMESTAMP")),
+            },
+        )
+        self.assertEqual(
+            {overload.parameter_types for overload in icu_overloads[age]},
+            {
+                (self.generator["LogicalType"]("TIMESTAMPTZ"),),
+                (self.generator["LogicalType"]("TIMESTAMPTZ"), self.generator["LogicalType"]("TIMESTAMPTZ")),
+            },
+        )
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 	return result;
 }
 
-bool LogicalOperator::HasSideEffects() const {
+bool LogicalOperator::HasLocalSideEffects() const {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
@@ -102,7 +102,13 @@ bool LogicalOperator::HasSideEffects() const {
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return true;
 	default:
-		break;
+		return false;
+	}
+}
+
+bool LogicalOperator::HasSideEffects() const {
+	if (HasLocalSideEffects()) {
+		return true;
 	}
 	for (auto &child : children) {
 		if (child && child->HasSideEffects()) {

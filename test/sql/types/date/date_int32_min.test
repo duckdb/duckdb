@@ -1,0 +1,90 @@
+# name: test/sql/types/date/date_int32_min.test
+# description: The smallest DATE (5877642-06-23 (BC), one day below the -infinity sentinel) renders and round-trips
+# group: [date]
+
+# make_date can produce the smallest representable date
+query III
+SELECT make_date(-2147483648), isfinite(make_date(-2147483648)), isinf(make_date(-2147483648));
+----
+5877642-06-23 (BC)	true	false
+
+# it round-trips through VARCHAR
+query I
+SELECT '5877642-06-23 (BC)'::DATE;
+----
+5877642-06-23 (BC)
+
+query I
+SELECT make_date(-2147483648)::VARCHAR::DATE = make_date(-2147483648);
+----
+true
+
+# it can be built from its parts
+query II
+SELECT make_date(-5877641, 6, 23), make_date({'year': -5877641, 'month': 6, 'day': 23});
+----
+5877642-06-23 (BC)	5877642-06-23 (BC)
+
+# the day between it and the smallest regular date is the -infinity sentinel and stays invalid
+statement error
+SELECT '5877642-06-24 (BC)'::DATE;
+----
+date field value out of range
+
+query I
+SELECT try_cast('5877642-06-24 (BC)' AS DATE);
+----
+NULL
+
+statement error
+SELECT make_date(-5877641, 6, 24);
+----
+Date out of range
+
+# below the smallest date remains out of range
+statement error
+SELECT '5877642-06-22 (BC)'::DATE;
+----
+date field value out of range
+
+statement error
+SELECT make_date(-5877641, 6, 22);
+----
+Date out of range
+
+# extraction of its parts
+query III
+SELECT year(d), month(d), day(d) FROM (SELECT DATE '5877642-06-23 (BC)' d);
+----
+-5877641	6	23
+
+# it sorts below the -infinity sentinel
+query I
+SELECT DATE '5877642-06-23 (BC)' < '-infinity'::DATE;
+----
+true
+
+# it does not fit any timestamp type
+query IIII
+SELECT try_cast(d AS TIMESTAMP), try_cast(d AS TIMESTAMP_NS), try_cast(d AS TIMESTAMP_S), try_cast(d AS TIMESTAMP_MS)
+FROM (SELECT DATE '5877642-06-23 (BC)' d);
+----
+NULL	NULL	NULL	NULL
+
+# it round-trips through CSV
+statement ok
+COPY (SELECT make_date(-2147483648) AS d) TO '{TEST_DIR}/date_int32_min.csv';
+
+query I
+SELECT d FROM read_csv('{TEST_DIR}/date_int32_min.csv', columns={'d': 'DATE'});
+----
+5877642-06-23 (BC)
+
+# it round-trips through a table
+statement ok
+CREATE TABLE smallest_date AS SELECT make_date(-2147483648) AS d;
+
+query II
+SELECT d, d = make_date(-2147483648) FROM smallest_date;
+----
+5877642-06-23 (BC)	true

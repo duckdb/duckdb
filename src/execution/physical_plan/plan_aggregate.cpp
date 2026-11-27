@@ -266,7 +266,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	reference<PhysicalOperator> plan = CreatePlanRecursive(*op.children[0]);
 	// the ungrouped aggregate evaluates its filters directly; grouped aggregates need them as payload columns
 	const bool ungrouped = op.groups.empty() && op.grouping_sets.size() <= 1;
 	plan = ExtractAggregateExpressions(plan, op.expressions, op.groups, op.grouping_sets, !ungrouped);

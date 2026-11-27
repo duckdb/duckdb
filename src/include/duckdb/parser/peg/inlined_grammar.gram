@@ -2519,11 +2519,12 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
+TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction / JoinTransaction
 
 BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
 RollbackTransaction <- AbortOrRollback Transaction?
 CommitTransaction <- CommitOrEnd Transaction?
+JoinTransaction <- 'JOIN' 'TRANSACTION' StringLiteral
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'

@@ -79,3 +79,11 @@ select {FUNC}(arg, val, 1000000) from t1;
 Invalid Input Error: Invalid input for arg_min/arg_max: n value must be < 1000000
 
 endloop
+
+statement ok
+SET memory_limit='1GB';
+
+query II
+SELECT count(*), sum(m[1]) FROM (SELECT max(i, 100000) m FROM range(20000) r(i) GROUP BY i);
+----
+20000	199990000

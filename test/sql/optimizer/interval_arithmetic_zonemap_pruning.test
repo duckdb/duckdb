@@ -1,0 +1,130 @@
+# name: test/sql/optimizer/interval_arithmetic_zonemap_pruning.test
+# description: Timestamp +/- constant fixed-duration interval predicates use zonemaps for row-group pruning
+# group: [optimizer]
+
+statement ok
+CREATE TABLE prune AS
+SELECT i, TIMESTAMP '2020-01-01' + i * INTERVAL 1 SECOND AS ts
+FROM range(500000) tbl(i);
+
+# a constant interval without a month component is a fixed duration: the bound on ts is derivable
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM prune WHERE ts - INTERVAL 1 SECOND > TIMESTAMP '2020-01-06';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query III
+SELECT count(*), min(i), max(i) FROM prune WHERE ts - INTERVAL 1 SECOND > TIMESTAMP '2020-01-06';
+----
+67998	432002	499999
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM prune WHERE ts + INTERVAL 1 HOUR > TIMESTAMP '2020-01-06 01:00:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query III
+SELECT count(*), min(i), max(i) FROM prune WHERE ts + INTERVAL 1 HOUR > TIMESTAMP '2020-01-06 01:00:00';
+----
+67999	432001	499999
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM prune WHERE INTERVAL 1 HOUR + ts > TIMESTAMP '2020-01-06 01:00:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+# a day interval is also a fixed duration for timestamps
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM prune WHERE ts - INTERVAL 5 DAYS > TIMESTAMP '2020-01-01';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+# month-bearing intervals clamp the day and derive no bounds, but must stay correct
+query III
+SELECT count(*), min(i), max(i) FROM prune WHERE ts - INTERVAL 1 MONTH > TIMESTAMP '2019-12-06';
+----
+67999	432001	499999
+
+# a NULL interval matches no rows
+query I
+SELECT count(*) FROM prune WHERE ts - NULL::INTERVAL > TIMESTAMP '2020-01-06';
+----
+0
+
+# a non-constant interval derives no bounds, but must stay correct
+statement ok
+CREATE TABLE iv AS SELECT INTERVAL 1 SECOND AS delta;
+
+query I
+SELECT count(*) FROM prune, iv WHERE ts - delta > TIMESTAMP '2020-01-06';
+----
+67998
+
+# infinite timestamps are their own result and survive the corner evaluation
+statement ok
+CREATE TABLE inf_ts AS SELECT * FROM (VALUES (TIMESTAMP '-infinity'), (TIMESTAMP '2020-01-01'), (TIMESTAMP 'infinity')) t(x);
+
+query I
+SELECT count(*) FROM inf_ts WHERE x + INTERVAL 1 HOUR > TIMESTAMP '2020-01-01';
+----
+2
+
+query I
+SELECT count(*) FROM inf_ts WHERE x - INTERVAL 1 HOUR < TIMESTAMP '2020-01-01';
+----
+2
+
+# the smallest finite timestamp (raw INT64_MIN) sorts below -infinity (-INT64_MAX): a range straddling
+# the sentinel is not monotone in the raw ordering, so no bounds may be derived from it
+statement ok
+CREATE TABLE straddle_us AS
+SELECT * FROM (VALUES (make_timestamp(-9223372036854775808)), (TIMESTAMP '-infinity')) t(x);
+
+query I
+SELECT count(*) FROM straddle_us WHERE x + INTERVAL 1 SECOND > TIMESTAMP '2000-01-01';
+----
+0
+
+statement ok
+INSERT INTO straddle_us VALUES (TIMESTAMP '2000-01-01');
+
+query I
+SELECT count(*) FROM straddle_us WHERE x + INTERVAL 1 SECOND <= TIMESTAMP '-infinity';
+----
+1
+
+statement ok
+CREATE TABLE straddle_ns AS
+SELECT * FROM (VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), (TIMESTAMP_NS '-infinity')) t(x);
+
+query I
+SELECT count(*) FROM straddle_ns WHERE x + INTERVAL 1 SECOND > TIMESTAMP_NS '2000-01-01';
+----
+0
+
+statement ok
+INSERT INTO straddle_ns VALUES (TIMESTAMP_NS '2000-01-01');
+
+query I
+SELECT count(*) FROM straddle_ns WHERE x + INTERVAL 1 SECOND <= TIMESTAMP_NS '-infinity';
+----
+1
+
+# the other timestamp widths share the annotation
+foreach tstype TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+statement ok
+CREATE OR REPLACE TABLE tsw AS
+SELECT * FROM (VALUES (TIMESTAMP '2020-01-01'::{tstype}), (TIMESTAMP '2020-01-02'::{tstype})) t(x);
+
+query I
+SELECT count(*) FROM tsw WHERE x + INTERVAL 1 HOUR > TIMESTAMP '2020-01-01 12:00:00'::{tstype};
+----
+1
+
+query I
+SELECT count(*) FROM tsw WHERE x - INTERVAL 1 HOUR < TIMESTAMP '2020-01-01 12:00:00'::{tstype};
+----
+1
+
+endloop

@@ -110,7 +110,9 @@ public:
 	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
 	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
 
-	// min date is 5877642-06-25 (BC) (-2^31+2)
+	// min well-behaved date is 5877642-06-25 (BC) (-2^31+2): the day below it, 5877642-06-24 (BC), is the
+	// -infinity sentinel (-2^31+1), and the smallest representable date is 5877642-06-23 (BC) (-2^31),
+	// which sorts below -infinity
 	constexpr static const int32_t DATE_MIN_YEAR = -5877641;
 	constexpr static const int32_t DATE_MIN_MONTH = 6;
 	constexpr static const int32_t DATE_MIN_DAY = 25;

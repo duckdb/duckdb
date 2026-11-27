@@ -31,7 +31,7 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
-		reference<PhysicalOperator> child = ResolveAndPlan(std::move(op.children[0]));
+		reference<PhysicalOperator> child = ResolveAndPlan(*op.children[0]);
 		auto &child_types = child.get().types;
 
 		// this is for table producing functions that consume subquery results

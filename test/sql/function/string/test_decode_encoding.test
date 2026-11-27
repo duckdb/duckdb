@@ -97,6 +97,72 @@ SELECT encode('aé', 'utf-16')
 ----
 a\x00\xE9\x00
 
+# decode drops the byte order mark of utf-16, the explicit byte orders keep it
+query I
+SELECT decode('\xfe\xff\x00h\xd8\x3d\xde\x00'::BLOB, 'utf-16')
+----
+h😀
+
+query I
+SELECT decode('\xff\xfeh\x00\x3d\xd8\x00\xde'::BLOB, 'utf-16')
+----
+h😀
+
+query I
+SELECT decode('h\x00\x3d\xd8\x00\xde'::BLOB, 'utf-16')
+----
+h😀
+
+query I
+SELECT system.encodings."utf-16"('\xfe\xff\x00h\x00'::BLOB, false)
+----
+{'decoded': h, 'consumed': 4}
+
+query I
+SELECT hex(encode(decode('\xfe\xff\x00h\xd8\x3d\xde\x00'::BLOB, 'utf-16be')))
+----
+EFBBBF68F09F9880
+
+query I
+SELECT hex(encode(decode('\xff\xfeh\x00'::BLOB, 'utf-16le')))
+----
+EFBBBF68
+
+query I
+SELECT encode('aé😀', 'utf-16be')
+----
+\x00a\x00\xE9\xD8=\xDE\x00
+
+query I
+SELECT encode('aé😀', 'utf-16le')
+----
+a\x00\xE9\x00=\xD8\x00\xDE
+
+# Big-endian U+0100 code units must not be narrowed as little-endian ASCII
+query I
+SELECT decode(from_hex('feff0100010001000100'), 'utf-16')
+----
+ĀĀĀĀ
+
+query I
+SELECT decode(from_hex('0100010001000100'), 'utf-16be')
+----
+ĀĀĀĀ
+
+query I
+SELECT system.encodings."utf-16be"(from_hex('0100010001000100'), false)
+----
+{'decoded': ĀĀĀĀ, 'consumed': 8}
+
+foreach encoding utf-16 utf-16be utf-16le
+
+query I
+SELECT decode(encode('aĀbcde', '{encoding}'), '{encoding}')
+----
+aĀbcde
+
+endloop
+
 query I
 SELECT decode('caf\xc3\xa9'::BLOB, 'utf-8')
 ----

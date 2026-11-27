@@ -8,6 +8,7 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -464,6 +465,27 @@ static void ListSortResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	}
 }
 
+//! Sorting keeps the elements, so the result has the statistics of the list
+static unique_ptr<BaseStatistics> ListSortStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS || list_stats.GetType() != input.expr.GetReturnType()) {
+		return nullptr;
+	}
+	return list_stats.Copy().ToUnique();
+}
+
+//! The result holds one index per element of the list
+static unique_ptr<BaseStatistics> ListGradeUpStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	auto result = ListStats::CreateUnknown(input.expr.GetReturnType());
+	result.CopyValidity(list_stats);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(list_stats));
+	return result.ToUnique();
+}
+
 static void SetListSortSerialization(ScalarFunction &function) {
 	function.SetUnbindCallback(ListSortUnbind);
 	function.SetSerializeCallback(ListSortBindData::Serialize);
@@ -489,10 +511,13 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort);
 	sort.SetResolveTypesCallback(ListSortResolveTypes);
+	sort.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_order);
 	sort_order.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_order.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_orders);
 	sort_orders.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_orders.SetStatisticsCallback(ListSortStats);
 
 	ScalarFunctionSet list_sort;
 	list_sort.AddFunction(sort);
@@ -519,8 +544,11 @@ ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	    .AddParameter("sort_order", LogicalType::VARCHAR)
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort);
+	sort.SetStatisticsCallback(ListGradeUpStats);
 	SetListSortSerialization(sort_order);
+	sort_order.SetStatisticsCallback(ListGradeUpStats);
 	SetListSortSerialization(sort_orders);
+	sort_orders.SetStatisticsCallback(ListGradeUpStats);
 
 	ScalarFunctionSet list_grade_up;
 	list_grade_up.AddFunction(sort);
@@ -542,8 +570,10 @@ ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort_reverse);
 	sort_reverse.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_reverse.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_reverse_null_order);
 	sort_reverse_null_order.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_reverse_null_order.SetStatisticsCallback(ListSortStats);
 
 	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);

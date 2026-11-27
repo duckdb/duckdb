@@ -3039,9 +3039,9 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								WHEN base_type = 'DATE' THEN 10::INTEGER
 								WHEN data_type IN ('TIME', 'TIME WITH TIME ZONE', 'TIME_NS') THEN 15::INTEGER
 								WHEN data_type LIKE 'TIMESTAMP%%' THEN 26::INTEGER
-								ELSE numeric_precision::INTEGER
+								ELSE TRY_CAST(numeric_precision AS INTEGER)
 							END,
-							xdbc_decimal_digits: numeric_scale::SMALLINT,
+							xdbc_decimal_digits: TRY_CAST(numeric_scale AS SMALLINT),
 							xdbc_num_prec_radix: numeric_precision_radix::SMALLINT,
 							xdbc_nullable: CASE is_nullable
 								WHEN FALSE THEN 0::SMALLINT

@@ -1,0 +1,83 @@
+# name: test/sql/optimizer/test_common_subplan_materialization_cost.test
+# description: Common-subplan filtering preserves cardinality boundaries and aggregate prefixes
+# group: [optimizer]
+
+statement ok
+SET explain_output='optimized_only';
+
+statement ok
+CREATE VIEW cost_at_threshold AS
+SELECT i FROM range(1024) a(i) UNION ALL SELECT i FROM range(1024, 2048) b(i);
+
+statement ok
+CREATE VIEW cost_over_threshold AS
+SELECT i FROM range(1024) a(i) UNION ALL SELECT i FROM range(1024, 2049) b(i);
+
+# The small-result threshold is inclusive and requires more than one leaf.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM cost_at_threshold UNION ALL SELECT * FROM cost_at_threshold;
+----
+logical_opt	<REGEX>:.*__common_subplan_.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM cost_at_threshold UNION ALL SELECT * FROM cost_at_threshold);
+----
+4096
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM cost_over_threshold UNION ALL SELECT * FROM cost_over_threshold;
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM cost_over_threshold UNION ALL SELECT * FROM cost_over_threshold);
+----
+4098
+
+statement ok
+CREATE VIEW cost_below_ratio AS
+(SELECT i FROM range(5000) a(i) UNION ALL SELECT i FROM range(5000, 5001) b(i)) LIMIT 2499;
+
+statement ok
+CREATE VIEW cost_at_ratio AS
+(SELECT i FROM range(5000) a(i) UNION ALL SELECT i FROM range(5000, 5001) b(i)) LIMIT 2500;
+
+# Above the small-result threshold, the comparison with half the largest leaf is strict.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM cost_below_ratio UNION ALL SELECT * FROM cost_below_ratio;
+----
+logical_opt	<REGEX>:.*__common_subplan_.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM cost_below_ratio UNION ALL SELECT * FROM cost_below_ratio);
+----
+4998
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM cost_at_ratio UNION ALL SELECT * FROM cost_at_ratio;
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM cost_at_ratio UNION ALL SELECT * FROM cost_at_ratio);
+----
+5000
+
+statement ok
+CREATE VIEW cost_window AS SELECT row_number() OVER (ORDER BY i) rn FROM range(5) r(i);
+
+# Unary projections preserve the window exception to the multi-leaf requirement.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM cost_window UNION ALL SELECT * FROM cost_window;
+----
+logical_opt	<REGEX>:.*__common_subplan_.*
+
+query I
+SELECT sum(rn) FROM (SELECT * FROM cost_window UNION ALL SELECT * FROM cost_window);
+----
+30
+
+query II
+EXPLAIN (FORMAT JSON) SELECT i FROM range(10) r(i) UNION ALL SELECT i FROM range(10) r(i);
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*

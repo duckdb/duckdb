@@ -150,6 +150,9 @@ public:
 		return false;
 	}
 
+	//! Decide whether co-evaluation is worth it
+	bool ShouldCoEvaluate(idx_t size = STANDARD_VECTOR_SIZE) const;
+
 	//! The shared global state from sinking
 	WindowGlobalSinkState &gsink;
 	//! The hash partition data
@@ -1171,6 +1174,39 @@ void WindowLocalSourceState::BuildResult(ExecutionContext &context, DataChunk &i
 	result.Verify(context.client.db);
 }
 
+bool WindowHashGroup::ShouldCoEvaluate(idx_t size) const {
+	if (!gsink.op.partition_limit.IsValid()) {
+		return false;
+	}
+
+	//	Compute the expected value of the span used by co-evaluation
+	const auto partition_limit = LossyNumericCast<double, idx_t>(gsink.op.partition_limit.GetIndex());
+	const auto npartitions = LossyNumericCast<double, idx_t>(partition_count.load());
+	const auto dcount = LossyNumericCast<double, idx_t>(count);
+	const auto partition_avg = dcount / npartitions;
+	const auto k = MinValue(partition_limit, partition_avg);
+	const auto active_rows = npartitions * k;
+	const auto prob_i_active = active_rows / dcount;
+	const auto prob_i_inactive = 1 - prob_i_active;
+	const auto avg_inactive = (partition_avg - partition_limit) / 2;
+	const auto dsize = LossyNumericCast<double, idx_t>(size);
+
+	double expected = 0;
+	//	Case 1: begin is active
+	//	Case 1a: end is active: the entire vector is active
+	expected += prob_i_active * prob_i_active * dsize;
+	//	Case 1b: end is inactive: the tail has an inactive range
+	expected += prob_i_active * prob_i_inactive * (dsize - avg_inactive);
+	//	Case 2: begin is inactive: the head has an inactive range
+	//	Case 2a: end is active
+	expected += prob_i_inactive * prob_i_active * (dsize - avg_inactive);
+	//	Case 2b: end is inactive: there are likely gaps at either end
+	expected += prob_i_inactive * prob_i_inactive * (dsize - avg_inactive * 2);
+
+	//	TODO: Scale for partition lookup cost.
+	return expected < 0.8 * dsize;
+}
+
 void WindowLocalSourceState::CoEvaluate(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
 	const auto partition_limit = gsource.gsink.op.partition_limit;
 	const auto &partition_mask = window_hash_group->partition_mask;
@@ -1269,9 +1305,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	//	Apply co-evaluation with early stop
-	const auto partition_avg = LossyNumericCast<double, idx_t>(window_hash_group->count) /
-	                           LossyNumericCast<double, idx_t>(window_hash_group->partition_count.load());
-	if (gsource.gsink.op.partition_limit.IsValid() && partition_avg < STANDARD_VECTOR_SIZE) {
+	if (window_hash_group->ShouldCoEvaluate()) {
 		CoEvaluate(context, result, interrupt);
 		return;
 	}
