@@ -4,18 +4,88 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shared_child_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
+static idx_t UsedBytes(const map<idx_t, idx_t> &segments_by_used) {
+	return segments_by_used.empty() ? 0 : segments_by_used.rbegin()->first;
+}
+
+void ColumnDataSharedChildAccounting::SetUsed(Entry &entry, idx_t previous_used) {
+	used_size = used_size - previous_used + UsedBytes(entry.segments_by_used);
+}
+
+void ColumnDataSharedChildAccounting::AddReference(idx_t id, idx_t size, idx_t used) {
+	auto inserted = entries.emplace(id, Entry {size, {}});
+	auto &entry = inserted.first->second;
+	if (inserted.second) {
+		allocation_size += size;
+	}
+	const auto previous_used = UsedBytes(entry.segments_by_used);
+	entry.segments_by_used[used]++;
+	SetUsed(entry, previous_used);
+}
+
+void ColumnDataSharedChildAccounting::UpdateUsed(idx_t id, idx_t previous, idx_t used) {
+	auto &entry = entries.find(id)->second;
+	const auto previous_used = UsedBytes(entry.segments_by_used);
+	auto count = entry.segments_by_used.find(previous);
+	D_ASSERT(count != entry.segments_by_used.end());
+	if (--count->second == 0) {
+		entry.segments_by_used.erase(count);
+	}
+	entry.segments_by_used[used]++;
+	SetUsed(entry, previous_used);
+}
+
+void ColumnDataSharedChildAccounting::RemoveReference(idx_t id, idx_t used) {
+	auto it = entries.find(id);
+	D_ASSERT(it != entries.end());
+	auto &entry = it->second;
+	const auto previous_used = UsedBytes(entry.segments_by_used);
+	auto count = entry.segments_by_used.find(used);
+	D_ASSERT(count != entry.segments_by_used.end());
+	if (--count->second == 0) {
+		entry.segments_by_used.erase(count);
+	}
+	// the used size drops to the longest prefix the remaining segments reference
+	SetUsed(entry, previous_used);
+	if (entry.segments_by_used.empty()) {
+		allocation_size -= entry.size;
+		entries.erase(it);
+	}
+}
+
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
-                                                         vector<LogicalType> types_p)
+                                                         vector<LogicalType> types_p,
+                                                         shared_ptr<ColumnDataSharedChildAccounting> accounting)
     : allocator(std::move(allocator_p)), total_allocated(0), last_chunk_total_allocated(0), constant_metadata_size(0),
-      types(std::move(types_p)), count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
+      types(std::move(types_p)), count(0), shared_child_accounting(std::move(accounting)),
+      heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
+}
+
+ColumnDataCollectionSegment::~ColumnDataCollectionSegment() {
+	for (auto &entry : shared_child_sizes) {
+		shared_child_accounting->RemoveReference(entry.first, entry.second.second);
+	}
+}
+
+void ColumnDataCollectionSegment::SetSharedChildAccounting(shared_ptr<ColumnDataSharedChildAccounting> accounting) {
+	if (accounting == shared_child_accounting) {
+		return;
+	}
+	for (auto &entry : shared_child_sizes) {
+		accounting->AddReference(entry.first, entry.second.first, entry.second.second);
+		shared_child_accounting->RemoveReference(entry.first, entry.second.second);
+	}
+	shared_child_accounting = std::move(accounting);
 }
 
 void ColumnDataCollectionSegment::Reset() {
@@ -28,7 +98,44 @@ void ColumnDataCollectionSegment::Reset() {
 	child_indices.clear();
 	dictionaries.clear();
 	dictionary_map.clear();
+	shared_child_buffers.clear();
+	for (auto &entry : shared_child_sizes) {
+		shared_child_accounting->RemoveReference(entry.first, entry.second.second);
+	}
+	shared_child_sizes.clear();
 	heap->GetAllocator().Reset();
+}
+
+VectorDataIndex ColumnDataCollectionSegment::AddSharedLargeVector(shared_ptr<SharedChildStorage> storage, idx_t count_p,
+                                                                  ChunkMetaData &chunk_meta,
+                                                                  VectorDataIndex prev_index) {
+	D_ASSERT(share_list_children && shared_child_accounting);
+	// like every LARGE_FLAT entry it holds more than a vector, a count-0 head would hide the rest of its chain
+	D_ASSERT(storage && count_p > STANDARD_VECTOR_SIZE && count_p <= storage->GetClaimedCount());
+	VectorMetaData meta_data;
+	// the capacity equals the count, so appends continue on a new entry instead of writing into shared data
+	meta_data.count = NumericCast<uint32_t>(count_p);
+	meta_data.representation = ColumnDataRepresentation::LARGE_FLAT;
+	meta_data.shared_child_slot = shared_child_buffers.size();
+	// the collection accounts each distinct storage once, chunk estimates charge the bytes the reference covers
+	const auto storage_size = storage->AllocationSize();
+	const auto used = count_p * storage->TypeSize();
+	auto sizes = shared_child_sizes.emplace(storage->Id(), make_pair(storage_size, used));
+	if (sizes.second) {
+		shared_child_accounting->AddReference(storage->Id(), storage_size, used);
+	} else if (used > sizes.first->second.second) {
+		shared_child_accounting->UpdateUsed(storage->Id(), sizes.first->second.second, used);
+		sizes.first->second.second = used;
+	}
+	total_allocated += used;
+	shared_child_buffers.push_back(std::move(storage));
+
+	VectorDataIndex index(vector_data.size());
+	vector_data.push_back(std::move(meta_data));
+	if (prev_index.IsValid()) {
+		GetVectorData(prev_index).next_data = index;
+	}
+	return index;
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size, idx_t capacity) {
@@ -345,9 +452,16 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto internal_type = vector_type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	auto &vdata = GetVectorData(vector_index);
-	D_ASSERT(vdata.is_allocated);
+	const auto shared_head = IsSharedListChild(vdata);
+	D_ASSERT(vdata.is_allocated || shared_head);
 
-	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+	const auto zero_copy = state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY;
+	if (!vdata.next_data.IsValid() && zero_copy && shared_head) {
+		// a complete shared list child: reference the shared storage through a scan-local view
+		SharedChildVector::SetView(result, GetSharedListChild(vdata), vdata.count);
+		return vdata.count;
+	}
+	if (!vdata.next_data.IsValid() && zero_copy) {
 		// no next data, we can do a zero-copy read of this vector
 		const auto capacity = GetVectorCapacity(vdata);
 		auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
@@ -370,6 +484,11 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		vector_count += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}
+	// never materialize into a shared buffer - it may still be referenced by other owners
+	auto &result_buffer = result.GetBufferRef();
+	if (result_buffer && result_buffer->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER) {
+		result.SetBuffer(make_buffer<StandardVectorBuffer>(capacity_t(vector_count), type_size));
+	}
 	// resize the result vector
 	result.Reserve(vector_count);
 	next_index = vector_index;
@@ -379,6 +498,19 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
+		if (IsSharedListChild(current_vdata)) {
+			auto &storage = GetSharedListChild(current_vdata);
+			auto shared_pin = storage->Pin();
+			if (type_size > 0) {
+				memcpy(target_data + current_offset * type_size, shared_pin.Ptr(), current_vdata.count * type_size);
+			}
+			// shared storage holds no NULLs
+			target_validity.SliceInPlace(ValidityMask(nullptr, current_vdata.count), current_offset, 0,
+			                             current_vdata.count);
+			current_offset += current_vdata.count;
+			next_index = current_vdata.next_data;
+			continue;
+		}
 		const auto current_capacity = GetVectorCapacity(current_vdata);
 		auto base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
 		auto validity_data = GetValidityPointer(base_ptr, type_size, current_vdata.count, current_capacity);

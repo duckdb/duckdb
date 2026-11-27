@@ -20,6 +20,7 @@ struct ColumnDataCopyFunction;
 class ColumnDataAllocator;
 class ColumnDataCollection;
 class ColumnDataCollectionSegment;
+class ColumnDataSharedChildAccounting;
 class ColumnDataRowCollection;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
@@ -84,6 +85,10 @@ public:
 	idx_t SizeInBytes() const;
 	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
 	idx_t AllocationSize() const;
+	//! Let NULL-free large list children appended to this (buffer-managed) collection reference shared child storage,
+	//! so lists carried or grown across recursive CTE iterations are not copied per append. Must be called before
+	//! the first append. Other collections copy list children
+	void EnableSharedListChildren();
 	//! Sets the partition index of this ColumnDataCollection
 	void SetPartitionIndex(idx_t index);
 
@@ -218,6 +223,10 @@ private:
 	idx_t count;
 	//! The data segments of the column data collection
 	vector<unique_ptr<ColumnDataCollectionSegment>> segments;
+	//! Accounts the shared child storage the segments reference once per collection (created with the first segment)
+	shared_ptr<ColumnDataSharedChildAccounting> shared_child_accounting;
+	//! Whether appended large list children reference shared child storage
+	bool share_list_children = false;
 	//! The set of copy functions
 	vector<ColumnDataCopyFunction> copy_functions;
 	//! When the column data collection is marked as finished - new tuples can no longer be appended to it

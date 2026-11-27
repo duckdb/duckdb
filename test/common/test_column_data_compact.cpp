@@ -7,6 +7,7 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/shared_child_vector.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -1159,6 +1160,590 @@ TEST_CASE("Large list children are scanned without copying", "[column_data_compa
 		VerifyLargeListChild(chained_first, length, length, 1000000);
 		VerifyLargeListChild(chained_second, length, length, 1000000);
 	}
+}
+
+// The tests below cover collections that share large list children (recursive CTE tables). SQL cannot tell sharing
+// from copying except by timing, results are identical, so the pointer equality, representation and accounting checks
+// here are the evidence that children are shared and that writes never reach shared storage.
+
+//! Fill 'chunk' with 'count' BIGINT[] rows: row zero holds 'length' values starting at 'base', the rest are empty
+static void FillLargeListChunk(DataChunk &chunk, idx_t count, idx_t length, int64_t base) {
+	chunk.Reset();
+	auto &list = chunk.data[0];
+	ListVector::Reserve(list, length);
+	auto entries = FlatVector::GetDataMutable<list_entry_t>(list);
+	entries[0] = list_entry_t {0, length};
+	for (idx_t i = 1; i < count; i++) {
+		entries[i] = list_entry_t {length, 0};
+	}
+	auto child = FlatVector::GetDataMutable<int64_t>(ListVector::GetChildMutable(list));
+	for (idx_t i = 0; i < length; i++) {
+		child[i] = base + int64_t(i);
+	}
+	ListVector::SetListSize(list, length);
+	FlatVector::SetSize(list, count_t(count));
+	chunk.CheckCardinality(count);
+}
+
+static void RequireLargeList(DataChunk &chunk, idx_t length, int64_t base) {
+	auto &list = chunk.data[0];
+	auto entries = FlatVector::GetData<list_entry_t>(list);
+	REQUIRE(entries[0].length == length);
+	auto child = FlatVector::GetData<int64_t>(ListVector::GetChild(list));
+	REQUIRE(child[entries[0].offset] == base);
+	REQUIRE(child[entries[0].offset + length - 1] == base + int64_t(length) - 1);
+}
+
+// The representation of a list child is not observable from SQL: results are identical whether a collection copies
+// a child or references shared storage.
+TEST_CASE("Only collections that opt in share large list children", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
+	const idx_t length = 3000;
+	for (auto opt_in : {false, true}) {
+		for (auto with_null : {false, true}) {
+			// a collection as a materialized CTE or a hash join creates it, or as a recursive CTE table
+			ColumnDataCollection collection(buffer_manager, types);
+			if (opt_in) {
+				collection.EnableSharedListChildren();
+			}
+			DataChunk input;
+			input.Initialize(Allocator::DefaultAllocator(), types);
+			FillLargeListChunk(input, 1, length, 1);
+			if (with_null) {
+				FlatVector::ValidityMutable(ListVector::GetChildMutable(input.data[0])).SetInvalid(5);
+			}
+			ColumnDataAppendState append_state;
+			collection.InitializeAppend(append_state);
+			collection.Append(append_state, input);
+			// only a NULL-free child of an opted-in collection is shared, everything else is a block-backed entry
+			auto &child_entry = FirstListChildEntry(collection);
+			REQUIRE(child_entry.representation == ColumnDataRepresentation::LARGE_FLAT);
+			REQUIRE(child_entry.count == length);
+			REQUIRE(ColumnDataCollectionSegment::IsSharedListChild(child_entry) == (opt_in && !with_null));
+			REQUIRE(collection.GetValue(0, 0) == input.GetValue(0, 0));
+		}
+	}
+}
+
+// A recursive CTE keeps only the current iteration in its tables and streams older rows to its parent, so SQL does not
+// hold more shared storage at once than memory allows (a materialized CTE or a join copies the lists), C++ does.
+TEST_CASE("Shared list children live in evictable blocks", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	// each chunk carries one 8 MiB list child, 16 chunks exceed the limit unless finished chunks spill
+	DBConfig config;
+	config.SetOptionByName("memory_limit", Value("64MB"));
+	config.SetOptionByName("temp_directory", Value(TestCreatePath("shared_list_spill")));
+	DuckDB db(nullptr, &config);
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 1024 * 1024;
+	const idx_t chunks = 16;
+	ColumnDataCollection collection(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+	collection.EnableSharedListChildren();
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	for (idx_t c = 0; c < chunks; c++) {
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), collection.Types());
+		FillLargeListChunk(input, STANDARD_VECTOR_SIZE, length, int64_t(c) * 10);
+		collection.Append(append_state, input);
+	}
+	ColumnDataScanState scan_state;
+	DataChunk chunk;
+	collection.InitializeScanChunk(chunk);
+	collection.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	for (idx_t c = 0; c < chunks; c++) {
+		REQUIRE(collection.Scan(scan_state, chunk));
+		auto &child = ListVector::GetChild(chunk.data[0]);
+		REQUIRE(child.GetBufferRef()->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
+		RequireLargeList(chunk, length, int64_t(c) * 10);
+	}
+}
+
+TEST_CASE("Shared list views detach on mutation", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 3000;
+	ColumnDataCollection source(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+	source.EnableSharedListChildren();
+	ColumnDataAppendState append_state;
+	source.InitializeAppend(append_state);
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), source.Types());
+	FillLargeListChunk(input, 1, length, 1);
+	source.Append(append_state, input);
+
+	auto scan_view = [&](ColumnDataScanState &scan_state, DataChunk &chunk) {
+		source.InitializeScanChunk(chunk);
+		source.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+		REQUIRE(source.Scan(scan_state, chunk));
+		REQUIRE(ListVector::GetChild(chunk.data[0]).GetBufferRef()->GetBufferType() ==
+		        VectorBufferType::SHARED_DATA_BUFFER);
+	};
+	auto copy_first = [&](DataChunk &chunk) {
+		ColumnDataCollection target(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+		target.EnableSharedListChildren();
+		ColumnDataAppendState target_append;
+		target.InitializeAppend(target_append);
+		target.Append(target_append, chunk);
+		DataChunk result;
+		target.InitializeScanChunk(result);
+		ColumnDataScanState target_scan;
+		target.InitializeScan(target_scan, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+		REQUIRE(target.Scan(target_scan, result));
+		return result.GetValue(0, 0);
+	};
+
+	// a NULL set on the view must reach the appended copy, not be replaced by the unchanged shared storage
+	DataChunk null_chunk;
+	ColumnDataScanState null_chunk_scan;
+	scan_view(null_chunk_scan, null_chunk);
+	FlatVector::ValidityMutable(ListVector::GetChildMutable(null_chunk.data[0])).SetInvalid(0);
+	REQUIRE(ListValue::GetChildren(copy_first(null_chunk))[0].IsNull());
+
+	// a data write lands in a private copy: the appended copy sees it, the shared storage does not
+	DataChunk write_chunk;
+	ColumnDataScanState write_chunk_scan;
+	scan_view(write_chunk_scan, write_chunk);
+	FlatVector::GetDataMutable<int64_t>(ListVector::GetChildMutable(write_chunk.data[0]))[0] = 99;
+	REQUIRE(ListValue::GetChildren(copy_first(write_chunk))[0] == Value::BIGINT(99));
+	DataChunk fresh;
+	ColumnDataScanState fresh_scan;
+	scan_view(fresh_scan, fresh);
+	REQUIRE(fresh.GetValue(0, 0) == input.GetValue(0, 0));
+}
+
+TEST_CASE("In-memory collections copy shared list children", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	const idx_t length = 3000;
+	auto in_memory = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(),
+	                                                 vector<LogicalType> {LogicalType::LIST(LogicalType::BIGINT)});
+	{
+		DuckDB db(":memory:");
+		auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+		ColumnDataCollection source(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+		source.EnableSharedListChildren();
+		ColumnDataAppendState append_state;
+		source.InitializeAppend(append_state);
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), source.Types());
+		FillLargeListChunk(input, 1, length, 7);
+		source.Append(append_state, input);
+
+		DataChunk chunk;
+		ColumnDataScanState scan_state;
+		source.InitializeScanChunk(chunk);
+		source.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+		REQUIRE(source.Scan(scan_state, chunk));
+		ColumnDataAppendState in_memory_append;
+		in_memory->InitializeAppend(in_memory_append);
+		in_memory->Append(in_memory_append, chunk);
+	}
+	// the database and its buffer manager are gone, the in-memory collection owns its data
+	DataChunk result;
+	in_memory->InitializeScanChunk(result);
+	ColumnDataScanState scan_state;
+	in_memory->InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(in_memory->Scan(scan_state, result));
+	REQUIRE(ListVector::GetChild(result.data[0]).GetBufferRef()->GetBufferType() !=
+	        VectorBufferType::SHARED_DATA_BUFFER);
+	RequireLargeList(result, length, 7);
+	in_memory.reset();
+}
+
+TEST_CASE("Managed result sets store large list children in their own blocks", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 3000;
+	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
+	ColumnDataCollection source(buffer_manager, types);
+	source.EnableSharedListChildren();
+	ColumnDataAppendState source_append;
+	source.InitializeAppend(source_append);
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), types);
+	FillLargeListChunk(input, 1, length, 5);
+	source.Append(source_append, input);
+	DataChunk view;
+	ColumnDataScanState view_scan;
+	source.InitializeScanChunk(view);
+	source.InitializeScan(view_scan, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(source.Scan(view_scan, view));
+	REQUIRE(ListVector::GetChild(view.data[0]).GetBufferRef()->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
+
+	// a view of shared storage appended to a managed result set is copied into a block-backed LARGE_FLAT entry
+	ColumnDataCollection result_set(buffer_manager, types,
+	                                ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
+	result_set.EnableSharedListChildren();
+	ColumnDataAppendState result_append;
+	result_set.InitializeAppend(result_append);
+	result_set.Append(result_append, view);
+	auto &segment = *result_set.GetSegments()[0];
+	auto &list_vdata = segment.GetVectorData(segment.chunk_data[0].vector_data[0]);
+	auto &child_entry = segment.GetVectorData(segment.GetChildIndex(list_vdata.child_index));
+	REQUIRE(child_entry.representation == ColumnDataRepresentation::LARGE_FLAT);
+	REQUIRE(!ColumnDataCollectionSegment::IsSharedListChild(child_entry));
+	REQUIRE(child_entry.count == length);
+
+	DataChunk result;
+	ColumnDataScanState result_scan;
+	result_set.InitializeScanChunk(result);
+	result_set.InitializeScan(result_scan, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(result_set.Scan(result_scan, result));
+	REQUIRE(ListVector::GetChild(result.data[0]).GetBufferRef()->GetBufferType() !=
+	        VectorBufferType::SHARED_DATA_BUFFER);
+	REQUIRE(FlatVector::GetData(ListVector::GetChild(result.data[0])) !=
+	        FlatVector::GetData(ListVector::GetChild(view.data[0])));
+	RequireLargeList(result, length, 5);
+}
+
+TEST_CASE("Chunk allocation estimates charge shared list children", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 100000;
+	ColumnDataCollection collection(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+	collection.EnableSharedListChildren();
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	for (idx_t c = 0; c < 2; c++) {
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), collection.Types());
+		FillLargeListChunk(input, STANDARD_VECTOR_SIZE, length, 0);
+		collection.Append(append_state, input);
+	}
+	auto &segment = *collection.GetSegments()[0];
+	REQUIRE(segment.ChunkCount() == 2);
+	// the estimate covers the child values a chunk holds, as block storage of the same child would
+	REQUIRE(segment.GetChunkAllocationSize(0) >= length * sizeof(int64_t));
+	REQUIRE(segment.GetChunkAllocationSize(1) >= length * sizeof(int64_t));
+	REQUIRE(collection.AllocationSize() >= 2 * length * sizeof(int64_t));
+}
+
+//! A buffer-managed collection holding one large BIGINT[] list per chunk, row zero of each chunk
+static unique_ptr<ColumnDataCollection> MakeLargeListCollection(BufferManager &buffer_manager, idx_t chunks,
+                                                                idx_t count, idx_t length) {
+	auto collection =
+	    make_uniq<ColumnDataCollection>(buffer_manager, vector<LogicalType> {LogicalType::LIST(LogicalType::BIGINT)});
+	collection->EnableSharedListChildren();
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	for (idx_t c = 0; c < chunks; c++) {
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), collection->Types());
+		FillLargeListChunk(input, count, length, int64_t(c) * 10 + 1);
+		collection->Append(append_state, input);
+	}
+	return collection;
+}
+
+//! Zero-copy scan of the first chunk, valid while 'scan_state' lives
+static void ScanFirstChunk(ColumnDataCollection &collection, ColumnDataScanState &scan_state, DataChunk &chunk) {
+	collection.InitializeScanChunk(chunk);
+	collection.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(collection.Scan(scan_state, chunk));
+	REQUIRE(ListVector::GetChild(chunk.data[0]).GetBufferRef()->GetBufferType() ==
+	        VectorBufferType::SHARED_DATA_BUFFER);
+}
+
+static Value AppendAndReadFirst(BufferManager &buffer_manager, DataChunk &chunk) {
+	ColumnDataCollection target(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+	target.EnableSharedListChildren();
+	ColumnDataAppendState target_append;
+	target.InitializeAppend(target_append);
+	target.Append(target_append, chunk);
+	DataChunk result;
+	target.InitializeScanChunk(result);
+	ColumnDataScanState target_scan;
+	target.InitializeScan(target_scan, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	REQUIRE(target.Scan(target_scan, result));
+	return result.GetValue(0, 0);
+}
+
+TEST_CASE("Slices of a shared list view survive the view detaching", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	auto collection = MakeLargeListCollection(buffer_manager, 1, 1, 3000);
+	DataChunk chunk;
+	ColumnDataScanState chunk_scan;
+	ScanFirstChunk(*collection, chunk_scan, chunk);
+	auto &child = ListVector::GetChildMutable(chunk.data[0]);
+	Vector slice(child, 1, 11);
+	// detaching the parent must keep the storage the slice points into pinned
+	FlatVector::GetDataMutable<int64_t>(child)[0] = 99;
+	REQUIRE(slice.GetValue(0) == Value::BIGINT(2));
+	REQUIRE(slice.GetValue(9) == Value::BIGINT(11));
+	REQUIRE(child.GetValue(0) == Value::BIGINT(99));
+}
+
+TEST_CASE("Shared list views that diverge from their storage are copied", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	auto collection = MakeLargeListCollection(buffer_manager, 1, 1, 3000);
+
+	// a NULL assigned through SetValue allocates a mask on the all-valid view alone
+	DataChunk null_chunk;
+	ColumnDataScanState null_chunk_scan;
+	ScanFirstChunk(*collection, null_chunk_scan, null_chunk);
+	ListVector::GetChildMutable(null_chunk.data[0]).SetValue(0, Value(LogicalType::BIGINT));
+	REQUIRE(ListValue::GetChildren(AppendAndReadFirst(buffer_manager, null_chunk))[0].IsNull());
+
+	// a view reinterpreted as a constant no longer presents the stored entries
+	DataChunk constant_chunk;
+	ColumnDataScanState constant_chunk_scan;
+	ScanFirstChunk(*collection, constant_chunk_scan, constant_chunk);
+	ListVector::GetChildMutable(constant_chunk.data[0]).SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto constant_children = ListValue::GetChildren(AppendAndReadFirst(buffer_manager, constant_chunk));
+	REQUIRE(constant_children.size() == 3000);
+	REQUIRE(constant_children[2999] == Value::BIGINT(1));
+}
+
+TEST_CASE("Repeated references to shared list storage are accounted once", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 100000;
+	auto source = MakeLargeListCollection(buffer_manager, 1, STANDARD_VECTOR_SIZE, length);
+	DataChunk chunk;
+	ColumnDataScanState chunk_scan;
+	ScanFirstChunk(*source, chunk_scan, chunk);
+	ColumnDataCollection target(buffer_manager, {LogicalType::LIST(LogicalType::BIGINT)});
+	target.EnableSharedListChildren();
+	ColumnDataAppendState target_append;
+	target.InitializeAppend(target_append);
+	for (idx_t i = 0; i < 4; i++) {
+		target.Append(target_append, chunk);
+	}
+	auto payload = length * sizeof(int64_t);
+	REQUIRE(target.AllocationSize() >= payload);
+	REQUIRE(target.AllocationSize() < 2 * payload);
+	// the chunk estimates still charge every reference
+	auto &segment = *target.GetSegments()[0];
+	idx_t estimated = 0;
+	for (idx_t chunk_idx = 0; chunk_idx < segment.ChunkCount(); chunk_idx++) {
+		estimated += segment.GetChunkAllocationSize(chunk_idx);
+	}
+	REQUIRE(estimated >= 4 * payload);
+}
+
+//! Scan the first value of 'collection' with DISALLOW_ZERO_COPY
+static Value ReadFirstCopied(ColumnDataCollection &collection) {
+	DataChunk result;
+	collection.InitializeScanChunk(result);
+	ColumnDataScanState scan_state;
+	collection.InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	REQUIRE(collection.Scan(scan_state, result));
+	return result.GetValue(0, 0);
+}
+
+static void AppendChunk(ColumnDataCollection &collection, DataChunk &chunk) {
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	collection.Append(append_state, chunk);
+}
+
+// Truncate and Combine of collections that share list children are not reachable from SQL (only recursive CTE tables
+// share, and they are reset rather than truncated), so the accounting after removing a reference is pinned in C++.
+TEST_CASE("Shared list storage accounting drops a removed longest reference", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
+	// one storage of 4000 entries, referenced by a 3000- and a 4000-entry list
+	Vector values(LogicalType::BIGINT, 4000);
+	auto data = FlatVector::GetDataMutable<int64_t>(values);
+	for (idx_t i = 0; i < 4000; i++) {
+		data[i] = int64_t(i);
+	}
+	FlatVector::SetSize(values, count_t(4000));
+	auto storage =
+	    SharedChildVector::Materialize(buffer_manager, values, *FlatVector::IncrementalSelectionVector(), 0, 4000);
+	REQUIRE(storage);
+	auto append_prefix = [&](ColumnDataCollection &collection, idx_t length) {
+		DataChunk chunk;
+		chunk.Initialize(Allocator::DefaultAllocator(), types);
+		auto &list = chunk.data[0];
+		SharedChildVector::SetView(ListVector::GetChildMutable(list), storage, length);
+		ListVector::SetListSize(list, length);
+		FlatVector::GetDataMutable<list_entry_t>(list)[0] = list_entry_t {0, length};
+		chunk.SetCardinality(1);
+		AppendChunk(collection, chunk);
+		REQUIRE(ColumnDataCollectionSegment::IsSharedListChild(FirstListChildEntry(collection)));
+	};
+	auto shared_bytes = [](const ColumnDataCollection &collection) {
+		idx_t segment_bytes = 0;
+		for (auto &segment : collection.GetSegments()) {
+			segment_bytes += segment->SizeInBytes();
+		}
+		return collection.SizeInBytes() - segment_bytes;
+	};
+	ColumnDataCollection a(buffer_manager, types);
+	a.EnableSharedListChildren();
+	append_prefix(a, 3000);
+	ColumnDataCollection b(buffer_manager, types);
+	b.EnableSharedListChildren();
+	append_prefix(b, 4000);
+	a.Combine(b);
+	REQUIRE(a.GetSegments().size() == 2);
+	REQUIRE(shared_bytes(a) == 4000 * sizeof(int64_t));
+	// dropping the segment with the longer reference lowers the used size to the remaining 3000-entry prefix
+	a.Truncate(1);
+	REQUIRE(a.Count() == 1);
+	REQUIRE(a.GetSegments().size() == 1);
+	REQUIRE(shared_bytes(a) == 3000 * sizeof(int64_t));
+	REQUIRE(ListValue::GetChildren(a.GetValue(0, 0)).size() == 3000);
+}
+
+// Operators never write into a vector a zero-copy scan handed out, so writes through the inherited vector buffer
+// APIs, which must not reach storage other collections reference, are only reachable from C++.
+TEST_CASE("Writes to shared list views never reach the storage", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
+	const idx_t length = 3000;
+	{
+		ColumnDataCollection source(buffer_manager, types);
+		source.EnableSharedListChildren();
+		source.EnableSharedListChildren();
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), types);
+		FillLargeListChunk(input, 1, length, 1);
+		AppendChunk(source, input);
+		const auto original = ReadFirstCopied(source);
+
+		auto mutate = [&](const std::function<void(Vector & child)> &write) {
+			DataChunk view;
+			ColumnDataScanState view_scan;
+			ScanFirstChunk(source, view_scan, view);
+			// a second collection references the storage before the write
+			ColumnDataCollection referencing(buffer_manager, types);
+			referencing.EnableSharedListChildren();
+			AppendChunk(referencing, view);
+			DataChunk referenced;
+			ColumnDataScanState referenced_scan;
+			ScanFirstChunk(referencing, referenced_scan, referenced);
+			REQUIRE(FlatVector::GetData(ListVector::GetChild(referenced.data[0])) ==
+			        FlatVector::GetData(ListVector::GetChild(view.data[0])));
+			write(ListVector::GetChildMutable(view.data[0]));
+			// neither the source nor the referencing collection sees the write, an append of the written view copies
+			REQUIRE(ReadFirstCopied(source) == original);
+			REQUIRE(ReadFirstCopied(referencing) == original);
+			ColumnDataCollection copied(buffer_manager, types);
+			copied.EnableSharedListChildren();
+			AppendChunk(copied, view);
+			return ReadFirstCopied(copied);
+		};
+
+		auto set_value = mutate([](Vector &child) { child.SetValue(0, Value::BIGINT(99)); });
+		REQUIRE(ListValue::GetChildren(set_value)[0] == Value::BIGINT(99));
+
+		auto set_null = mutate([](Vector &child) { child.SetValue(1, Value(LogicalType::BIGINT)); });
+		REQUIRE(ListValue::GetChildren(set_null)[1].IsNull());
+
+		auto slice_write = mutate([](Vector &child) {
+			Vector slice(child, 1, 11);
+			FlatVector::GetDataMutable<int64_t>(slice)[0] = 99;
+			REQUIRE(slice.GetValue(0) == Value::BIGINT(99));
+		});
+		// the write landed in the slice's private copy only
+		REQUIRE(slice_write == original);
+	}
+}
+
+// Only the recursive CTE combines collections that share list children, and only with each other, so a mismatched
+// combine is not reachable from SQL.
+TEST_CASE("Collections with different list child sharing do not combine", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
+	auto shared = MakeLargeListCollection(buffer_manager, 1, 1, 3000);
+	ColumnDataCollection plain(buffer_manager, types);
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), types);
+	FillLargeListChunk(input, 1, 3000, 7);
+	AppendChunk(plain, input);
+	// either direction is rejected before either side changes
+	REQUIRE_THROWS_WITH(plain.Combine(*shared), Catch::Contains("mismatching list child sharing"));
+	REQUIRE_THROWS_WITH(shared->Combine(plain), Catch::Contains("mismatching list child sharing"));
+	REQUIRE_THROWS_WITH(plain.Swap(*shared), Catch::Contains("mismatching list child sharing"));
+	REQUIRE(plain.Count() == 1);
+	REQUIRE(shared->Count() == 1);
+	// the plain collection keeps storing large list children in its own blocks
+	AppendChunk(plain, input);
+	REQUIRE(plain.Count() == 2);
+	auto &segment = *plain.GetSegments().back();
+	for (auto &vdata : segment.vector_data) {
+		REQUIRE(!ColumnDataCollectionSegment::IsSharedListChild(vdata));
+	}
+	REQUIRE(ListValue::GetChildren(plain.GetValue(0, 1)).size() == 3000);
+}
+
+TEST_CASE("Combined collections account shared list storage once", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t length = 100000;
+	auto source = MakeLargeListCollection(buffer_manager, 1, 1, length);
+	DataChunk chunk;
+	ColumnDataScanState chunk_scan;
+	ScanFirstChunk(*source, chunk_scan, chunk);
+	const auto payload = length * sizeof(int64_t);
+	vector<unique_ptr<ColumnDataCollection>> collections;
+	idx_t separate_allocation = 0;
+	idx_t separate_size = 0;
+	for (idx_t i = 0; i < 4; i++) {
+		collections.push_back(make_uniq<ColumnDataCollection>(buffer_manager, source->Types()));
+		collections.back()->EnableSharedListChildren();
+		AppendChunk(*collections.back(), chunk);
+		// each collection on its own accounts the storage it references
+		REQUIRE(collections.back()->AllocationSize() >= payload);
+		separate_allocation += collections.back()->AllocationSize();
+		separate_size += collections.back()->SizeInBytes();
+	}
+	for (idx_t i = 1; i < collections.size(); i++) {
+		collections[0]->Combine(*collections[i]);
+	}
+	// after combining, the storage all four segments reference is accounted once
+	auto &combined = *collections[0];
+	REQUIRE(combined.GetSegments().size() == 4);
+	REQUIRE(combined.Count() == 4);
+	REQUIRE(combined.AllocationSize() == separate_allocation - 3 * payload);
+	REQUIRE(combined.SizeInBytes() == separate_size - 3 * payload);
 }
 
 } // namespace duckdb
