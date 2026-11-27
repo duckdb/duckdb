@@ -44,6 +44,7 @@ private:
 	static constexpr idx_t LOAD_FACTOR = 2;
 	//! Clear sweeps every slot once the occupied slots exceed this fraction of the capacity
 	static constexpr idx_t CLEAR_SWEEP_FACTOR = 8;
+	static constexpr idx_t INITIAL_DICTIONARY_CAPACITY = 256;
 
 	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
 	struct primitive_dictionary_entry_t {
@@ -54,20 +55,39 @@ private:
 		}
 	};
 
+	static idx_t ComputeMaxCapacity(idx_t maximum_size_p) {
+		const auto capped_size = MinValue<idx_t>(maximum_size_p, MAXIMUM_POSSIBLE_SIZE);
+		return NextPowerOfTwo(capped_size * LOAD_FACTOR);
+	}
+
+	static idx_t ComputeInitialCapacity(idx_t maximum_size_p) {
+		return MinValue<idx_t>(INITIAL_DICTIONARY_CAPACITY, ComputeMaxCapacity(maximum_size_p));
+	}
+
+	static idx_t ComputeInitialTargetCapacity(idx_t maximum_size_p, idx_t maximum_target_capacity_p) {
+		if (maximum_size_p == 0) {
+			return 1;
+		}
+		if (std::is_same<TGT, string_t>::value) {
+			return MinValue<idx_t>(INITIAL_TARGET_CAPACITY, maximum_target_capacity_p);
+		}
+		const auto capped_size = MinValue<idx_t>(maximum_size_p, MAXIMUM_POSSIBLE_SIZE);
+		const idx_t initial_entries = MinValue<idx_t>(INITIAL_DICTIONARY_CAPACITY / LOAD_FACTOR, capped_size);
+		return initial_entries * sizeof(TGT);
+	}
+
 public:
 	static constexpr uint32_t MAXIMUM_POSSIBLE_SIZE = INVALID_INDEX - 1;
 	static constexpr idx_t INITIAL_TARGET_CAPACITY = 262144;
 
-	//! PrimitiveDictionary is a fixed-size linear probing hash table for primitive types
+	//! PrimitiveDictionary is a linear probing hash table for primitive types that grows up to maximum_size_p
 	//! It is used to dictionary-encode data in, e.g., Parquet files
 	PrimitiveDictionary(Allocator &allocator_p, idx_t maximum_size_p, idx_t maximum_target_capacity_p)
 	    : allocator(allocator_p), maximum_size(maximum_size_p), size(0),
-	      capacity(NextPowerOfTwo(maximum_size * LOAD_FACTOR)), capacity_mask(capacity - 1),
-	      maximum_target_capacity(maximum_target_capacity_p),
+	      max_capacity(ComputeMaxCapacity(maximum_size_p)), capacity(ComputeInitialCapacity(maximum_size_p)),
+	      capacity_mask(capacity - 1), maximum_target_capacity(maximum_target_capacity_p),
 	      allocated_dictionary(allocator.Allocate(capacity * sizeof(primitive_dictionary_entry_t))),
-	      allocated_target(allocator.Allocate(std::is_same<TGT, string_t>::value
-	                                              ? MinValue(INITIAL_TARGET_CAPACITY, maximum_target_capacity)
-	                                              : capacity * sizeof(TGT))),
+	      allocated_target(allocator.Allocate(ComputeInitialTargetCapacity(maximum_size_p, maximum_target_capacity_p))),
 	      target_stream(allocated_target.get(), allocated_target.GetSize()),
 	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())), full(false) {
 		ClearAllSlots();
@@ -92,8 +112,17 @@ public:
 		}
 		auto &entry = Lookup(value, hash);
 		if (entry.IsEmpty()) {
-			if (size + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
+			if (idx_t(size) + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
 				full = true;
+				return;
+			}
+			if (ShouldGrowDictionary()) {
+				GrowDictionary();
+				auto &new_entry = Lookup(value, hash);
+				D_ASSERT(new_entry.IsEmpty());
+				new_entry.value = value;
+				new_entry.index = size++;
+				occupied.push_back(UnsafeNumericCast<uint32_t>(&new_entry - dictionary));
 				return;
 			}
 			entry.value = value;
@@ -185,6 +214,7 @@ public:
 	void Reset() {
 		allocated_dictionary.Reset();
 		allocated_target.Reset();
+		dictionary = nullptr;
 		occupied = vector<uint32_t>();
 	}
 
@@ -216,6 +246,33 @@ public:
 	}
 
 private:
+	bool ShouldGrowDictionary() const {
+		return (idx_t(size) + 1) * LOAD_FACTOR > capacity && capacity < max_capacity;
+	}
+
+	void GrowDictionary() {
+		const idx_t new_capacity = MinValue<idx_t>(capacity * 2, max_capacity);
+		auto new_allocated_dictionary = allocator.Allocate(new_capacity * sizeof(primitive_dictionary_entry_t));
+		auto new_dictionary = reinterpret_cast<primitive_dictionary_entry_t *>(new_allocated_dictionary.get());
+		for (idx_t i = 0; i < new_capacity; i++) {
+			new_dictionary[i].index = INVALID_INDEX;
+		}
+		const idx_t new_mask = new_capacity - 1;
+		for (auto &slot_offset : occupied) {
+			const auto &old_entry = dictionary[slot_offset];
+			auto offset = Hash(old_entry.value) & new_mask;
+			while (!new_dictionary[offset].IsEmpty()) {
+				++offset &= new_mask;
+			}
+			new_dictionary[offset] = old_entry;
+			slot_offset = UnsafeNumericCast<uint32_t>(offset);
+		}
+		allocated_dictionary = std::move(new_allocated_dictionary);
+		dictionary = new_dictionary;
+		capacity = new_capacity;
+		capacity_mask = new_mask;
+	}
+
 	void ClearAllSlots() {
 		for (idx_t i = 0; i < capacity; i++) {
 			dictionary[i].index = INVALID_INDEX;
@@ -226,8 +283,24 @@ private:
 	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(const SRC &src_value) {
 		const auto tgt_value = OP::template Operation<SRC, TGT>(src_value);
-		if (target_stream.GetPosition() + OP::template WriteSize<SRC, TGT>(tgt_value) > target_stream.GetCapacity()) {
-			return false; // Out of capacity
+		const auto write_size = OP::template WriteSize<SRC, TGT>(tgt_value);
+		const auto required_size = target_stream.GetPosition() + write_size;
+		if (required_size > allocated_target.GetSize()) {
+			const idx_t max_target_bytes = MinValue<idx_t>(maximum_size, MAXIMUM_POSSIBLE_SIZE) * write_size;
+			idx_t new_target_capacity = allocated_target.GetSize();
+			while (new_target_capacity < required_size) {
+				if (new_target_capacity >= max_target_bytes) {
+					return false; // Out of capacity
+				}
+				new_target_capacity = MinValue<idx_t>(new_target_capacity * 2, max_target_bytes);
+			}
+			auto new_allocated_target = allocator.Allocate(new_target_capacity);
+			memcpy(new_allocated_target.get(), allocated_target.get(), target_stream.GetPosition());
+			allocated_target = std::move(new_allocated_target);
+
+			MemoryStream new_target_stream(allocated_target.get(), allocated_target.GetSize());
+			new_target_stream.SetPosition(target_stream.GetPosition());
+			target_stream = std::move(new_target_stream);
 		}
 		OP::template WriteToStream<SRC, TGT>(tgt_value, target_stream);
 		return true;
@@ -264,9 +337,9 @@ private:
 			target_stream = std::move(new_target_stream);
 
 			// Recompute string pointers from old to new buffer
-			for (idx_t i = 0; i < capacity; i++) {
-				auto &entry = dictionary[i];
-				if (entry.IsEmpty() || entry.value.IsInlined()) {
+			for (auto offset : occupied) {
+				auto &entry = dictionary[offset];
+				if (entry.value.IsInlined()) {
 					continue;
 				}
 				entry.value.SetPointer(
@@ -292,8 +365,9 @@ private:
 	uint32_t size;
 
 	//! Dictionary capacity (power of two) and corresponding mask
-	const idx_t capacity;
-	const idx_t capacity_mask;
+	const idx_t max_capacity;
+	idx_t capacity;
+	idx_t capacity_mask;
 
 	//! Capacity of target encoded data
 	const idx_t maximum_target_capacity;
@@ -305,7 +379,7 @@ private:
 	MemoryStream target_stream;
 
 	//! Pointers to allocated regions for convenience
-	primitive_dictionary_entry_t *const dictionary;
+	primitive_dictionary_entry_t *dictionary;
 	//! Offsets of the filled slots, so Clear does not have to sweep the whole capacity
 	vector<uint32_t> occupied;
 

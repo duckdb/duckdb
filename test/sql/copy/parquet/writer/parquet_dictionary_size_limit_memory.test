@@ -1,0 +1,111 @@
+# name: test/sql/copy/parquet/writer/parquet_dictionary_size_limit_memory.test
+# description: Parquet writer should not eagerly allocate DICTIONARY_SIZE_LIMIT up front
+# group: [writer]
+
+require parquet
+
+load {TEST_DIR}/parquet_dictionary_size_limit_memory.db
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET memory_limit = '20MB';
+
+# 10 rows with an explicit 4M dictionary limit must not pre-allocate 192 MiB
+statement ok
+COPY (SELECT i::DOUBLE AS c FROM range(10) t(i)) TO '{TEST_DIR}/small_double.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 4000000, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT count(*), sum(c) FROM '{TEST_DIR}/small_double.parquet';
+----
+10	45.0
+
+query I
+SELECT encodings LIKE '%DICTIONARY%' FROM parquet_metadata('{TEST_DIR}/small_double.parquet');
+----
+true
+
+# Huge DICTIONARY_SIZE_LIMIT near INT64_MAX must not overflow capacity calculation
+statement ok
+COPY (SELECT i::DOUBLE AS c FROM range(10) t(i)) TO '{TEST_DIR}/huge_limit.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 9223372036854775807, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT count(*), sum(c) FROM '{TEST_DIR}/huge_limit.parquet';
+----
+10	45.0
+
+# Wide table across multiple column types with a large DICTIONARY_SIZE_LIMIT
+statement ok
+COPY (
+	SELECT
+		i::DOUBLE AS d0, (i + 1)::DOUBLE AS d1, (i + 2)::DOUBLE AS d2, (i + 3)::DOUBLE AS d3,
+		(i + 4)::DOUBLE AS d4, (i + 5)::DOUBLE AS d5, (i + 6)::DOUBLE AS d6, (i + 7)::DOUBLE AS d7,
+		i::BIGINT AS b0, (i + 1)::BIGINT AS b1, (i + 2)::BIGINT AS b2, (i + 3)::BIGINT AS b3,
+		('long_prefix_string_' || i::VARCHAR) AS s0, ('other_prefix_string_' || i::VARCHAR) AS s1,
+		uuid() AS u0, interval (i) days AS iv0
+	FROM range(10) t(i)
+) TO '{TEST_DIR}/wide_10_rows.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 4000000, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT count(*), sum(d0 + d7 + b3) FROM '{TEST_DIR}/wide_10_rows.parquet';
+----
+10	235.0
+
+# Growing past initial dictionary capacity for numeric and non-inlined string columns
+statement ok
+SET memory_limit = '50MB';
+
+statement ok
+COPY (
+	SELECT
+		i::DOUBLE AS d,
+		('non_inlined_dictionary_value_' || i::VARCHAR) AS s
+	FROM range(1000) t(i)
+) TO '{TEST_DIR}/grown_1000.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 4000000, WRITE_BLOOM_FILTER FALSE);
+
+query III
+SELECT count(*), sum(d)::BIGINT, count(DISTINCT s) FROM '{TEST_DIR}/grown_1000.parquet';
+----
+1000	499500	1000
+
+query I
+SELECT bool_and(encodings LIKE '%DICTIONARY%') FROM parquet_metadata('{TEST_DIR}/grown_1000.parquet');
+----
+true
+
+# Nested LIST child column can hold more distinct elements than row_group.num_rows
+statement ok
+COPY (
+	SELECT [i * 50 + j for j in range(50)] AS vals
+	FROM range(10) t(i)
+) TO '{TEST_DIR}/nested_list.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 4000000, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT count(*), sum(list_sum(vals)) FROM '{TEST_DIR}/nested_list.parquet';
+----
+10	124750
+
+query I
+SELECT encodings LIKE '%DICTIONARY%' FROM parquet_metadata('{TEST_DIR}/nested_list.parquet');
+----
+true
+
+# DICTIONARY_SIZE_LIMIT 0 (disabled) and 1 (exceeded) remain valid
+statement ok
+COPY (SELECT i::DOUBLE AS c FROM range(10) t(i)) TO '{TEST_DIR}/limit_0.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 0, WRITE_BLOOM_FILTER FALSE);
+
+statement ok
+COPY (SELECT i::DOUBLE AS c FROM range(10) t(i)) TO '{TEST_DIR}/limit_1.parquet' (FORMAT parquet, DICTIONARY_SIZE_LIMIT 1, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT encodings NOT LIKE '%DICTIONARY%', (SELECT count(*) FROM '{TEST_DIR}/limit_0.parquet')
+FROM parquet_metadata('{TEST_DIR}/limit_0.parquet');
+----
+true	10
+
+query II
+SELECT encodings NOT LIKE '%DICTIONARY%', (SELECT count(*) FROM '{TEST_DIR}/limit_1.parquet')
+FROM parquet_metadata('{TEST_DIR}/limit_1.parquet');
+----
+true	10
