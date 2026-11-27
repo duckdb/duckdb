@@ -52,6 +52,9 @@ public:
 	                             PreparedStatementInfo info);
 	//! Create a handle to a statement that each execution submits anew, whose result is known only at execution
 	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, unique_ptr<SQLStatement> statement);
+	//! Create a handle to a statement that each execution submits anew, with the metadata of a validating bind
+	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, unique_ptr<SQLStatement> statement,
+	                             PreparedStatementInfo info);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -214,6 +217,8 @@ private:
 	PreparedStatementInfo info;
 	//! The statement as the user wrote it, when each execution submits it anew
 	unique_ptr<SQLStatement> written_statement;
+	//! Whether the result names, types and properties are known only at execution
+	bool metadata_deferred = false;
 
 private:
 	//! Create the statement that runs this prepared statement with the given values, `EXECUTE <name>(...)` or a copy

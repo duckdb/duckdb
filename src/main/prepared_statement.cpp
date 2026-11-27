@@ -13,12 +13,22 @@ PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p,
 }
 
 PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p, unique_ptr<SQLStatement> statement)
-    : context(context_p), query(statement->query), success(true), written_statement(std::move(statement)) {
+    : context(context_p), query(statement->query), success(true), written_statement(std::move(statement)),
+      metadata_deferred(true) {
 	D_ASSERT(!context.expired());
 	// The placeholder the planner reports for a result known only at execution. The properties describe nothing
 	info.names = {Identifier("unknown")};
 	info.types = {LogicalTypeId::UNKNOWN};
 	info.statement_type = written_statement->type;
+	info.properties.always_require_rebind = true;
+}
+
+PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p, unique_ptr<SQLStatement> statement,
+                                     PreparedStatementInfo info_p)
+    : context(context_p), query(statement->query), success(true), info(std::move(info_p)),
+      written_statement(std::move(statement)) {
+	D_ASSERT(!context.expired());
+	// each execution submits the statement anew - the handle caches no plan
 	info.properties.always_require_rebind = true;
 }
 
@@ -109,7 +119,7 @@ case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes
 }
 
 bool PreparedStatement::MetadataAvailable() const {
-	return !written_statement && info.properties.bound_all_parameters;
+	return !metadata_deferred && info.properties.bound_all_parameters;
 }
 
 unique_ptr<SQLStatement> PreparedStatement::CreateStatement(identifier_map_t<BoundParameterData> &named_values,

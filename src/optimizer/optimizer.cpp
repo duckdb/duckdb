@@ -142,20 +142,13 @@ static bool ContainsDataSource(const LogicalOperator &op) {
 	return false;
 }
 
-// Prepared statements may be nested (the C API wraps every statement in a PREPARE), so mark every
-// LogicalPrepare in the chain, not only the root
-static void MarkDataDependentPrepares(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_PREPARE) {
-		return;
-	}
-	auto &prepared = op.Cast<LogicalPrepare>().prepared;
-	// Optimizers can embed the current database state in the executable plan.
-	if (!prepared->properties.read_databases.empty() && ContainsDataSource(op)) {
-		prepared->properties.always_require_rebind = true;
-	}
+static bool ContainsNestedPrepare(const LogicalOperator &op) {
 	for (auto &child : op.children) {
-		MarkDataDependentPrepares(*child);
+		if (child->type == LogicalOperatorType::LOGICAL_PREPARE || ContainsNestedPrepare(*child)) {
+			return true;
+		}
 	}
+	return false;
 }
 
 void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
@@ -635,7 +628,19 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
-	MarkDataDependentPrepares(*plan);
+	if (plan->type == LogicalOperatorType::LOGICAL_PREPARE) {
+		// Nothing wraps a PREPARE in another PREPARE: SQL rejects it, and the API prepare runs statements
+		// that manage prepared statements as written (ClientContext::PrepareInternal), so the root is the
+		// only LogicalPrepare in the plan. A nested one would silently miss the marking below.
+		if (ContainsNestedPrepare(*plan)) {
+			throw InternalException("A PREPARE statement cannot contain another PREPARE statement");
+		}
+		auto &prepared = plan->Cast<LogicalPrepare>().prepared;
+		// Optimizers can embed the current database state in the executable plan.
+		if (!prepared->properties.read_databases.empty() && ContainsDataSource(*plan)) {
+			prepared->properties.always_require_rebind = true;
+		}
+	}
 
 	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
