@@ -3975,7 +3975,7 @@ typedef struct {
 #define duckdb_v2_value_variant_to_value duckdb_ext_api.duckdb_v2_value_variant_to_value
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_copy_from_set_data_source duckdb_ext_api.duckdb_v2_copy_from_set_data_source
+#define duckdb_v2_copy_from_set_data_source        duckdb_ext_api.duckdb_v2_copy_from_set_data_source
 #define duckdb_v2_connection_create_in_transaction duckdb_ext_api.duckdb_v2_connection_create_in_transaction
 #endif
 // capigen:end appended
