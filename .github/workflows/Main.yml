@@ -867,7 +867,10 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: coverage-linux-release-default-tests
-        path: coverage/linux-release-default-tests
+        path: |
+          coverage/linux-release-default-tests
+          !coverage/linux-release-default-tests/lcov.info
+        compression-level: 6
         if-no-files-found: error
 
  linux-release-tests:
