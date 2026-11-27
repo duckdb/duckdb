@@ -647,6 +647,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	Vector local_row_ids(row_identifiers, local_sel, local_count);
 	local_row_ids.Flatten();
 	ColumnFetchState local_fetch_state;
+	local_fetch_state.context = state.context;
 	local_storage.FetchChunk(*this, local_row_ids, local_count, column_ids, local_chunk, local_fetch_state);
 
 	// Append local rows after committed rows in the result.

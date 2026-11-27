@@ -587,7 +587,8 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 
 		//! Need to perform the cast here as well
 		auto &cast_set = CastFunctionSet::Get(GetDatabase());
-		auto cast_input = GetCastFunctionInput::Default();
+		auto context = state.context.GetContext();
+		auto cast_input = context ? GetCastFunctionInput(*context) : GetCastFunctionInput::Default();
 		auto fetched_row = extracted_variant.GetValue(0).CastAs(cast_set, cast_input, result.GetType());
 		result.SetValue(result_idx, fetched_row);
 	}
