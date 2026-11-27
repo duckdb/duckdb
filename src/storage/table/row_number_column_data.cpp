@@ -45,11 +45,6 @@ idx_t RowNumberColumnData::Scan(TransactionData transaction, idx_t vector_index,
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowNumberColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
-                                             Vector &result) {
-	throw InternalException("ScanCommittedRange is not supported for row number columns");
-}
-
 idx_t RowNumberColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	if (result_offset != 0) {
 		throw InternalException("RowNumberColumnData result_offset must be 0");
@@ -120,11 +115,6 @@ RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, Context &c
 
 unique_ptr<ColumnCheckpointState> RowNumberColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
                                                                   const BaseStatistics &old_stats) {
-	throw InternalException("RowNumberColumnData cannot be checkpointed");
-}
-
-void RowNumberColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                         Vector &scan_vector) const {
 	throw InternalException("RowNumberColumnData cannot be checkpointed");
 }
 

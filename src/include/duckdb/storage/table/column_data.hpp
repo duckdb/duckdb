@@ -43,6 +43,8 @@ struct RowGroupWriteInfo;
 struct ScanFilter;
 struct TransactionData;
 struct PersistentColumnData;
+class UpdateSegment;
+struct ColumnUpdates;
 class ValidityColumnData;
 struct ColumnDataFinalizeAppendState;
 struct SuballocationBlock;
@@ -58,6 +60,7 @@ public:
 	Context &GetContext();
 	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+	VisibilityBound GetVisibilityBound() const;
 
 private:
 	RowGroupWriteInfo &info;
@@ -138,12 +141,13 @@ public:
 
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
-	bool HasChanges(idx_t start_row, idx_t end_row) const;
-	//! Whether or not the column has changes at this level
+	//! Whether a checkpoint has to write this column: appended data, updates not yet on disk, or inexact statistics
 	bool HasChanges() const;
 
 	//! Whether or not the column has ANY changes, including in child columns
 	virtual bool HasAnyChanges() const;
+	//! Whether updates may have widened the statistics of this column or of a column nested in it
+	virtual bool HasInexactStatistics() const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
@@ -152,6 +156,11 @@ public:
 	                                idx_t end_row);
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
+	//! Initialize a scan of this column's own segments only, without its validity or children
+	void InitializeSegmentScan(ColumnScanState &state);
+	//! Scan a flat vector of this column's own segments only, with the updates visible to the transaction
+	idx_t ScanSegmentVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                        idx_t scan_count);
 	//! Initialize a scan starting at the specified offset
 	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
 	//! Scan the next vector from the column
@@ -159,7 +168,6 @@ public:
 	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                   idx_t scan_count);
 
-	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
@@ -217,7 +225,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
 	                                                     const BaseStatistics &stats);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
+	void CheckpointUpdates(ColumnData &target, VisibilityBound visibility_bound, BaseStatistics &target_stats,
+	                       const BaseStatistics &old_stats);
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
@@ -272,6 +281,8 @@ protected:
 	                    Vector &update_vector, row_t *row_ids, idx_t update_count, const Vector &base_vector,
 	                    idx_t row_group_start);
 	idx_t GetVectorCount(idx_t vector_index) const;
+	//! The update segment, if any
+	optional_ptr<UpdateSegment> GetUpdates() const;
 
 	static bool IsDirectNullCheckFilter(const TableFilter &filter);
 	//! Checks the filter against the statistics of one segment and of the updates of the column
@@ -286,14 +297,16 @@ private:
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
-	//! The lock for the updates
-	mutable mutex update_lock;
-	//! The updates for this column segment
-	unique_ptr<UpdateSegment> updates;
+	//! The updates of this column, shared with the column a checkpoint rewrote it into
+	shared_ptr<ColumnUpdates> updates;
 	//! The lock for the stats
 	mutable mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+	//! Whether updates widened the statistics; only a rewrite of the column makes them exact again
+	atomic<bool> stats_inexact;
+	//! The bound as of which a checkpoint wrote the base data: it holds every update committed below it
+	atomic<VisibilityBound> base_bound;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 

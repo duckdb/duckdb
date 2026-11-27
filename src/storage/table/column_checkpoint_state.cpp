@@ -4,6 +4,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,11 @@ ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnDa
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
+void ColumnCheckpointState::CheckpointUpdates(VisibilityBound visibility_bound, const BaseStatistics &old_stats) {
+	auto &target = result_column ? *result_column : original_column_mutable;
+	original_column_mutable.CheckpointUpdates(target, visibility_bound, *global_stats, old_stats);
+}
+
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	D_ASSERT(global_stats);
 	return std::move(global_stats);
@@ -23,6 +29,15 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 
 shared_ptr<ColumnData> ColumnCheckpointState::CreateEmptyColumnData() {
 	throw InternalException("CreateEmptyColumnData not implemented for this column checkpoint state");
+}
+
+void ColumnCheckpointState::InitializeSegmentScan(ColumnScanState &state) {
+	original_column_mutable.InitializeSegmentScan(state);
+}
+
+idx_t ColumnCheckpointState::ScanSegmentVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                                               Vector &result, idx_t scan_count) {
+	return original_column_mutable.ScanSegmentVector(transaction, vector_index, state, result, scan_count);
 }
 
 ColumnData &ColumnCheckpointState::GetResultColumn() {

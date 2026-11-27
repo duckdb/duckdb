@@ -45,8 +45,15 @@ public:
 	virtual shared_ptr<ColumnData> CreateEmptyColumnData();
 	virtual ColumnData &GetResultColumn();
 	virtual shared_ptr<ColumnData> GetFinalResult();
+	void CheckpointUpdates(VisibilityBound visibility_bound, const BaseStatistics &old_stats);
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
+
+	//! Initialize a scan of the original column's own segments
+	void InitializeSegmentScan(ColumnScanState &state);
+	//! Scan a flat vector of the original column's own segments, with the visible updates
+	idx_t ScanSegmentVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                        idx_t scan_count);
 
 	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);

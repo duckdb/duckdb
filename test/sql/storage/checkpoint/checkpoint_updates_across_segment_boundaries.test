@@ -1,0 +1,38 @@
+# name: test/sql/storage/checkpoint/checkpoint_updates_across_segment_boundaries.test
+# description: A checkpoint writes the updates of vectors whose rows lie in two segments
+# group: [checkpoint]
+
+load {TEST_DIR}/checkpoint_updates_across_segment_boundaries.db
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE t AS SELECT i, repeat('x', 500) || i AS s FROM range(10000) t(i)
+
+statement ok
+CHECKPOINT
+
+# uncompressed strings fill segments of a few hundred rows, which start inside vectors
+query I
+SELECT count(*) FILTER (WHERE start % 2048 <> 0) > 0 FROM pragma_storage_info('t') WHERE column_name = 's' AND segment_type = 'VARCHAR'
+----
+true
+
+statement ok
+UPDATE t SET s = CASE WHEN i % 3 = 0 THEN NULL ELSE 'updated' || i END WHERE i % 5 = 0
+
+statement ok
+CHECKPOINT
+
+query III
+SELECT count(*) FILTER (WHERE s IS NULL AND i % 15 = 0), count(*) FILTER (WHERE s = 'updated' || i), count(*) FILTER (WHERE s = repeat('x', 500) || i) FROM t
+----
+667	1333	8000
+
+restart
+
+query III
+SELECT count(*) FILTER (WHERE s IS NULL AND i % 15 = 0), count(*) FILTER (WHERE s = 'updated' || i), count(*) FILTER (WHERE s = repeat('x', 500) || i) FROM t
+----
+667	1333	8000
