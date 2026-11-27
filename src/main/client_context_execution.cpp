@@ -71,7 +71,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	// Notify any registered state of query begin
 	for (auto &state : context->GetRegisteredState().States()) {
 		state->QueryBegin(*this);
+		active_query->begun_states.push_back(state);
 	}
+	active_query->begin_pending = false;
+	active_query->begun_states.clear();
 	RefreshLoggerInternal();
 }
 
@@ -118,6 +121,9 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		previous_error = &statement_error;
 	}
 	invalidate_transaction = invalidate_transaction && !active_query->outside_local_transaction;
+	// if QueryBegin failed part-way, only the states that began are notified of the end
+	auto end_states =
+	    active_query->begin_pending ? std::move(active_query->begun_states) : context->GetRegisteredState().States();
 	active_query.reset();
 	query_deadline.SetInvalid();
 	query_progress.Initialize();
@@ -171,7 +177,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	}
 
 	// Notify any registered state of query end
-	for (auto const &s : context->GetRegisteredState().States()) {
+	for (auto const &s : end_states) {
 		if (error.HasError()) {
 			s->QueryEnd(*this, &error);
 		} else {
