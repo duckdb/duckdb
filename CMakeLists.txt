@@ -666,8 +666,9 @@ option(
   CLANG_TIDY
   "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build."
   FALSE)
-option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
-option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)
+option(BUILD_UNITTESTS "Build the test extension, C++ test bundle, and runner."
+       TRUE)
+option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ test bundle." TRUE)
 option(NATIVE_LTO_STATIC_LIBRARIES
        "Run LTO before writing static libraries so non-LTO linkers can use them"
        OFF)
@@ -701,6 +702,8 @@ option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
+option(WINDOWS_STATIC_LIBRARY_EXPORTS
+       "Keep core DLL exports in self-contained Windows extensions" OFF)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 set(SMALLER_BINARY
     ""
@@ -1037,6 +1040,15 @@ if(NOT MSVC)
     set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
   endif()
 
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wc2y-extensions"
+                            COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+    if(COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+      set(CXX_EXTRA "${CXX_EXTRA} -Wno-c2y-extensions")
+    endif()
+  endif()
+
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                                    VERSION_GREATER 8.0)
     if(REDUCE_SYMBOLS)
@@ -1093,6 +1105,7 @@ else()
   string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_WINDOWS_FLAGS}")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /DDEBUG")
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
@@ -1323,17 +1336,28 @@ if(PREBUILT_BINARY)
     )
   endif()
 
-  # capabilities shipped next to the prebuilt library become their archive
-  # targets
+  # capabilities shipped next to the prebuilt library, or at their place in the
+  # build tree that made it, become their archive targets
   get_filename_component(_DUCKDB_PREBUILT_DIRECTORY "${PREBUILT_BINARY_PATH}"
                          DIRECTORY)
-  foreach(DUCKDB_PREBUILT_CAPABILITY duckdb_httplib duckdb_loadable_extensions)
+  foreach(DUCKDB_PREBUILT_CAPABILITY_ENTRY
+          duckdb_httplib:main/http duckdb_loadable_extensions:main/extension)
+    string(REPLACE ":" ";" DUCKDB_PREBUILT_CAPABILITY_ENTRY
+                   "${DUCKDB_PREBUILT_CAPABILITY_ENTRY}")
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 0 DUCKDB_PREBUILT_CAPABILITY)
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 1
+         _DUCKDB_PREBUILT_CAPABILITY_SUBDIR)
     if(MSVC)
-      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/${DUCKDB_PREBUILT_CAPABILITY}.lib")
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "${DUCKDB_PREBUILT_CAPABILITY}.lib")
     else()
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+    endif()
+    set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+        "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}")
+    if(NOT EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}")
       set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+          "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_SUBDIR}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}"
+      )
     endif()
     if(EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
        AND NOT TARGET ${DUCKDB_PREBUILT_CAPABILITY})
@@ -1355,23 +1379,21 @@ if(PREBUILT_BINARY)
                    src/main/extension/local_extension_repository)
 
   foreach(
-    DUCKDB_PREBUILT_LINK_LIBRARY
-    duckdb_fastpforlib
-    duckdb_fmt
-    duckdb_fsst
-    duckdb_hyperloglog
-    duckdb_mbedtls
-    duckdb_miniz
-    duckdb_re2
-    duckdb_skiplistlib
-    duckdb_utf8proc
-    duckdb_yyjson
-    duckdb_zstd)
-    if(NOT TARGET ${DUCKDB_PREBUILT_LINK_LIBRARY})
-      add_library(${DUCKDB_PREBUILT_LINK_LIBRARY} INTERFACE IMPORTED GLOBAL)
-      target_link_libraries(${DUCKDB_PREBUILT_LINK_LIBRARY}
-                            INTERFACE duckdb_static)
-    endif()
+    DUCKDB_PREBUILT_THIRD_PARTY
+    fastpforlib
+    fmt
+    fsst
+    hyperloglog
+    mbedtls
+    miniz
+    re2
+    skiplist
+    utf8proc
+    yyjson
+    zstd)
+    add_subdirectory(
+      third_party/${DUCKDB_PREBUILT_THIRD_PARTY}
+      third_party/${DUCKDB_PREBUILT_THIRD_PARTY} EXCLUDE_FROM_ALL)
   endforeach()
 
   add_subdirectory(tools)
@@ -1386,7 +1408,7 @@ duckdb_link_deferred_extension_libraries()
 
 if(NOT EXTENSION_CONFIG_BUILD)
   if(PREBUILT_BINARY)
-    message(STATUS "Skipping third_party/ because PREBUILT_BINARY is set")
+    message(STATUS "Prebuilt DuckDB helper libraries are built on demand")
   else()
     add_third_party(fastpforlib)
     add_third_party(fmt)
@@ -1442,6 +1464,10 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
+endif()
+
+if(TARGET test_loadable_extension AND TARGET shell)
+  set_target_properties(shell PROPERTIES ENABLE_EXPORTS ON)
 endif()
 
 duckdb_apply_architecture_flags()

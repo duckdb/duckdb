@@ -145,8 +145,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		state_vec_writer.WriteValue(state_ptr);
 	}
 
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
-	                                               local_state.state_buffer.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[0],
+	                                               count, local_state.state_buffer.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
 
 	AggregateFinalizeInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
@@ -197,11 +197,11 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 
 	// Deserialize both inputs — null rows are skipped by LoadOp, keeping the initialized empty state
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
-	                                               local_state.state_buffer0.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[0],
+	                                               count, local_state.state_buffer0.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[1], count,
-	                                               local_state.state_buffer1.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[1],
+	                                               count, local_state.state_buffer1.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
@@ -286,6 +286,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(FunctionBinder &functi
 		}
 	}
 
+	// The recorded signature already holds the collations the state was built with
+	function_binder.arguments_collated = true;
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto [bound_aggr, bind_info] =
 	    function_binder.ResolveAggregateFunction(best_function.GetBinding(), args, keyword_args);
@@ -553,8 +555,9 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	}
 	auto &source_allocator = scratch ? *scratch : aggr_input_data.allocator;
 	try {
-		AggregateStateSerialization::DeserializeStates(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(),
-		                                               source_allocator, StateMemoryOwnership::BORROWED);
+		AggregateStateSerialization::DeserializeStates(underlying_aggr, bind_data.bind_data.get(), layout, inputs[0],
+		                                               count, temp_state_buf.get(), source_allocator,
+		                                               StateMemoryOwnership::BORROWED);
 		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (input_count == 2) {
@@ -939,21 +942,19 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
 }
 
-bool ExportAggregateFunction::TryGetCombinedStateLayout(const BoundAggregateFunction &function,
-                                                        optional_ptr<const FunctionData> bind_data,
-                                                        AggregateStateLayout &layout) {
+unique_ptr<AggregateStateSerializer>
+ExportAggregateFunction::TryGetCombinedStateSerializer(const BoundAggregateFunction &function,
+                                                       optional_ptr<const FunctionData> bind_data) {
 	if (!bind_data || function.GetStateCombineCallback() != CombineAggrStateCombine) {
-		return false;
+		return nullptr;
 	}
 	auto &combine_data = bind_data->Cast<ExportAggregateBindData>();
 	auto &aggr = combine_data.aggr;
-	// states with explicit export / import callbacks are not described by their field layout alone
-	if (!aggr.HasGetStateTypeCallback() || aggr.HasExportAggregateStateCallback() ||
-	    aggr.HasImportAggregateStateCallback()) {
-		return false;
+	if (!aggr.HasGetStateTypeCallback()) {
+		return nullptr;
 	}
-	layout = aggr.GetStateType(combine_data.bind_data.get());
-	return true;
+	return make_uniq<AggregateStateSerializer>(aggr.GetStateType(combine_data.bind_data.get()), aggr,
+	                                           combine_data.bind_data.get());
 }
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {

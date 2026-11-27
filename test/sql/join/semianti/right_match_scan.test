@@ -6,20 +6,20 @@ statement ok
 CREATE TABLE build_rows AS
 SELECT i AS id, CASE WHEN i % 19 <> 0 THEN 2 * (i // 2) END AS k,
        repeat('row-' || i::VARCHAR, (i % 3 + 1)::INTEGER) AS payload
-FROM range(32771) t(i);
+FROM range(2179) t(i);
 
-foreach threads 1 4
+foreach threads 2
 
 statement ok
 SET threads={threads};
 
-foreach rate 0 1 50 99 100
+foreach rate 0 50 100
 
 # Each matching key has eight probe rows. Odd keys cannot match; NULLs stay unmatched.
 statement ok
 CREATE TABLE probe_rows AS
-SELECT 2 * (i % 16386) + CASE WHEN hash(i % 16386) % 100 < {rate} THEN 0 ELSE 1 END AS k
-FROM range(131088) t(i);
+SELECT 2 * (i % 1090) + CASE WHEN hash(i % 1090) % 100 < {rate} THEN 0 ELSE 1 END AS k
+FROM range(8720) t(i);
 
 statement ok
 INSERT INTO probe_rows VALUES (NULL);

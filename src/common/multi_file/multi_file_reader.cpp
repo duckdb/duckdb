@@ -118,14 +118,6 @@ unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &functio
 	return res;
 }
 
-Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) {
-	vector<Value> files;
-	for (auto &file : file_list) {
-		files.push_back(file);
-	}
-	return Value::LIST(LogicalType::VARCHAR, std::move(files));
-}
-
 void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
 	auto add_options = [&](TypedKwargs &options) {
 		if (which == MultiFileParameters::ALL) {
@@ -224,42 +216,10 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	return files;
 }
 
-//! A file list that expands the globs with the glob table function. Files that are given together with
-//! the options to open them with are passed as file structs, which are listed as-is instead of being globbed
-static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, const vector<OpenFileInfo> &files,
+//! A file list that expands the globs with the glob table function
+static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, Value globs,
                                                     const FileGlobInput &glob_input) {
-	bool has_open_options = false;
-	for (auto &file : files) {
-		if (file.extended_info) {
-			has_open_options = true;
-			break;
-		}
-	}
-	vector<Value> globs;
-	for (auto &file : files) {
-		if (!has_open_options) {
-			globs.emplace_back(file.path);
-			continue;
-		}
-		Value entry(file.path);
-		if (file.extended_info) {
-			// a struct even without options - an entry with open options is never globbed
-			vector<string> names;
-			for (auto &option : file.extended_info->options) {
-				names.push_back(option.first);
-			}
-			std::sort(names.begin(), names.end());
-			child_list_t<Value> children;
-			children.emplace_back(OpenFileInfo::PATH_FIELD, Value(file.path));
-			for (auto &name : names) {
-				children.emplace_back(name, file.extended_info->options.at(name));
-			}
-			entry = Value::STRUCT(std::move(children));
-		}
-		globs.push_back(entry.DefaultCastAs(LogicalType::VARIANT()));
-	}
-	auto glob_type = has_open_options ? LogicalType::VARIANT() : LogicalType::VARCHAR;
-	vector<Value> inputs {Value::LIST(glob_type, std::move(globs))};
+	vector<Value> inputs {std::move(globs)};
 	named_argument_map_t named_parameters;
 	named_parameters["full_file_info"] = Value::BOOLEAN(true);
 	named_parameters["allow_empty"] = Value::BOOLEAN(glob_input.AllowsEmpty());
@@ -272,7 +232,11 @@ static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, cons
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
-	auto res = CreateGlobFileList(context, vector<OpenFileInfo>(paths.begin(), paths.end()), glob_input);
+	vector<Value> globs;
+	for (auto &path : paths) {
+		globs.emplace_back(path);
+	}
+	auto res = CreateGlobFileList(context, Value::LIST(LogicalType::VARCHAR, std::move(globs)), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -297,7 +261,12 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 		}
 		return CreateFileList(context, paths, glob_input);
 	}
-	auto res = CreateGlobFileList(context, files, glob_input);
+	// glob lists the files with open options as-is - a VARIANT lets every file have its own options
+	vector<Value> entries;
+	for (auto &file : files) {
+		entries.push_back(file.ToValue().CastAs(context, LogicalType::VARIANT()));
+	}
+	auto res = CreateGlobFileList(context, Value::LIST(LogicalType::VARIANT(), std::move(entries)), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

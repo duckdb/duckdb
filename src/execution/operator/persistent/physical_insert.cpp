@@ -118,7 +118,12 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info)->Cast<DuckTableEntry>();
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info);
+		if (!created_table) {
+			// a connection that shares the transaction created the table after the statement was bound
+			throw TransactionException("Catalog write-write conflict on create with %s", info->Base().GetTableName());
+		}
+		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -418,7 +423,7 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 
 	auto &indexes = local_storage.GetIndexes(context.client.GetContext(), data_table);
 	auto storage = local_storage.GetStorage(data_table);
-	indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, tuples, nullptr);
+	indexes.VerifyUniqueIndexes(storage ? &storage->GetDeleteIndexes() : nullptr, tuples, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -440,7 +445,7 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, storage, &conflict_manager);
 	} else {
 		auto &indexes = local_storage.GetIndexes(context.client.GetContext(), data_table);
-		indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, tuples, &conflict_manager);
+		indexes.VerifyUniqueIndexes(storage ? &storage->GetDeleteIndexes() : nullptr, tuples, &conflict_manager);
 	}
 
 	if (!conflict_manager.HasConflicts()) {

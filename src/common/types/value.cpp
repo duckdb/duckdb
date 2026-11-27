@@ -246,49 +246,20 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::NegativeInfinity(type);
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIME_NS:
 		return Value::TIME_NS(dtime_ns_t(0));
-	case LogicalTypeId::TIMESTAMP: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		return Value::TIMESTAMP(date, dtime_t(0));
-	}
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the minimum timestamp and convert it to timestamp_sec_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(min_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the minimum timestamp and convert it to timestamp_ms_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(min_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPNS(timestamp_ns_t(min_ns));
-	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
-		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
-	}
-	case LogicalTypeId::TIMESTAMP_TZ_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
-	}
 	case LogicalTypeId::INTERVAL: {
 		const auto min_months = NumericLimits<int32_t>::Minimum();
 		const auto min_days = NumericLimits<int32_t>::Minimum();
@@ -360,35 +331,19 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::Infinity(type);
 	case LogicalTypeId::TIME:
 		//	24:00:00 according to PG
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIME_NS:
 		//	24:00:00 according to PG
 		return Value::TIME_NS(dtime_ns_t(Interval::NANOS_PER_DAY));
-	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the maximum timestamp and convert it to timestamp_s_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(max_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the maximum timestamp and convert it to timestamp_ms_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(max_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		const auto ts = timestamp_ns_t(NumericLimits<int64_t>::Maximum() - 1);
-		return Value::TIMESTAMPNS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));

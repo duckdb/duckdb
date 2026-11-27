@@ -68,9 +68,13 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	//! Returns true if this operator itself has side effects.
+	bool HasLocalSideEffects() const;
 	//! Returns true if this operator or any of its descendants has side effects
 	//! Used to prevent inlining or elimination of side-effecting CTEs.
 	bool HasSideEffects() const;
+	//! Returns true if a CTE body contains a data-modifying operator.
+	bool CTEContainsDML() const;
 	//! Returns true if this operator or any of its descendants contains a volatile expression
 	bool HasVolatileExpressions() const;
 

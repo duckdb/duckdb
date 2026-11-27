@@ -62,7 +62,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	lock_guard<mutex> guard(databases_lock);
 	shared_ptr<AttachedDatabase> db;
 	if (name == TEMP_CATALOG) {
-		db = context.client_data->temporary_objects;
+		db = meta_transaction.GetTemporaryObjectsPtr();
 	} else {
 		db = GetDatabaseInternal(guard, name);
 	}
@@ -183,7 +183,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				// The database ACTUALLY exists, so we return it.
 				return entry->second;
 			}
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		// Returning in the loop above will also end the timer, otherwise, do it explicitly here.
 		timer.EndTimer();
@@ -251,7 +251,8 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 		auto deleter = detached_db->ExtractDeleter();
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
-		detached_db.reset();
+		detached_db->MarkDetached(AttachedDatabase::GetDetachCloseAction(context));
+		AttachedDatabase::InvokeCloseIfLastReference(detached_db, context);
 		// Best-effort teardown: the replacement is already in effect, so a deleter failure must not
 		// abort the statement mid-swap; TryDelete logs it as a warning instead.
 		if (deleter) {
@@ -287,6 +288,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 	auto deleter = attached_db->ExtractDeleter();
 	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 	attached_db->OnDetach(context);
+	attached_db->MarkDetached(AttachedDatabase::GetDetachCloseAction(context));
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
@@ -577,7 +579,11 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext
 		result.push_back(system);
 	}
 	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 2) {
-		result.push_back(context.client_data->temporary_objects);
+		if (context.transaction.HasActiveTransaction()) {
+			result.push_back(context.transaction.ActiveTransaction().GetTemporaryObjectsPtr());
+		} else {
+			result.push_back(context.client_data->temporary_objects);
+		}
 	}
 
 	return result;

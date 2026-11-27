@@ -56,7 +56,8 @@ public:
 
 	//! Converts a big-endian two's complement Parquet decimal into the BIGNUM blob of a wide decimal
 	static string ReadWideDecimalValue(const_data_ptr_t pointer, idx_t size);
-	//! The number of bytes a FIXED_LEN_BYTE_ARRAY needs to hold decimals of the given width
+	//! The number of bytes of the FIXED_LEN_BYTE_ARRAY that decimals of the given width are written in, enough to
+	//! hold the width, rounded up to a multiple of 8 bytes
 	static idx_t WideDecimalByteLength(uint32_t width);
 	//! Writes the BIGNUM blob of a wide decimal as a big-endian two's complement value of byte_length bytes
 	static void WriteWideDecimal(const bignum_t &value, idx_t byte_length, data_ptr_t result);
@@ -64,8 +65,5 @@ public:
 private:
 	[[noreturn]] static void ThrowInvalidDecimalEncoding();
 };
-
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size, const ParquetColumnSchema &schema);
 
 } // namespace duckdb

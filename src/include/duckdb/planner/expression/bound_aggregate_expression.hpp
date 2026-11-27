@@ -17,6 +17,10 @@ namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_AGGREGATE;
+	//! Preserves the first argument's domain for singleton input when the second argument is non-NULL
+	static constexpr const char *NON_NULL_SELECTOR_DOMAIN_PROPERTY = "duckdb.aggregate.non_null_selector_domain";
+	//! Stores the returned first argument as a sort key, which does not keep the sign of a zero
+	static constexpr const char *ARG_STORED_AS_SORT_KEY_PROPERTY = "duckdb.aggregate.arg_stored_as_sort_key";
 
 public:
 	BoundAggregateExpression(BoundAggregateFunction function, vector<unique_ptr<Expression>> children,
@@ -79,6 +83,7 @@ public:
 	bool IsVolatile() const override;
 	bool CanThrow() const override;
 	bool PropagatesNullValues() const override;
+	bool CanForwardSingletonInputDomain() const;
 
 	string ToString() const override;
 

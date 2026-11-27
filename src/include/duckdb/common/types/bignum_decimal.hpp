@@ -20,6 +20,7 @@ class ClientContext;
 class Context;
 class StringHeap;
 class Vector;
+struct BignumCastScratch;
 
 //! The operations on the unscaled value of a DECIMAL wider than 38 digits, a bignum_t (the BIGNUM blob): the interface
 //! of the fixed-size tiers (see decimal_helper.hpp), whose results are owned blobs here as the values have no fixed
@@ -39,11 +40,15 @@ struct DecimalHelper<bignum_t> {
 		BignumArithmeticState state;
 	};
 
-	//! Scratch reused across rescaled values; returned blobs own their bytes.
+	//! Scratch reused across rescaled values.
 	struct RescaleState {
 		explicit RescaleState(optional_ptr<ClientContext> context = nullptr) : arithmetic(context) {
 		}
 
+		//! Invalidates scratch values; call before constructing the next input in heap.
+		void Reset() {
+			heap.GetAllocator().Reset();
+		}
 		const string &GetPowerOfTen(idx_t exponent);
 
 		StringHeap heap;
@@ -75,6 +80,8 @@ struct DecimalHelper<bignum_t> {
 	//! The BIGNUM blob of an integer
 	DUCKDB_API static string FromInteger(hugeint_t value);
 	DUCKDB_API static string FromInteger(uhugeint_t value);
+	DUCKDB_API static void FromInteger(hugeint_t value, string &result);
+	DUCKDB_API static void FromInteger(uhugeint_t value, string &result);
 	//! Converts an unscaled value to a hugeint, returns false if it does not fit
 	DUCKDB_API static bool TryToHugeint(const bignum_t &value, hugeint_t &result);
 	DUCKDB_API static bool TryToUhugeint(const bignum_t &value, uhugeint_t &result);
@@ -97,19 +104,24 @@ struct DecimalHelper<bignum_t> {
 	                     RoundState &state, bignum_t &result) {
 		return TryRound(value, drop_digits, restore_digits, ROUNDING, width, state, result);
 	}
+	//! Divides a value by a positive divisor and rounds the quotient as requested, the result lives in the heap
+	DUCKDB_API static string_t DivideAndRound(const BignumIntermediate &source, const BignumIntermediate &divisor,
+	                                          DecimalRounding rounding, StringHeap &heap, BignumArithmeticState &state);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero), the result is the BIGNUM blob of the
 	//! rescaled value
 	DUCKDB_API static string Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
 	                                 optional_ptr<ClientContext> context = nullptr);
-	DUCKDB_API static string Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
-	                                 uint32_t target_scale);
+	//! The result borrows from value or state; consume it before resetting state or releasing value.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+	                                   uint32_t target_scale);
+	//! Fixed-width inputs use integer arithmetic before encoding the result as a BIGNUM.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, hugeint_t value, uint32_t source_scale,
+	                                   uint32_t target_scale);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width, the
 	//! result is the BIGNUM blob of the rescaled value
 	DUCKDB_API static bool TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
 	                                  uint32_t target_scale, string &result,
 	                                  optional_ptr<ClientContext> context = nullptr);
-	DUCKDB_API static bool TryRescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
-	                                  uint32_t target_width, uint32_t target_scale, string &result);
 
 	//! Converts an unscaled value with the given scale to a FLOAT or DOUBLE, rounding once (through the decimal
 	//! string), returns false if the value is out of range
@@ -117,6 +129,10 @@ struct DecimalHelper<bignum_t> {
 	                                     optional_ptr<ClientContext> context = nullptr);
 	DUCKDB_API static bool TryToFloating(const bignum_t &value, uint32_t scale, double &result,
 	                                     optional_ptr<ClientContext> context = nullptr);
+	DUCKDB_API static bool TryToFloating(BignumCastScratch &state, string &text, const bignum_t &value, uint32_t scale,
+	                                     float &result);
+	DUCKDB_API static bool TryToFloating(BignumCastScratch &state, string &text, const bignum_t &value, uint32_t scale,
+	                                     double &result);
 	//! Converts an unscaled value with the given scale to a double, infinite when the value is out of range
 	DUCKDB_API static double ToDouble(const bignum_t &value, uint32_t scale,
 	                                  optional_ptr<ClientContext> context = nullptr);

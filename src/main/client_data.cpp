@@ -3,7 +3,7 @@
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -13,6 +13,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,10 @@ ClientData::~ClientData() {
 	// This needs to be destroyed first because PreparedStatementData holds a PhysicalPlan,
 	// and the PhysicalPlan holds objects that might rely on the client file opener/file system/buffer manager
 	prepared_statements.clear();
+	if (temporary_objects.use_count() == 1) {
+		// otherwise a shared transaction still uses it and the last reference closes it
+		temporary_objects->Close(DatabaseCloseAction::SKIP_CHECKPOINT);
+	}
 }
 
 ClientData &ClientData::Get(ClientContext &context) {

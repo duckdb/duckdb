@@ -3,6 +3,7 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
 #include "duckdb/common/sorting/natural_sort.hpp"
 #include "duckdb/common/sorting/partitioned_sort.hpp"
+#include "duckdb/common/sorting/topn_sort.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 namespace duckdb {
@@ -10,7 +11,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // SortStrategy
 //===--------------------------------------------------------------------===//
-SortStrategy::SortStrategy(const Types &input_types) : payload_types(input_types) {
+SortStrategy::SortStrategy(const Types &input_types, optional_idx partition_limit)
+    : payload_types(input_types), partition_limit(partition_limit) {
 	// The payload prefix is the same as the input schema
 	for (column_t i = 0; i < payload_types.size(); ++i) {
 		scan_ids.emplace_back(i);
@@ -36,14 +38,18 @@ unique_ptr<SortStrategy> SortStrategy::Factory(ClientContext &client,
                                                const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
                                                const vector<unique_ptr<BaseStatistics>> &partitions_stats,
                                                const OperatorPartitionInfo &partition_info, idx_t estimated_cardinality,
-                                               bool require_payload) {
+                                               bool require_payload, optional_idx partition_limit) {
 	if (partition_info.RequiresPartitionColumns()) {
-		return make_uniq<PartitionedSort>(client, order_bys, payload_types, partition_info, require_payload);
+		return make_uniq<PartitionedSort>(client, order_bys, payload_types, partition_info, require_payload,
+		                                  partition_limit);
 	} else if (!partition_bys.empty()) {
 		return make_uniq<HashedSort>(client, partition_bys, order_bys, payload_types, partitions_stats,
 		                             estimated_cardinality, require_payload);
 	} else if (!order_bys.empty()) {
-		return make_uniq<FullSort>(client, order_bys, payload_types, require_payload);
+		if (TopNSort::CanOptimize(partition_limit, estimated_cardinality)) {
+			return make_uniq<TopNSort>(client, order_bys, payload_types, partition_limit);
+		}
+		return make_uniq<FullSort>(client, order_bys, payload_types, require_payload, partition_limit);
 	} else {
 		return make_uniq<NaturalSort>(payload_types);
 	}

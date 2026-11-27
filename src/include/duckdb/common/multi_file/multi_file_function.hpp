@@ -616,6 +616,7 @@ public:
 			// covers a cancellation that signals without the lock
 			gstate.async_open_settled.wait_for(parallel_lock, std::chrono::milliseconds(10));
 			parallel_lock.unlock();
+			// the throttled FastInterruptCheck() would only read the clock every ~2.5s of waiting here
 			context.InterruptCheck();
 			parallel_lock.lock();
 		}
@@ -894,10 +895,10 @@ public:
 				                                    context, file_idx, *result);
 				result->files_opened++;
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
-					//! File can be skipped entirely, close it and move on
+					//! File can be skipped entirely, close it - the scan moves past skipped files when it reaches them,
+					//! the readers before this one still have to be scanned
 					reader_data->file_state = MultiFileFileState::SKIPPED;
 					reader_data->reader = nullptr;
-					result->file_index++;
 				}
 			}
 		}

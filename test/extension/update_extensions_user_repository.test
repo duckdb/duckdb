@@ -18,7 +18,7 @@ statement ok
 CREATE EXTENSION REPOSITORY my_repo WITH PREFIX '{LOCAL_EXTENSION_REPO}' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 
 # nothing installed yet
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS
 ----
 
@@ -26,10 +26,10 @@ statement ok
 INSTALL json FROM my_repo
 
 # the extension from my_repo is listed and updated from my_repo
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS
 ----
-json	my_repo	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+
+json	my_repo	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+	NULL
 
 # updating a single extension only looks at the flat folder for now
 statement error
@@ -48,16 +48,16 @@ true
 statement ok
 FORCE INSTALL json FROM '{LOCAL_EXTENSION_REPO}'
 
-query IIIII rowsort
+query IIIIII rowsort
 UPDATE EXTENSIONS
 ----
-json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+
-json	my_repo	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+
+json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+	NULL
+json	my_repo	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+	NULL
 
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS (json)
 ----
-json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+
+json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+	NULL
 
 statement error
 UPDATE EXTENSIONS (foobar)
@@ -68,8 +68,8 @@ Failed to update the extension 'foobar', the extension is not installed!
 statement ok
 SET allow_extension_repositories='forbidden'
 
-query IIIII rowsort
+query IIIIII rowsort
 UPDATE EXTENSIONS
 ----
-json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+
-json	my_repo	REPOSITORY_NOT_TRUSTED	<REGEX>:.+	<REGEX>:.+
+json	{LOCAL_EXTENSION_REPO}	NO_UPDATE_AVAILABLE	<REGEX>:.+	<REGEX>:.+	NULL
+json	my_repo	REPOSITORY_NOT_TRUSTED	<REGEX>:.+	<REGEX>:.+	NULL

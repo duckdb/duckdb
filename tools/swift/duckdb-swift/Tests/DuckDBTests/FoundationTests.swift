@@ -28,23 +28,23 @@ import XCTest
 
 final class FoundationTests: XCTestCase {
     func test_time_to_date() {
-        let time = Time(microseconds: Int64(USEC_PER_SEC))
+        let time = Time(microseconds: Int64(1_000_000))
         let date = Foundation.Date(time)
         XCTAssertEqual(date.timeIntervalSince1970, 1)
     }
     func test_date_to_time() throws {
         let date = Foundation.Date(timeIntervalSince1970: 1)
         let time = Time(date)
-        XCTAssertEqual(time.microseconds, Int64(USEC_PER_SEC))
+        XCTAssertEqual(time.microseconds, Int64(1_000_000))
     }
     func test_timestamp_to_date() throws {
-        let time = Timestamp(microseconds: Int64(USEC_PER_SEC))
+        let time = Timestamp(microseconds: Int64(1_000_000))
         let date = Foundation.Date(time)
         XCTAssertEqual(date.timeIntervalSince1970, 1)
     }
     func test_date_to_timestamp() throws {
         let date = Foundation.Date(timeIntervalSince1970: 1)
         let time = Timestamp(date)
-        XCTAssertEqual(time.microseconds, Int64(USEC_PER_SEC))
+        XCTAssertEqual(time.microseconds, Int64(1_000_000))
     }
 }

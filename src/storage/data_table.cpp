@@ -156,7 +156,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
 
 	// scan the original table, and fill the new column with the transformed value
-	local_storage.DropColumn(parent, *this, removed_column);
+	local_storage.DropColumn(context, parent, *this, removed_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.version = DataTableVersion::ALTERED;
@@ -184,7 +184,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 			VerifyNewConstraint(context, local_storage, parent, not_null);
 		}
 	}
-	local_storage.MoveStorage(parent, *this);
+	local_storage.MoveStorage(context, parent, *this);
 	parent.version = DataTableVersion::ALTERED;
 }
 
@@ -723,7 +723,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	auto &data_table = table_entry.GetStorage();
 	auto &local_storage = LocalStorage::Get(context, db);
 	auto sibling_storage = local_storage.GetStorage(data_table);
-	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
+	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->GetDeleteIndexes() : nullptr;
 
 	data_table.info->indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
@@ -852,7 +852,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 	}
 
 	if (HasUniqueIndexes()) {
-		info->indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, chunk, manager);
+		info->indexes.VerifyUniqueIndexes(storage ? &storage->GetDeleteIndexes() : nullptr, chunk, manager);
 	}
 
 	auto &constraints = table.GetConstraints();
@@ -1528,15 +1528,20 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
 
 	// now perform the actual update
-	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
 	updates_slice.InitializeEmpty(updates.GetTypes());
 
 	SelectionVector sel_local_update(count), sel_global_update(count);
-	auto n_local_update = VectorOperations::GreaterThanEquals(row_ids, max_row_id_vec, nullptr, count,
-	                                                          &sel_local_update, &sel_global_update);
-	auto n_global_update = count - n_local_update;
+	idx_t n_local_update = 0;
+	idx_t n_global_update = 0;
+	for (auto row_id : row_ids.Values<row_t>()) {
+		if (row_id.GetValue() >= MAX_ROW_ID) {
+			sel_local_update.set_index(n_local_update++, row_id.GetIndex());
+		} else {
+			sel_global_update.set_index(n_global_update++, row_id.GetIndex());
+		}
+	}
 
 	// row id > MAX_ROW_ID? transaction-local storage
 	if (n_local_update > 0) {

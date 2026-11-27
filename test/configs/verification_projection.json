@@ -4,9 +4,21 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "Synthetic projections hide direct join scans; result coverage remains in adaptive_redundant_scan_filters.test.",
+      "paths": [
+        "test/optimizer/pushdown/adaptive_redundant_scan_filters_plan.test"
+      ]
+    },
+    {
       "reason": "Synthetic projections change common-subplan matching; result coverage remains in companion tests.",
       "paths": [
         "test/sql/optimizer/test_common_subplan_matching_plan.test"
+      ]
+    },
+    {
+      "reason": "TopNWindowElimination::TraverseProjectionBindings rejects extra projections.",
+      "paths": [
+        "test/sql/copy/partitioned/partitioned_window.test"
       ]
     },
     {
@@ -19,6 +31,7 @@
     {
       "reason": "Synthetic verification projections intentionally hide the direct recursive-state scan.",
       "paths": [
+        "test/optimizer/recursive_cte_projection_join_order_plan.test",
         "test/sql/cte/recursive_cte_key_finalize_owned_state.test",
         "test/sql/cte/recursive_cte_key_probe.test",
         "test/sql/cte/recursive_cte_key_union_plan.test",

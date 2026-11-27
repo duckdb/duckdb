@@ -1,0 +1,66 @@
+# name: test/optimizer/filter_pullup_projection_safety.test
+# description: Keep fallible and volatile expressions at their original evaluation boundary during filter pullup
+# group: [optimizer]
+
+statement ok
+SET threads = 1;
+
+# Exercise filter pullup without a later pass that can restore the filter's location.
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+statement ok
+CREATE TABLE items(grp INTEGER, value VARCHAR);
+
+statement ok
+INSERT INTO items VALUES (1, '42'), (2, 'bad'), (NULL, 'also_bad');
+
+statement ok
+CREATE TABLE chosen AS SELECT 1 AS grp;
+
+statement ok
+CREATE TABLE singleton AS SELECT 43 AS cast_key, 2 AS sequence_key;
+
+query I
+SELECT p.value
+FROM (SELECT items.value::INTEGER AS value FROM items JOIN chosen USING (grp)) p
+JOIN singleton s ON p.value + 1 = s.cast_key;
+----
+42
+
+statement ok
+CREATE SEQUENCE probe_seq;
+
+query I
+SELECT p.seq
+FROM (SELECT nextval('probe_seq') AS seq FROM items JOIN chosen USING (grp)) p
+JOIN singleton s ON p.seq + 1 = s.sequence_key;
+----
+1
+
+query I
+SELECT currval('probe_seq');
+----
+1
+
+statement ok
+CREATE TABLE inputs AS SELECT i, 0.5::DOUBLE AS threshold, 1 AS k FROM range(4) t(i);
+
+statement ok
+CREATE TABLE copies AS SELECT i, 2 AS k FROM range(10) t(i);
+
+statement ok
+SELECT setseed(0.42);
+
+# A source row either survives the volatile filter once and yields all ten copies, or is excluded.
+query I
+SELECT count(*)
+FROM (
+    SELECT p.i
+    FROM (SELECT i, k FROM inputs WHERE random() < threshold) p
+    JOIN copies c ON p.k + 1 = c.k
+    GROUP BY p.i
+    HAVING count(*) <> 10
+);
+----
+0

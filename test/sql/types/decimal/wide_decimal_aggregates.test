@@ -119,7 +119,20 @@ NULL
 statement error
 SELECT finalize(to_aggregate_state({'count': 2, 'value': NULL::BIGNUM}, 'avg', ['DECIMAL(40,2)']));
 ----
-Invalid avg state
+Invalid avg state - the value cannot be NULL when the count is not 0
+
+# the counts of imported states do not wrap when the states are combined
+statement error
+SELECT finalize(combine(to_aggregate_state({'count': 18446744073709551615, 'value': 1::BIGNUM}, 'avg', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'count': 2, 'value': 1::BIGNUM}, 'avg', ['DECIMAL(40,0)'])));
+----
+Overflow in aggregate state combine
+
+query I
+SELECT finalize(combine(to_aggregate_state({'count': 18446744073709551613, 'value': 10::BIGNUM}, 'avg', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'count': 2, 'value': 18446744073709551605::BIGNUM}, 'avg', ['DECIMAL(40,0)'])));
+----
+1.0
 
 # the BIGNUM sum exports its state the same way
 query II

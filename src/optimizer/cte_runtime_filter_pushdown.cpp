@@ -98,7 +98,7 @@ void JoinFilterPushdownOptimizer::GenerateCTEFilters(LogicalMaterializedCTE &cte
 			columns.push_back(std::move(column));
 		}
 		reference_map_t<LogicalCTERef, vector<JoinFilterPushdownColumn>> targets;
-		GetCTEFilterTargets(*join.children[0], std::move(columns), targets);
+		GetCTEFilterTargets(*join.children[0], columns, targets);
 		for (auto &target : targets) {
 			auto &ref = target.first.get();
 			auto consumer = consumer_indexes.find(ref.table_index);
@@ -107,8 +107,10 @@ void JoinFilterPushdownOptimizer::GenerateCTEFilters(LogicalMaterializedCTE &cte
 			}
 			for (auto &column : target.second) {
 				column.probe_column_index = bindings.at(column.probe_column_index.column_index.GetIndex());
+				vector<JoinFilterPushdownColumn> producer_columns;
+				producer_columns.push_back(std::move(column));
 				vector<PushdownFilterTarget> scans;
-				GetPushdownFilterTargets(*cte.children[0], {std::move(column)}, scans);
+				GetPushdownFilterTargets(*cte.children[0], producer_columns, scans);
 				for (auto &scan : scans) {
 					for (auto &scan_column : scan.columns) {
 						auto index = scan_column.probe_column_index.column_index;

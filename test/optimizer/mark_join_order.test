@@ -1,0 +1,150 @@
+# name: test/optimizer/mark_join_order.test
+# description: Reorder membership checks while preserving markers and duplicate probe rows
+# group: [optimizer]
+
+statement ok
+CREATE TABLE mark_probe(id INTEGER, k VARCHAR);
+
+statement ok
+INSERT INTO mark_probe VALUES (0,NULL),(1,'a'),(2,'b'),(3,'c'),(4,'a');
+
+statement ok
+CREATE TABLE mark_fact(id INTEGER);
+
+statement ok
+INSERT INTO mark_fact VALUES (0),(1),(1),(2),(3),(4);
+
+statement ok
+CREATE TABLE mark_keys(k VARCHAR);
+
+statement ok
+INSERT INTO mark_keys VALUES ('a'),('a'),(NULL);
+
+statement ok
+CREATE TABLE other_keys(k VARCHAR, id INTEGER);
+
+statement ok
+INSERT INTO other_keys VALUES ('b',2);
+
+query III rowsort
+SELECT p.id, p.k IN (SELECT k FROM mark_keys), p.k IN (SELECT k FROM other_keys)
+FROM mark_probe p JOIN mark_fact f USING (id);
+----
+0	NULL	NULL
+1	true	false
+1	true	false
+2	NULL	true
+3	NULL	false
+4	true	false
+
+# Either marker can retain a row, including a row whose other marker is NULL.
+query I rowsort
+SELECT p.id FROM mark_probe p JOIN mark_fact f USING (id)
+WHERE p.k IN (SELECT k FROM mark_keys) OR p.id IN (SELECT id FROM other_keys);
+----
+1
+1
+2
+4
+
+statement ok
+PREPARE ordered_mark AS
+SELECT p.id, p.k IN (SELECT k FROM mark_keys)
+FROM mark_probe p JOIN mark_fact f USING (id);
+
+statement ok
+DELETE FROM mark_keys;
+
+query II rowsort
+EXECUTE ordered_mark;
+----
+0	false
+1	false
+1	false
+2	false
+3	false
+4	false
+
+statement ok
+INSERT INTO mark_keys VALUES ('c');
+
+query II rowsort
+EXECUTE ordered_mark;
+----
+0	NULL
+1	false
+1	false
+2	false
+3	true
+4	false
+
+# Keep constant-side MARK comparisons out of condition normalization.
+query III rowsort
+SELECT p.a,p.c,__mark_join_marker FROM (VALUES (1,1),(2,NULL)) p(a,c)
+JOIN BY (TYPE MARK) (VALUES (1),(2)) b(a) ON p.a=b.a AND p.c=1;
+----
+1	1	true
+2	NULL	NULL
+
+# A marker can be the probe key of another MARK join.
+statement ok
+CREATE TABLE boolean_keys AS SELECT * FROM (VALUES (true),(true),(NULL)) t(b);
+
+query II rowsort
+SELECT p.id, (p.k IN (SELECT k FROM mark_keys)) IN (SELECT b FROM boolean_keys)
+FROM mark_probe p JOIN mark_fact f USING (id);
+----
+0	NULL
+1	NULL
+1	NULL
+2	NULL
+3	true
+4	NULL
+
+# Both synthetic marker bindings supply a Boolean domain to the equality estimate.
+query I rowsort
+SELECT p.id FROM mark_probe p JOIN mark_fact f USING (id)
+WHERE (p.k IN (SELECT k FROM mark_keys)) = (p.id IN (SELECT id FROM other_keys));
+----
+1
+1
+4
+
+# An INNER predicate must wait for the marker it consumes.
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM mark_probe p JOIN BY (TYPE MARK) mark_keys k ON p.k=k.k
+JOIN boolean_keys b ON __mark_join_marker=b.b
+JOIN mark_fact f ON p.id=f.id;
+----
+3	true
+3	true
+
+# A marker on the nullable side is evaluated after NULL extension.
+query III rowsort
+SELECT p.id, f.id, f.id IN (SELECT id FROM other_keys)
+FROM (VALUES (1),(2),(5)) p(id) LEFT JOIN mark_fact f USING (id);
+----
+1	1	false
+1	1	false
+2	2	true
+5	NULL	NULL
+
+query II rowsort
+SELECT p.id, p.k IN (SELECT k FROM mark_keys)
+FROM mark_probe p SEMI JOIN mark_fact f ON p.id=f.id;
+----
+0	NULL
+1	false
+2	false
+3	true
+4	false
+
+query II rowsort
+SELECT p.id, p.k IN (SELECT k FROM mark_keys)
+FROM mark_probe p ANTI JOIN other_keys k ON p.id=k.id;
+----
+0	NULL
+1	false
+3	true
+4	false

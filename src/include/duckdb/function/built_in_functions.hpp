@@ -54,6 +54,7 @@ private:
 	void RegisterArrowFunctions();
 	void RegisterSnifferFunction();
 	void RegisterCopyFunctions();
+	void RegisterEncodingFunctions();
 
 	void RegisterExtensionOverloads();
 

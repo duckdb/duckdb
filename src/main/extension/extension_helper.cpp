@@ -96,6 +96,7 @@ static const DefaultExtension internal_extensions[] = {
     {"unity_catalog", "Adds support for connecting to Unity Catalog"},
     {"glue", "Adds support for the AWS Glue Data Catalog"},
     {"legacy_parser", "Adds the SQL parser DuckDB used up to 1.5"},
+    {"test", "Runs SQL logic tests and compiled test bundles"},
     {nullptr, nullptr}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -250,22 +251,23 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
-                                                     const string &full_extension_path, const string &extension_name,
-                                                     const string &extension_directory) {
-	ExtensionUpdateResult result;
+//! Checks an installed extension: returns true when it needs a download, which is described in pending
+static bool PrepareExtensionUpdateInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
+                                           const string &full_extension_path, const string &extension_name,
+                                           const string &extension_directory, ExtensionUpdateResult &result,
+                                           PendingExtensionUpdate &pending) {
 	result.extension_name = extension_name;
 
 	if (!fs.FileExists(full_extension_path)) {
 		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
-		return result;
+		return false;
 	}
 
 	// Extension exists, check for .info file
 	const string info_file_path = full_extension_path + ".info";
 	if (!fs.FileExists(info_file_path)) {
 		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
-		return result;
+		return false;
 	}
 
 	// Parse the version of the extension before updating
@@ -286,14 +288,14 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	// Early out: no info file found
 	if (extension_install_info->mode == ExtensionInstallMode::UNKNOWN) {
 		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
-		return result;
+		return false;
 	}
 
 	// Early out: we can only update extensions from repositories
 	if (extension_install_info->mode != ExtensionInstallMode::REPOSITORY) {
 		result.tag = ExtensionUpdateResultTag::NOT_A_REPOSITORY;
 		result.installed_version = result.prev_version;
-		return result;
+		return false;
 	}
 
 	// update the extension from the repository it was installed from
@@ -315,34 +317,63 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 		} catch (std::exception &) {
 			result.tag = ExtensionUpdateResultTag::REPOSITORY_UNREADABLE;
 			result.installed_version = result.prev_version;
-			return result;
+			return false;
 		}
 		if (!repository_found) {
 			result.tag = ExtensionUpdateResultTag::REPOSITORY_NOT_FOUND;
 			result.installed_version = result.prev_version;
-			return result;
+			return false;
 		}
 		if (!ExtensionRepositoryManager::TrustsRepository(db, user_repository)) {
 			result.tag = ExtensionUpdateResultTag::REPOSITORY_NOT_TRUSTED;
 			result.installed_version = result.prev_version;
-			return result;
+			return false;
 		}
 		repository_from_info = user_repository;
 	}
 
+	pending.extension_name = extension_name;
+	pending.use_etags = repository_from_info.path == extension_install_info->repository_url;
+	pending.repository = std::move(repository_from_info);
+	pending.extension_directory = extension_directory;
+	return true;
+}
+
+//! Checks an installed extension, appending its result and - when it needs a download - its pending update
+static void PrepareExtensionUpdateEntry(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
+                                        const string &full_extension_path, const string &extension_name,
+                                        const string &extension_directory, vector<ExtensionUpdateResult> &results,
+                                        vector<PendingExtensionUpdate> &pending) {
+	ExtensionUpdateResult result;
+	PendingExtensionUpdate pending_update;
+	auto needs_download = PrepareExtensionUpdateInternal(context, db, fs, full_extension_path, extension_name,
+	                                                     extension_directory, result, pending_update);
+	if (needs_download) {
+		pending_update.result_index = results.size();
+		pending.push_back(std::move(pending_update));
+	}
+	results.push_back(std::move(result));
+}
+
+void ExtensionHelper::ExecuteExtensionUpdate(ClientContext &context, const PendingExtensionUpdate &pending,
+                                             ExtensionUpdateResult &result) {
 	// Force install from the repository
+	auto repository = pending.repository;
 	ExtensionInstallOptions options;
-	options.repository = repository_from_info;
+	options.repository = repository;
 	options.force_install = true;
-	options.use_etags = repository_from_info.path == extension_install_info->repository_url;
-	options.extension_directory = extension_directory;
+	options.use_etags = pending.use_etags;
+	options.extension_directory = pending.extension_directory;
 
 	unique_ptr<ExtensionInstallInfo> install_result;
 	try {
-		install_result = ExtensionHelper::InstallExtension(context, extension_name, options);
+		install_result = ExtensionHelper::InstallExtension(context, pending.extension_name, options);
 	} catch (std::exception &e) {
 		ErrorData error(e);
-		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
+		result.tag = ExtensionUpdateResultTag::UPDATE_FAILED;
+		result.installed_version = result.prev_version;
+		result.error = error.Message();
+		return;
 	}
 
 	result.installed_version = install_result->version;
@@ -354,18 +385,13 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	} else {
 		result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
 	}
-
-	return result;
 }
 
-vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	vector<ExtensionUpdateResult> result;
-	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
-
+void ExtensionHelper::PrepareExtensionUpdates(ClientContext &context, vector<ExtensionUpdateResult> &results,
+                                              vector<PendingExtensionUpdate> &pending) {
 #ifndef WASM_LOADABLE_EXTENSIONS
-	identifier_set_t seen_extensions;
+	auto &fs = FileSystem::GetFileSystem(context);
+	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 	// scan the install directories for installed extensions, each is updated in the directory it was found in
 	for (auto &ext_directory : ExtensionHelper::GetInstalledExtensionDirectories(db, fs)) {
@@ -377,33 +403,54 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 			auto extension_file_name = StringUtil::GetFileName(path);
 			auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-			seen_extensions.insert(Identifier(extension_name));
-
-			result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory.path, path),
-			                                         extension_name, ext_directory.extension_directory));
+			PrepareExtensionUpdateEntry(context, db, fs, fs.JoinPath(ext_directory.path, path), extension_name,
+			                            ext_directory.extension_directory, results, pending);
 		});
 	}
 #endif
-
-	return result;
 }
 
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
+void ExtensionHelper::PrepareExtensionUpdate(ClientContext &context, const string &extension_name,
+                                             vector<ExtensionUpdateResult> &results,
+                                             vector<PendingExtensionUpdate> &pending) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	auto update_result = UpdateExtensionInternal(context, db, fs, full_extension_path, extension_name, ext_directory);
+	PrepareExtensionUpdateEntry(context, db, fs, full_extension_path, extension_name, ext_directory, results, pending);
 
-	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
+	auto &result = results.back();
+	if (result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
-	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
-	return update_result;
+}
+
+//! Runs the pending updates one after the other
+static vector<ExtensionUpdateResult> ExecuteExtensionUpdates(ClientContext &context,
+                                                             vector<ExtensionUpdateResult> results,
+                                                             const vector<PendingExtensionUpdate> &pending) {
+	for (auto &pending_update : pending) {
+		ExtensionHelper::ExecuteExtensionUpdate(context, pending_update, results[pending_update.result_index]);
+	}
+	return results;
+}
+
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
+	vector<ExtensionUpdateResult> results;
+	vector<PendingExtensionUpdate> pending;
+	PrepareExtensionUpdates(context, results, pending);
+	return ExecuteExtensionUpdates(context, std::move(results), pending);
+}
+
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
+	vector<ExtensionUpdateResult> results;
+	vector<PendingExtensionUpdate> pending;
+	PrepareExtensionUpdate(context, extension_name, results, pending);
+	results = ExecuteExtensionUpdates(context, std::move(results), pending);
+	return std::move(results[0]);
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {

@@ -75,11 +75,31 @@ struct CurrentTransactionId {
 	static ScalarFunction GetFunction();
 };
 
+struct ShareTransaction {
+	static constexpr const char *Name = "share_transaction";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Share the current transaction so that other connections can join it using JOIN TRANSACTION";
+	static constexpr const char *Example = "share_transaction()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current query_id";
 	static constexpr const char *Example = "current_query_id()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ExtensionRepositoryUrl {
+	static constexpr const char *Name = "extension_repository_url";
+	static constexpr const char *Parameters = "host";
+	static constexpr const char *Description = "Returns the extension repository url that the given host publishes in its well-known metadata file, i.e., where CREATE EXTENSION REPOSITORY <host> would install and load extensions from. Reads the host's metadata file over https and nothing else: no repository is created and no key is trusted";
+	static constexpr const char *Example = "extension_repository_url('duckdb.org')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

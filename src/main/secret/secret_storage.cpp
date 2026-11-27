@@ -297,7 +297,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 		}
 	} catch (PermissionException &ex) {
 		// If LocalFileSystem is specifically disabled (not all external access), skip loading persistent secrets
-		if (!DBConfig::GetConfig(db).file_system->SubSystemIsDisabled("LocalFileSystem")) {
+		if (!VirtualFileSystem::Get(db).SubSystemIsDisabled("LocalFileSystem")) {
 			throw;
 		}
 	}

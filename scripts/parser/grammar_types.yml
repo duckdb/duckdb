@@ -106,6 +106,7 @@ SQLStatement:
     - VariableAssignment
     - TransactionStatement
     - BeginTransaction
+    - JoinTransaction
     - CommitTransaction
     - RollbackTransaction
     - TriggerBody
@@ -1086,6 +1087,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1826,7 +1830,7 @@ IdentifierType:
     - ExtensionRepositoryName
     - ExtensionRepositoryHostName
     - FromSourceName
-    - ShowExternalResourcesType
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
@@ -1935,6 +1939,8 @@ matcher_rule_overrides:
   NumberLiteral:
     allow_type_overlap: true
     matcher: number_literal
+  DottedName:
+    matcher: dotted_name
   StringLiteral:
     allow_type_overlap: true
     matcher: string_literal
@@ -1954,6 +1960,7 @@ expression_depth_nesting_rules:
   - Type
   - NestedType
   - SubqueryReference
+  - WithStatement
   - CustomPrefixExpression
 
 expression_depth_chain_rules:
@@ -2014,6 +2021,7 @@ packrat_memoized_rules:
   - CatalogQualification
   - SchemaQualification
   - ReservedSchemaQualification
+  - SelectParens
 
 # rule_labels: see Matcher::SetLabel. When a syntax error lists what the parser expected at the failure point,
 # every alternative inside a labelled rule is summarised by the label instead of being spelled out. Only label

@@ -102,7 +102,7 @@ bool ScanMatches(Node &column, const string &query) {
 	REQUIRE(duckdb_adbc::BatchToArrayStream(&record.array, &record.schema, &stream, &err) == ADBC_STATUS_OK);
 	DuckDB db(nullptr);
 	Connection con(db);
-	auto result = con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(stream))->Execute();
+	auto result = con.Query(ArrowTestHelper::ArrowScanSelect(ArrowTestHelper::ConstructArrowScan(stream)));
 	REQUIRE_NO_FAIL(*result);
 	auto expected = con.Query(query);
 	REQUIRE_NO_FAIL(*expected);

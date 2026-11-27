@@ -7,24 +7,11 @@
 
 namespace duckdb {
 
-static bool ContainsRecursiveCTE(const LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		return true;
-	}
-	for (auto &child : op.children) {
-		if (ContainsRecursiveCTE(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) {
 	D_ASSERT(op.children.size() == 2);
 
-	auto cte_body_has_side_effects = op.children[0]->HasSideEffects();
-	auto use_exchange = planning_recursive_cte_depth == 0 && !ContainsRecursiveCTE(*op.children[0]) &&
-	                    !ContainsRecursiveCTE(*op.children[1]);
+	auto cte_body_has_side_effects = GetLogicalProperties(*op.children[0]).has_side_effects;
+	auto use_exchange = planning_recursive_cte_depth == 0 && !GetLogicalProperties(op).has_recursive_cte;
 
 	// Create the working_table that the PhysicalCTE will use for evaluation.
 	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.children[0]->types);
@@ -34,7 +21,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	materialized_ctes[op.table_index] = vector<const_reference<PhysicalOperator>>();
 
 	// Create the plan for the left side. This is the materialization.
-	auto &left = CreatePlan(*op.children[0]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
 	const auto cte_body_order = OrderPreservationRecursive(left);
 	const auto preserve_cte_order = PreserveInsertionOrder(left);
 	const auto use_batch_index = preserve_cte_order && UseBatchIndex(left);
@@ -52,7 +39,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	}
 
 	// Initialize an empty vector to collect the scan operators.
-	auto &right = CreatePlan(*op.children[1]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 
 	auto &cte = Make<PhysicalCTE>(op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalCTE>();

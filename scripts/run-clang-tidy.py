@@ -184,7 +184,7 @@ def apply_fixes(args, tmpdir):
     subprocess.call(invocation)
 
 
-def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
+def run_tidy(args, tmpdir, build_path, queue, lock, failed_files, progress):
     """Takes filenames out of queue and runs clang-tidy on them."""
     while True:
         name = queue.get()
@@ -203,13 +203,19 @@ def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
 
         proc = subprocess.Popen(invocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate()
-        if proc.returncode != 0:
-            failed_files.append(name)
-            with lock:
+        with lock:
+            if proc.returncode != 0:
+                failed_files.append(name)
                 sys.stdout.write(' '.join(invocation) + '\n' + output.decode('utf-8'))
                 if len(err) > 0:
                     sys.stdout.flush()
                     sys.stderr.write(err.decode('utf-8'))
+            progress['completed'] += 1
+            if progress['completed'] % 200 == 0 or progress['completed'] == progress['total']:
+                print(
+                    'Clang-tidy progress: {completed}/{total} files processed'.format(**progress),
+                    flush=True,
+                )
         queue.task_done()
 
 
@@ -330,9 +336,10 @@ def main():
         files, source_root, third_party_path, file_name_re, args.shard_index, args.shard_count
     )
     print(
-        'Running clang-tidy shard {}/{} on {} of {} files'.format(
-            args.shard_index + 1, args.shard_count, len(selected_files), eligible_file_count
-        )
+        'Running clang-tidy shard {}/{} on {} of {} files with {} parallel workers'.format(
+            args.shard_index + 1, args.shard_count, len(selected_files), eligible_file_count, max_task
+        ),
+        flush=True,
     )
 
     return_code = 0
@@ -341,9 +348,12 @@ def main():
         task_queue = queue.Queue(max_task)
         # List of files with a non-zero return code.
         failed_files = []
+        progress = {'completed': 0, 'total': len(selected_files)}
         lock = threading.Lock()
         for _ in range(max_task):
-            t = threading.Thread(target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files))
+            t = threading.Thread(
+                target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files, progress)
+            )
             t.daemon = True
             t.start()
 

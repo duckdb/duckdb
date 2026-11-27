@@ -93,16 +93,6 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	return LossyNumericCast<idx_t>(result);
 }
 
-//! The available system memory. The config's filesystem is not set until the database starts, but
-//! options can be configured before that, so fall back to a temporary local filesystem.
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
-	}
-	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
-}
-
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -310,7 +300,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
 	vector<string> directories;
@@ -346,7 +336,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
@@ -645,7 +635,7 @@ void DisabledCompressionMethodsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &input) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = VirtualFileSystem::Get(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
 	for (auto &entry : list) {
 		StringUtil::Trim(entry);
@@ -655,13 +645,11 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 
 void DisabledFilesystemsSetting::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
-	fs.SetDisabledFileSystems(vector<string>());
+	VirtualFileSystem::Get(db).SetDisabledFileSystems(vector<string>());
 }
 
 Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(*context.db);
-	return Value(StringUtil::Join(fs.GetDisabledFileSystems(), ","));
+	return Value(StringUtil::Join(VirtualFileSystem::Get(*context.db).GetDisabledFileSystems(), ","));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1164,17 +1152,9 @@ void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	optional_ptr<FileSystem> fs;
-	if (info.context) {
-		fs = FileSystem::GetFileSystem(*info.context);
-	} else if (info.db) {
-		fs = FileSystem::GetFileSystem(*info.db);
-	} else {
-		fs = info.config.file_system.get();
-	}
-	if (fs && !input.IsNull()) {
+	if (!input.IsNull()) {
 		auto new_home_directory = input.ToString();
-		if (fs->IsRemoteFile(new_home_directory)) {
+		if (FileSystem::IsRemoteFile(new_home_directory)) {
 			throw InvalidInputException("Cannot set the home directory to a remote path");
 		}
 	}
@@ -1288,7 +1268,7 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
 		maximum_memory =
-		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(info.config); });
+		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(); });
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);

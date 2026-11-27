@@ -3,6 +3,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"

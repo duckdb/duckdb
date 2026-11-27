@@ -35,6 +35,8 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -213,6 +215,10 @@ const ColumnList &DuckTableEntry::GetColumns() const {
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
+	if (context.transaction.HasActiveTransaction() && context.transaction.ActiveTransaction().IsShared()) {
+		// connections sharing the transaction can write values outside of the statistics before the query reads them
+		return nullptr;
+	}
 	// Get the committed statistics
 	auto stats = storage->GetStatistics(context, column_id);
 	if (!stats) {
@@ -1486,7 +1492,7 @@ void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_stat
 }
 
 void DuckTableEntry::CommitDrop(CommitDropState &drop_state) {
-	storage->CommitDropTable(drop_state);
+	drop_state.DropTable(storage);
 }
 
 DataTable &DuckTableEntry::GetStorage() {

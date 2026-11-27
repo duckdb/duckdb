@@ -162,7 +162,8 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 	// for time/timestamps/dates - there are various limitations on what we can propagate
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
@@ -197,9 +198,15 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 		// (the ICU extension overrides them at execution time) but Value::DefaultTryCastAs
 		// uses the static, UTC-only operator, so propagated min/max would diverge from
 		// runtime values. See issue #22235.
+		// The time of day of every timestamp wraps at midnight, as for TIME and TIME_NS above
 		switch (source.id()) {
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return false;
 		default:
 			break;
@@ -267,6 +274,27 @@ static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStati
 	return result.ToUnique();
 }
 
+static unique_ptr<BaseStatistics> StatisticsPropagateListToList(const BaseStatistics &input, const LogicalType &source,
+                                                                const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST);
+	if (input.GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	if (source == target) {
+		return input.Copy().ToUnique();
+	}
+	// casting the elements keeps the length of the lists
+	auto result = ListStats::CreateUnknown(target);
+	result.CopyValidity(input);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(input));
+	auto child_stats = CastStatistics::TryPropagate(ListStats::GetChildStats(input), ListType::GetChildType(source),
+	                                                ListType::GetChildType(target));
+	if (child_stats) {
+		ListStats::SetChildStats(result, std::move(child_stats));
+	}
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &stats, const LogicalType &source,
                                                         const LogicalType &target) {
 	if (source.id() == LogicalTypeId::VARIANT) {
@@ -287,6 +315,9 @@ unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &st
 	}
 	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {
 		return StatisticsPropagateArrayToList(stats, source, target);
+	}
+	if (source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST) {
+		return StatisticsPropagateListToList(stats, source, target);
 	}
 	if (!CanPropagate(source, target)) {
 		return nullptr;

@@ -303,9 +303,8 @@ functions:
         type: column_data_collection
         description: The collection to read instead. Borrowed; the caller keeps ownership and must keep it alive.
       column_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: Optional. An array of `column_count` column names, in order. Pass NULL for the default names col1..colN.
       column_names_lengths:

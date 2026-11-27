@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/once_flag.hpp"
@@ -55,7 +56,7 @@ public:
 	WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, idx_t group_idx, idx_t bin_idx);
 
 	void AllocateMasks();
-	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
+	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx, unordered_map<idx_t, DataChunk> &prefixes);
 
 	ExecutorGlobalStates &GetGlobalStates(ClientContext &client);
 
@@ -149,6 +150,9 @@ public:
 		return false;
 	}
 
+	//! Decide whether co-evaluation is worth it
+	bool ShouldCoEvaluate(idx_t size = STANDARD_VECTOR_SIZE) const;
+
 	//! The shared global state from sinking
 	WindowGlobalSinkState &gsink;
 	//! The hash partition data
@@ -165,6 +169,8 @@ public:
 	OrderMasks order_masks;
 	unordered_map<idx_t, AllocatedData> order_mask_data;
 	OnceFlag masks_initialized;
+	//! The number of partitions
+	atomic<idx_t> partition_count = 0;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
 	//! The processing stage for this group
@@ -266,12 +272,12 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
-                               vector<column_t> partitions)
+                               vector<column_t> partitions, optional_idx partition_limit)
     : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false),
-      partition_info(std::move(partitions)) {
+      partition_info(std::move(partitions)), partition_limit(partition_limit) {
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -286,12 +292,38 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 			max_orders = bound_window.OrderBy().size();
 		}
 	}
+
+	// the comparisons of the sorted partition and order keys
+	auto &sort_expr = select_list[order_idx]->Cast<BoundWindowExpression>();
+	vector<LogicalType> key_types;
+	if (!partition_info.RequiresPartitionColumns()) {
+		for (auto &partition : sort_expr.Partitions()) {
+			key_types.push_back(partition->GetReturnType());
+		}
+	}
+	const auto order_begin = key_types.size();
+	for (auto &order : sort_expr.OrderBy()) {
+		key_types.push_back(order.expression->GetReturnType());
+	}
+	auto create_distinct_from = [&](idx_t end, idx_t begin) {
+		auto type = WindowCollectionChunkScanner::PrefixStructType(key_types, end, begin);
+		return BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM, type, 0, type,
+		                                                  1);
+	};
+	partition_distinct_from = create_distinct_from(order_begin, 0);
+	for (auto &expr : select_list) {
+		const auto end = order_begin + expr->Cast<BoundWindowExpression>().OrderBy().size();
+		if (end > order_begin && !order_distinct_from.count(end)) {
+			order_distinct_from[end] = create_distinct_from(end, order_begin);
+		}
+	}
 }
 
-PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
-                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
-    : PhysicalWindow(physical_plan, std::move(types), std::move(select_list), estimated_cardinality,
-                     vector<column_t>()) {
+PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+                               optional_idx partition_limit)
+    : PhysicalWindow(physical_plan, context, std::move(types), std::move(select_list), estimated_cardinality,
+                     vector<column_t>(), partition_limit) {
 }
 
 unique_ptr<WindowExecutor> WindowExecutor::Factory(BoundWindowExpression &wexpr, ClientContext &client,
@@ -319,7 +351,8 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	}
 
 	sort_strategy = SortStrategy::Factory(client, wexpr.Partitions(), wexpr.OrderBy(), op.children[0].get().GetTypes(),
-	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality);
+	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality, false,
+	                                      op.partition_limit);
 	strategy_sink = sort_strategy->GetGlobalSinkState(client);
 }
 
@@ -596,7 +629,8 @@ void WindowHashGroup::AllocateMasks() {
 	});
 }
 
-void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
+void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end,
+                                   unordered_map<idx_t, DataChunk> &prefixes) {
 	D_ASSERT(count > 0);
 
 	//	Initialise our range
@@ -613,6 +647,7 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
 	if (!block_begin) {
 		partition_mask.SetValidUnsafe(0);
+		++partition_count;
 	}
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetRangeInvalid(count, begin_entry, end_entry);
@@ -634,23 +669,31 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	auto &collection = *rows;
 	auto &scan_cols = gsink.sort_strategy->sort_ids;
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
-	unordered_map<idx_t, DataChunk> prefixes;
+	unordered_map<idx_t, unique_ptr<ExpressionExecutor>> distinct_from;
 	for (auto &order_mask : order_masks) {
 		D_ASSERT(order_mask.first >= order_begin);
-		auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
-		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
-		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
-		keys.Initialize(collection.GetAllocator(), types);
+		if (keys.ColumnCount() == 0) {
+			auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
+			vector<LogicalType> types(2, order_type);
+			keys.Initialize(collection.GetAllocator(), types);
+		}
+		if (order_mask.first == order_begin) {
+			continue;
+		}
+		distinct_from[order_mask.first] = make_uniq<ExpressionExecutor>(
+		    gsink.client.GetContext(), *gsink.op.order_distinct_from.at(order_mask.first));
 	}
 
-	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, order_begin,
+	WindowDeltaScanner(gsink.client.GetContext(), *gsink.op.partition_distinct_from, collection, block_begin, block_end,
+	                   scan_cols, order_begin,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Process the partition boundaries
 		                   for (idx_t i = 0; i < ndistinct; ++i) {
 			                   const idx_t curr_index = row_idx + distinct.get_index(i);
 			                   partition_mask.SetValidUnsafe(curr_index);
+			                   ++partition_count;
 			                   for (auto &order_mask : order_masks) {
 				                   order_mask.second.SetValidUnsafe(curr_index);
 			                   }
@@ -678,16 +721,23 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   if (ndistinct) {
 				                   prefix.Slice(matching, nmatch);
 			                   } else {
-				                   prefix.SetChildCardinality(nmatch);
+				                   // Slice instead of resizing: the vectors share their buffers with prev and curr
+				                   for (auto &vec : prefix.data) {
+					                   vec.Slice(Vector::Ref(vec), 0, nmatch);
+				                   }
+				                   prefix.CheckCardinality(nmatch);
 			                   }
-			                   const auto m = VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, nmatch,
-			                                                                 &distinct, nullptr);
+			                   const auto m = distinct_from[order_mask.first]->SelectExpression(
+			                       prefix, &distinct, nullptr, nullptr, nmatch);
 			                   for (idx_t i = 0; i < m; ++i) {
 				                   const idx_t curr_index = row_idx + matching.get_index(distinct.get_index(i));
 				                   order_mask.second.SetValidUnsafe(curr_index);
 			                   }
 		                   }
 	                   });
+	for (auto &prefix : prefixes) {
+		prefix.second.Reset();
+	}
 }
 
 // Per-thread scan state
@@ -726,6 +776,7 @@ public:
 	unique_ptr<WindowCollectionChunkScanner> scanner;
 	//! Buffer for window results
 	DataChunk output_chunk;
+	unordered_map<idx_t, DataChunk> boundary_prefixes;
 
 protected:
 	//! Sort the partition
@@ -740,6 +791,13 @@ protected:
 	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Get a chunk by evaluating functions
 	void GetData(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
+	//! Evaluate a slice of the input
+	void Evaluate(ExecutionContext &context, const idx_t position, DataChunk &input, DataChunk &output,
+	              InterruptState &interrupt);
+	//! Merge the input and output columns into the result
+	void BuildResult(ExecutionContext &context, DataChunk &input, DataChunk &output, DataChunk &result) const;
+	//! Co-Evaluation with Early Stop pruning
+	void CoEvaluate(ExecutionContext &context, DataChunk &result, InterruptState &interrupt);
 
 	//! Storage and evaluation for the fully materialised data
 	unique_ptr<WindowBuilder> builder;
@@ -753,6 +811,12 @@ protected:
 	//! Storage and evaluation for chunks used in the evaluate phase
 	ExpressionExecutor eval_exec;
 	DataChunk eval_chunk;
+
+	//! Early stop evaluation
+	idx_t partition_start = DConstants::INVALID_INDEX;
+	idx_t partition_end = DConstants::INVALID_INDEX;
+	DataChunk overlap_input;
+	SelectionVector overlap_sel;
 };
 
 idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
@@ -806,7 +870,7 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::MASK);
 
-	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx);
+	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx, boundary_prefixes);
 
 	//	Mark this range as done
 	window_hash_group->masked += (task->end_idx - task->begin_idx);
@@ -932,7 +996,9 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 		output_types.emplace_back(wexpr.GetReturnType());
 	}
 	output_chunk.Initialize(gsource.client, output_types);
-
+	if (gsink.op.partition_limit.IsValid()) {
+		overlap_sel.Initialize();
+	}
 	auto &shared = gsink.shared;
 	shared.PrepareCollection(coll_exec, coll_chunk);
 	shared.PrepareSink(sink_exec, sink_chunk);
@@ -1022,6 +1088,9 @@ bool WindowLocalSourceState::TryAssignTask() {
 	// Scanner first, as it may be referencing sort blocks in the hash group
 	scanner.reset();
 
+	//	Force a recalculation of the partition_start
+	partition_start = DConstants::INVALID_INDEX;
+
 	return gsource.TryNextTask(task, task_local);
 }
 
@@ -1065,8 +1134,181 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	}
 }
 
+void WindowLocalSourceState::Evaluate(ExecutionContext &context, const idx_t position, DataChunk &input,
+                                      DataChunk &output, InterruptState &interrupt) {
+	const auto &executors = gsource.gsink.executors;
+	auto &gestates = window_hash_group->gestates;
+	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
+
+	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
+		auto &executor = *executors[expr_idx];
+		auto &result = output.data[expr_idx];
+		if (eval_chunk.data.empty()) {
+			eval_chunk.SetChildCardinality(input.size());
+		} else {
+			eval_chunk.Reset();
+			eval_exec.Execute(input, eval_chunk);
+		}
+		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
+		executor.Evaluate(context, position, eval_chunk, result, sink, input.size());
+	}
+
+	output_chunk.Verify(context.client.db);
+}
+
+void WindowLocalSourceState::BuildResult(ExecutionContext &context, DataChunk &input, DataChunk &output,
+                                         DataChunk &result) const {
+	idx_t out_idx = 0;
+
+	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity),
+	// so set the result cardinality explicitly here - before the references below
+	// alias input_chunk's/output_chunk's buffers.
+	result.SetChildCardinality(input.size());
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		result.data[out_idx++].Reference(input.data[col_idx]);
+	}
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		result.data[out_idx++].Reference(output.data[col_idx]);
+	}
+
+	result.Verify(context.client.db);
+}
+
+bool WindowHashGroup::ShouldCoEvaluate(idx_t size) const {
+	if (!gsink.op.partition_limit.IsValid()) {
+		return false;
+	}
+
+	//	Compute the expected value of the span used by co-evaluation
+	const auto partition_limit = LossyNumericCast<double, idx_t>(gsink.op.partition_limit.GetIndex());
+	const auto npartitions = LossyNumericCast<double, idx_t>(partition_count.load());
+	const auto dcount = LossyNumericCast<double, idx_t>(count);
+	const auto partition_avg = dcount / npartitions;
+	const auto k = MinValue(partition_limit, partition_avg);
+	const auto active_rows = npartitions * k;
+	const auto prob_i_active = active_rows / dcount;
+	const auto prob_i_inactive = 1 - prob_i_active;
+	const auto avg_inactive = (partition_avg - partition_limit) / 2;
+	const auto dsize = LossyNumericCast<double, idx_t>(size);
+
+	double expected = 0;
+	//	Case 1: begin is active
+	//	Case 1a: end is active: the entire vector is active
+	expected += prob_i_active * prob_i_active * dsize;
+	//	Case 1b: end is inactive: the tail has an inactive range
+	expected += prob_i_active * prob_i_inactive * (dsize - avg_inactive);
+	//	Case 2: begin is inactive: the head has an inactive range
+	//	Case 2a: end is active
+	expected += prob_i_inactive * prob_i_active * (dsize - avg_inactive);
+	//	Case 2b: end is inactive: there are likely gaps at either end
+	expected += prob_i_inactive * prob_i_inactive * (dsize - avg_inactive * 2);
+
+	//	TODO: Scale for partition lookup cost.
+	return expected < 0.8 * dsize;
+}
+
+void WindowLocalSourceState::CoEvaluate(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
+	const auto partition_limit = gsource.gsink.op.partition_limit;
+	const auto &partition_mask = window_hash_group->partition_mask;
+	const auto group_count = window_hash_group->count;
+	const auto k = partition_limit.GetIndex();
+	idx_t n;
+
+	output_chunk.Reset();
+
+	//	Skip to the chunk that overlaps the next subrange
+	for (; task->begin_idx < task->end_idx; task->begin_idx++) {
+		//	Read the next chunk
+		window_hash_group->UpdateScanner(scanner, task->begin_idx);
+		batch_index = window_hash_group->batch_base + task->begin_idx;
+		const auto input_base = scanner->Scanned();
+		auto &input_chunk = scanner->chunk;
+		scanner->Scan();
+		const auto input_count = input_chunk.size();
+		const auto input_end = input_base + input_count;
+
+		//	Reset the partition start if we have a new task
+		if (partition_start == DConstants::INVALID_INDEX) {
+			n = 1;
+			partition_start = WindowBoundariesState::FindPrevStart(partition_mask, 0, input_base, n);
+			n = 1;
+			partition_end = WindowBoundariesState::FindNextStart(partition_mask, partition_start + 1, group_count, n);
+		}
+		auto limit_end = MinValue(partition_start + k, partition_end);
+
+		//	Lazy initialisation
+		if (!overlap_input.ColumnCount() && input_chunk.ColumnCount()) {
+			overlap_input.Initialize(gsource.client, input_chunk.GetTypes());
+		}
+
+		//	Accumulate all the sub-partitions that intersect the chunk
+		//	Profiling shows that a single call to Evaluate with gaps is preferable
+		//	to repeated small ranges. This should be revisited when the strategies
+		//	can implement the compaction during Sink and after we start allowing
+		//	compatible function evaluation, some of which may be expensive.
+		idx_t overlap_count = 0;
+		idx_t span_begin = DConstants::INVALID_INDEX;
+		idx_t span_end = 0;
+		for (idx_t input_start = input_base; input_start < input_end; input_start = limit_end) {
+			//	Scan forward until we have a limited partition that overlaps
+			while (limit_end <= input_start) {
+				n = 1;
+				partition_start = partition_end;
+				partition_end =
+				    WindowBoundariesState::FindNextStart(partition_mask, partition_start + 1, group_count, n);
+				limit_end = MinValue(partition_start + k, partition_end);
+			}
+			if (partition_start >= input_end) {
+				break;
+			}
+
+			//	Copy the overlap to the limit buffers and evaluate
+			const auto overlap_begin = MaxValue(partition_start, input_start) - input_base;
+			const auto overlap_end = MinValue(limit_end, input_end) - input_base;
+
+			//	Fast track the entire input to avoid copying
+			if (overlap_begin == 0 && overlap_end == input_count) {
+				Evaluate(context, input_base, input_chunk, output_chunk, interrupt);
+				BuildResult(context, input_chunk, output_chunk, result);
+				++task->begin_idx;
+				return;
+			}
+
+			//	Accumulate the overlap in an SV
+			span_begin = MinValue(span_begin, overlap_begin);
+			span_end = overlap_end;
+			for (auto i = overlap_begin; i < overlap_end; ++i) {
+				overlap_sel.set_index(overlap_count++, i - span_begin);
+			}
+		}
+
+		//	If we didn't find anything, move to the next chunk
+		if (!overlap_count) {
+			continue;
+		}
+
+		overlap_input.Slice(input_chunk, span_begin, span_end);
+		Evaluate(context, input_base + span_begin, overlap_input, output_chunk, interrupt);
+		BuildResult(context, overlap_input, output_chunk, result);
+		if (overlap_count != span_end - span_begin) {
+			result.Slice(overlap_sel, overlap_count);
+		}
+
+		// Move to the next chunk
+		++task->begin_idx;
+
+		return;
+	}
+}
+
 void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
+
+	//	Apply co-evaluation with early stop
+	if (window_hash_group->ShouldCoEvaluate()) {
+		CoEvaluate(context, result, interrupt);
+		return;
+	}
 
 	window_hash_group->UpdateScanner(scanner, task->begin_idx);
 	batch_index = window_hash_group->batch_base + task->begin_idx;
@@ -1075,39 +1317,13 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	auto &input_chunk = scanner->chunk;
 	scanner->Scan();
 
-	const auto &executors = gsource.gsink.executors;
-	auto &gestates = window_hash_group->gestates;
-	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	output_chunk.Reset();
-	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
-		auto &executor = *executors[expr_idx];
-		auto &result = output_chunk.data[expr_idx];
-		if (eval_chunk.data.empty()) {
-			eval_chunk.SetChildCardinality(input_chunk.size());
-		} else {
-			eval_chunk.Reset();
-			eval_exec.Execute(input_chunk, eval_chunk);
-		}
-		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
-		executor.Evaluate(context, position, eval_chunk, result, sink, input_chunk.size());
-	}
-	output_chunk.Verify(context.client.db);
 
-	idx_t out_idx = 0;
-	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity), so set the
-	// result cardinality explicitly here - before the references below alias input_chunk's/output_chunk's buffers.
-	result.SetChildCardinality(input_chunk.size());
-	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); col_idx++) {
-		result.data[out_idx++].Reference(input_chunk.data[col_idx]);
-	}
-	for (idx_t col_idx = 0; col_idx < output_chunk.ColumnCount(); col_idx++) {
-		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
-	}
+	Evaluate(context, position, input_chunk, output_chunk, interrupt);
+	BuildResult(context, input_chunk, output_chunk, result);
 
 	// Move to the next chunk
 	++task->begin_idx;
-
-	result.Verify(context.client.db);
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
@@ -1222,6 +1438,11 @@ InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

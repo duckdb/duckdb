@@ -7,6 +7,7 @@
       "reason": "Tests a warning on purpose, or the behavior with warnings_as_errors disabled",
       "paths": [
         "test/logging/warnings_as_errors.test",
+        "test/optimizer/group_by_top_key_limit_guards.test",
         "test/sql/attach/attach_ducklake_metadata_warning.test",
         "test/sql/attach/external_resource_show_subquery.test",
         "test/sql/logging/logging_deprecated_names.test",
@@ -39,6 +40,7 @@
         "test/optimizer/arithmetic_simplification.test",
         "test/optimizer/deliminator.test",
         "test/optimizer/deliminator_nullability.test",
+        "test/optimizer/mark_predicates.test",
         "test/optimizer/partial_aggregate_pushdown_throwing_argument.test",
         "test/sql/aggregate/aggregates/test_arg_min_max.test",
         "test/sql/binder/legacy_null_type.test",

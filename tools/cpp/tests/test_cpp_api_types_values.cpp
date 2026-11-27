@@ -497,6 +497,33 @@ TEST_CASE("Stable C++API: DECIMAL Values of a runtime width and scale", "[cpp_ap
 	REQUIRE(huge_read.value.lower == 0);
 	REQUIRE(huge_read.value.upper == 1);
 
+	// Widths above 38 are BIGNUM-backed, and the width is any uint32_t, not capped at 255.
+	auto wide = Value::CreateDecimal(factory, int128_t {static_cast<uint64_t>(-12345), -1}, 300, 260);
+	REQUIRE(wide.GetLogicalType().ToText() == "DECIMAL(300,260)");
+	REQUIRE(wide.ToText() == "-0." + std::string(255, '0') + "12345");
+	auto wide_read = wide.GetDecimal();
+	REQUIRE(wide_read.width == 300);
+	REQUIRE(wide_read.scale == 260);
+	REQUIRE(wide_read.value.lower == static_cast<uint64_t>(-12345));
+	REQUIRE(wide_read.value.upper == -1);
+	// A backing integer beyond 128 bits is read exactly as a bignum_t.
+	auto beyond_chunk = conn.Execute("SELECT '-1" + std::string(42, '0') + ".00'::DECIMAL(50, 2)").FetchChunk();
+	auto beyond = beyond_chunk.GetVector(0).GetValue(0);
+	REQUIRE_THROWS_AS(beyond.GetDecimal(), Exception);
+	auto beyond_backing = beyond.Get<bignum_t>().Decode();
+	REQUIRE(beyond_backing.is_negative);
+	// the backing integer 10^44 needs 147 bits
+	REQUIRE(beyond_backing.magnitude.size() == 19);
+
+	// The width is bounded by the max_decimal_width setting of the connection, for values and for types.
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {1, 0}, 1000001, 10), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(factory.ParseType("DECIMAL(1000001,10)"), Exception);
+	conn.Execute("SET max_decimal_width = 1000001").Drain();
+	REQUIRE(Value::CreateDecimal(factory, int128_t {1, 0}, 1000001, 10).GetDecimal().width == 1000001);
+	REQUIRE(factory.ParseType("DECIMAL(1000001,10)").GetDecimalWidth() == 1000001);
+	conn.Execute("RESET max_decimal_width").Drain();
+
 	// The same value as the typed constructor.
 	REQUIRE(Value::Create(factory, decimal_t<9, 3> {123456789}).GetDecimal().value.lower == 123456789);
 	// And from a query.
@@ -670,4 +697,77 @@ TEST_CASE("Stable C++API: Factory creates chunks and collections, and an instanc
 	REQUIRE(Value::Create(builtins, int32_t(7)).Cast(builtins, factory.ParseType("BIGINT")).ToText() == "7");
 	REQUIRE(factory.ParseType("mood").ToText() == "ENUM('happy', 'sad')");
 	REQUIRE_THROWS_AS(builtins.ParseType("mood"), InvalidInputException);
+}
+
+TEST_CASE("Stable C++API: VariantToValue returns the value that a VARIANT value holds", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto result = conn.Execute("SELECT 41::TINYINT::VARIANT, 'foo'::VARIANT, ['a', 'b']::VARIANT, NULL::VARIANT, 1");
+	auto chunk = result.FetchChunk();
+	REQUIRE(chunk.GetRowCount() == 1);
+
+	auto tinyint = chunk.GetVector(0).GetValue(0);
+	REQUIRE(tinyint.GetLogicalType().GetTypeId() == LogicalTypeId::VARIANT);
+	auto converted = tinyint.VariantToValue();
+	REQUIRE(converted.GetLogicalType().GetTypeId() == LogicalTypeId::TINYINT);
+	REQUIRE(converted.Get<int8_t>() == 41);
+
+	auto text = chunk.GetVector(1).GetValue(0).VariantToValue();
+	REQUIRE(text.GetLogicalType().GetTypeId() == LogicalTypeId::VARCHAR);
+	REQUIRE(text.ToText() == "foo");
+
+	auto list = chunk.GetVector(2).GetValue(0).VariantToValue();
+	REQUIRE(list.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
+	REQUIRE(list.GetChildCount() == 2);
+	REQUIRE(list.GetChild(1).ToText() == "b");
+
+	REQUIRE(chunk.GetVector(3).GetValue(0).VariantToValue().IsNull());
+
+	// Only a VARIANT can be converted
+	REQUIRE_THROWS_AS(chunk.GetVector(4).GetValue(0).VariantToValue(), InvalidInputException);
+}
+
+TEST_CASE("Stable C++API: converting a VARIANT keeps the elements of different types as variants", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto result = conn.Execute("SELECT [1::INTEGER::VARIANT, 'a'::VARIANT]::VARIANT, [1, 2]::VARIANT");
+	auto chunk = result.FetchChunk();
+
+	auto mixed = chunk.GetVector(0).GetValue(0).VariantToValue();
+	REQUIRE(mixed.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
+	REQUIRE(mixed.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::VARIANT);
+	REQUIRE(mixed.GetChildCount() == 2);
+	REQUIRE(mixed.GetChild(0).VariantToValue().Get<int32_t>() == 1);
+	REQUIRE(mixed.GetChild(1).VariantToValue().ToText() == "a");
+
+	// the elements of the same type give a list of that type
+	auto same = chunk.GetVector(1).GetValue(0).VariantToValue();
+	REQUIRE(same.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(same.GetChild(1).Get<int32_t>() == 2);
+}
+
+TEST_CASE("Stable C++API: a value cast to VARIANT converts back to the value", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	auto variant_type = factory.ParseType("VARIANT");
+
+	auto integer = Value::Create(factory, int32_t(42)).Cast(factory, variant_type);
+	REQUIRE(integer.GetLogicalType().GetTypeId() == LogicalTypeId::VARIANT);
+	auto converted = integer.VariantToValue();
+	REQUIRE(converted.GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(converted.Get<int32_t>() == 42);
+
+	std::vector<Value> elements;
+	elements.push_back(Value::Create(factory, varchar_t("a")));
+	elements.push_back(Value::Create(factory, varchar_t("b")));
+	auto list = Value::CreateList(factory, elements).Cast(factory, variant_type).VariantToValue();
+	REQUIRE(list.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::VARCHAR);
+	REQUIRE(list.GetChildCount() == 2);
 }

@@ -1,0 +1,77 @@
+# name: test/sql/transactions/join_transaction_concurrent_file_database.test_slow
+# description: Connections of one shared transaction append to and scan a table of a file database while row groups are written to disk
+# group: [transactions]
+
+load {TEST_DIR}/join_transaction_concurrent_file_database.db
+
+statement ok
+CREATE TABLE s(a BIGINT, b VARCHAR, thread INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+# the appends are large enough to write row groups to disk before the commit
+concurrentloop threadid 0 4
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+loop r 0 2
+
+statement ok
+INSERT INTO s SELECT i, 'v' || i, {threadid} FROM range(250000) t(i)
+
+# scans of the table run while the other connections write their row groups
+loop k 0 10
+
+statement ok
+SELECT count(*), max(b) FROM s
+
+statement ok
+SELECT * FROM s WHERE a = 77 LIMIT 3
+
+endloop
+
+query I
+SELECT count(*) >= 250000 * ({r} + 1) FROM s WHERE thread = {threadid}
+----
+true
+
+endloop
+
+# deletes of the transaction-local rows
+statement ok
+DELETE FROM s WHERE thread = {threadid} AND a % 1000 = {threadid}
+
+statement ok
+UPDATE s SET b = 'updated' WHERE thread = {threadid} AND a % 1000 = {threadid} + 10
+
+statement ok
+COMMIT
+
+endloop
+
+query IIII
+SELECT count(*), count(DISTINCT thread), count(*) FILTER (b = 'updated'), count(*) FILTER (a % 1000 = thread) FROM s
+----
+1998000	4	2000	0
+
+statement ok
+COMMIT
+
+query II
+SELECT count(*), count(*) FILTER (b = 'updated') FROM s
+----
+1998000	2000
+
+restart
+
+query IIII
+SELECT count(*), count(DISTINCT thread), count(*) FILTER (b = 'updated'), count(*) FILTER (a % 1000 = thread) FROM s
+----
+1998000	4	2000	0

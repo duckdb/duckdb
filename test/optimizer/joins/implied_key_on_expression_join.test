@@ -1,0 +1,129 @@
+# name: test/optimizer/joins/implied_key_on_expression_join.test
+# description: Pulling up hidden join keys exposes transitive group equalities for rank joins
+# group: [joins]
+
+foreach group_type BIGINT VARCHAR
+
+statement ok
+CREATE OR REPLACE TABLE sales AS
+SELECT g::{group_type} AS grp, p // 12 AS year, p % 12 AS moy, (g * 7 + p * 3 + i) % 50 AS price
+FROM range(4) a(g), range(14) b(p), range(8) c(i);
+
+statement ok
+CREATE OR REPLACE VIEW monthly_total AS SELECT grp, year, moy, sum(price) AS total FROM sales GROUP BY ALL;
+
+statement ok
+CREATE OR REPLACE VIEW monthly_max AS SELECT grp, year, moy, max(price) AS max_price FROM sales GROUP BY ALL;
+
+statement ok
+CREATE OR REPLACE VIEW enriched AS
+SELECT grp, year, moy, total, max_price
+FROM sales JOIN monthly_total USING (grp, year, moy) JOIN monthly_max USING (grp, year, moy);
+
+statement ok
+CREATE OR REPLACE VIEW ranked AS
+SELECT grp, year, moy, rn
+FROM enriched JOIN (
+  SELECT *, row_number() OVER (PARTITION BY grp ORDER BY year, moy) AS rn
+  FROM (SELECT DISTINCT * FROM enriched)
+) USING (grp, year, moy, total, max_price);
+
+statement ok
+CREATE OR REPLACE VIEW ranked_neighbors AS
+SELECT count(*), sum(cur.grp::BIGINT * 100 + cur.rn), sum(lag.year * 100 + lag.moy)
+FROM ranked cur, ranked lag, ranked lead
+WHERE cur.rn = lag.rn + 1 AND cur.rn = lead.rn - 1 AND cur.grp = lag.grp AND cur.grp = lead.grp;
+
+query III
+FROM ranked_neighbors;
+----
+24576	3870720	135168
+
+# Both rank joins include the group key with the default optimizer pipeline.
+query II
+EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
+----
+physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
+
+statement ok
+CREATE OR REPLACE VIEW ranked_neighbors AS
+SELECT count(*), sum(cur.grp::BIGINT * 100 + cur.rn), sum(lag.year * 100 + lag.moy)
+FROM ranked cur
+JOIN ranked lag ON cur.rn = lag.rn + 1 AND cur.grp = lag.grp
+JOIN ranked lead ON cur.rn = lead.rn - 1 AND cur.grp = lead.grp;
+
+query III
+FROM ranked_neighbors;
+----
+24576	3870720	135168
+
+query II
+EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
+----
+physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
+
+# Group predicates above the joins must pass through the restored output projection.
+statement ok
+CREATE OR REPLACE VIEW ranked_neighbors AS
+SELECT count(*), sum(cur.grp::BIGINT * 100 + cur.rn), sum(lag.year * 100 + lag.moy)
+FROM ranked cur
+JOIN ranked lag ON cur.rn = lag.rn + 1
+JOIN ranked lead ON cur.rn = lead.rn - 1
+WHERE cur.grp = lag.grp AND cur.grp = lead.grp;
+
+query III
+FROM ranked_neighbors;
+----
+24576	3870720	135168
+
+query II
+EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
+----
+physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
+
+endloop
+
+statement ok
+CREATE TABLE lhs(g INTEGER, r INTEGER);
+
+statement ok
+INSERT INTO lhs VALUES (1, 2), (2, 2), (NULL, 2);
+
+statement ok
+CREATE TABLE rhs AS SELECT g, r - 1 AS r FROM lhs;
+
+statement ok
+CREATE TABLE bridge(g INTEGER);
+
+statement ok
+INSERT INTO bridge VALUES (1), (2), (2), (NULL);
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 JOIN bridge c ON a.g = c.g AND b.g = c.g;
+----
+3
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 JOIN bridge c ON a.g = c.g;
+----
+9
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1
+JOIN bridge c ON a.g IS NOT DISTINCT FROM c.g AND b.g IS NOT DISTINCT FROM c.g;
+----
+4
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 LEFT JOIN bridge c ON a.g = c.g AND b.g = c.g;
+----
+10
+
+# Distinct BIGINTs can compare equal after a lossy cast.
+query I
+SELECT count(*)
+FROM (VALUES (9007199254740992::BIGINT, 2)) a(g, r)
+JOIN (VALUES (9007199254740993::BIGINT, 1)) b(g, r) ON a.r = b.r + 1
+JOIN (VALUES (9007199254740992::DOUBLE)) c(g) ON a.g::DOUBLE = c.g AND b.g::DOUBLE = c.g;
+----
+1

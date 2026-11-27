@@ -1,0 +1,49 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_logging.test
+# description: Test logging of reads served by the external file cache
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set cache_local_files=true;
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+copy (select range i from range(10000)) to '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+CALL enable_logging(['ExternalFileCache', 'FileSystem']);
+
+statement ok
+select * from '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+select * from '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+CALL disable_logging();
+
+# Statement verification can add queries before each select, so only check the first and the last one
+# The first read misses
+query I
+select count(*) filter (event = 'MISS') > 0 from duckdb_logs_parsed('ExternalFileCache')
+where query_id = (select min(query_id) from duckdb_logs_parsed('ExternalFileCache'));
+----
+true
+
+# The last read is entirely served from the cache
+query II
+select count(*) filter (event = 'MISS') > 0, count(*) filter (event = 'HIT') > 0
+from duckdb_logs_parsed('ExternalFileCache')
+where query_id = (select max(query_id) from duckdb_logs_parsed('ExternalFileCache'));
+----
+false	true
+
+# The missed blocks are what is read from the file
+query I
+select (select sum(bytes) from duckdb_logs_parsed('ExternalFileCache') where event = 'MISS') =
+       (select sum(bytes) from duckdb_logs_parsed('FileSystem') where op = 'READ');
+----
+true

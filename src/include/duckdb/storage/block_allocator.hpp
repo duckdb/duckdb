@@ -86,6 +86,11 @@ public:
 	optional_idx GetAllocationShard(const_data_ptr_t pointer) const;
 	idx_t GetPoolShardCount() const;
 	idx_t GetLocalPoolShard() const;
+	idx_t GetFallbackShardCount() const;
+	//! Approximate cache locality by grouping adjacent CPUs in fours, wrapping at shard_count.
+	static idx_t GetLocalShard(idx_t shard_count);
+	static idx_t GetShardGroup(idx_t shard, idx_t shard_count);
+	static idx_t GetLocalShardGroup(idx_t shard_count);
 
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
@@ -109,8 +114,10 @@ private:
 	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t pool_size, idx_t shard_count);
 
 	//! The buffer allocator's huge-page backend keeps matching allocation and release ownership.
-	data_ptr_t AllocateHugeData(idx_t size) const;
-	void FreeHugeData(data_ptr_t pointer, idx_t size) const;
+	data_ptr_t AllocateHugeData(idx_t size, optional_idx &home) const;
+	void FreeHugeData(data_ptr_t pointer, idx_t size, optional_idx home) const;
+	data_ptr_t AllocateFallbackData(idx_t size) const;
+	void FreeFallbackData(data_ptr_t pointer, idx_t size, optional_idx home) const;
 
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
 	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };
@@ -137,8 +144,10 @@ private:
 	idx_t GetCachedPoolMemory() const;
 	void ReturnThreadLocalBlocks() const;
 	void FlushFallbackAllocator(idx_t deallocated) const noexcept;
-	//! Return bytes released to the fallback allocator, which may still need a purge.
-	idx_t TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit = optional_idx()) const noexcept
+	//! Purge the fallback allocator if frees are waiting for it. Idle threads do this without pressure.
+	void FlushDeallocated() const noexcept;
+	//! Trim cached backing to the headroom. Bytes released to the fallback allocator join the unflushed estimate.
+	void TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit = optional_idx()) const noexcept
 	    DUCKDB_EXCLUDES(flush_lock);
 	idx_t FlushAllocationCache(idx_t byte_limit, ReclaimMode mode = ReclaimMode::FORCE) const noexcept
 	    DUCKDB_EXCLUDES(flush_lock);

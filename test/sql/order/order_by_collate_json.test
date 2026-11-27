@@ -1,0 +1,37 @@
+# name: test/sql/order/order_by_collate_json.test
+# description: COLLATE on an ORDER BY key of a non-plain-VARCHAR type (JSON) is rejected, not an internal error
+# group: [order]
+
+require json
+
+# the JSON alias of VARCHAR: a COLLATE in the ORDER BY is rejected like a COLLATE expression is
+statement error
+SELECT j FROM (SELECT '{}'::JSON AS j) ORDER BY j COLLATE nocase;
+----
+COLLATE can only be applied to varchar columns
+
+# under prepared-statement verification the column number is a parameter, so the key binds as a COLLATE expression
+statement error
+SELECT '{}'::JSON AS j ORDER BY 1 COLLATE nocase;
+----
+<REGEX>:Binder Error: (COLLATE can only be applied to varchar columns|collations are only supported for type varchar).*
+
+# the matching COLLATE expression form already errors this way
+statement error
+SELECT j COLLATE nocase FROM (SELECT '{}'::JSON AS j);
+----
+collations are only supported for type varchar
+
+# the connection is still usable
+query I
+SELECT 42;
+----
+42
+
+# a plain VARCHAR ORDER BY key with a collation still works
+query I
+SELECT s FROM (VALUES ('b'), ('A'), ('c')) t(s) ORDER BY s COLLATE nocase;
+----
+A
+b
+c

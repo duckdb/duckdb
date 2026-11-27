@@ -10,6 +10,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
@@ -18,20 +20,31 @@ TransactionContext::TransactionContext(ClientContext &context)
       auto_rollback(false), current_transaction(nullptr) {
 }
 
-TransactionContext::~TransactionContext() {
-	if (current_transaction) {
-		try {
-			Rollback(nullptr);
-		} catch (std::exception &ex) {
-			// a destructor cannot throw, and building the error message allocates
-			try {
-				ErrorData data(ex);
-				DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
-			} catch (...) { // NOLINT
-			}
-		} catch (...) { // NOLINT
-		}
+void TransactionContext::SetCurrentTransaction(shared_ptr<MetaTransaction> transaction) {
+	lock_guard<mutex> guard(current_transaction_lock);
+	current_transaction = std::move(transaction);
+}
+
+shared_ptr<MetaTransaction> TransactionContext::TakeCurrentTransaction() {
+	lock_guard<mutex> guard(current_transaction_lock);
+	return std::move(current_transaction);
+}
+
+shared_ptr<MetaTransaction> TransactionContext::GetSharedTransaction(const string &share_id) {
+	lock_guard<mutex> guard(current_transaction_lock);
+	// a transaction that was never shared has an empty share id, which must not match
+	if (!share_id.empty() && current_transaction && current_transaction->GetShareId() == share_id) {
+		return current_transaction;
 	}
+	return nullptr;
+}
+
+bool TransactionContext::IsInSharedTransaction() {
+	lock_guard<mutex> guard(current_transaction_lock);
+	return current_transaction && current_transaction->IsShared();
+}
+
+TransactionContext::~TransactionContext() {
 }
 
 void TransactionContext::BeginTransaction() {
@@ -40,7 +53,8 @@ void TransactionContext::BeginTransaction() {
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
 	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
-	current_transaction = make_uniq<MetaTransaction>(*context.db, start_timestamp, global_transaction_id);
+	SetCurrentTransaction(make_shared_ptr<MetaTransaction>(*context.db, context.client_data->temporary_objects,
+	                                                       start_timestamp, global_transaction_id));
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
@@ -65,8 +79,21 @@ void TransactionContext::Commit() {
 		throw TransactionException("failed to commit: no transaction active");
 	}
 	autocheckpoint_error = ErrorData();
-	auto transaction = std::move(current_transaction);
+	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
+	bool commit_result = true;
+	if (!LeaveTransaction(*transaction, true, commit_result)) {
+		// other connections still participate in the transaction, the last one to leave ends it
+		for (auto &state : context.GetContext().GetRegisteredState().States()) {
+			state->TransactionCommit(*transaction, context);
+		}
+		return;
+	}
+	if (!commit_result) {
+		// a participant rolled back: the transaction cannot be committed
+		RollbackTransaction(transaction, nullptr);
+		throw TransactionException("Failed to commit: a connection sharing the transaction rolled it back");
+	}
 	auto error = transaction->Commit(context);
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
@@ -105,12 +132,23 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
-	auto transaction = std::move(current_transaction);
+	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
+	bool commit_result = false;
+	if (!LeaveTransaction(*transaction, false, commit_result)) {
+		for (auto &state : context.GetContext().GetRegisteredState().States()) {
+			state->TransactionRollback(*transaction, context, error);
+		}
+		return;
+	}
+	RollbackTransaction(transaction, error);
+}
 
+void TransactionContext::RollbackTransaction(const shared_ptr<MetaTransaction> &transaction,
+                                             optional_ptr<ErrorData> error) {
 	ErrorData rollback_error;
 	try {
-		transaction->Rollback();
+		transaction->Rollback(context);
 	} catch (std::exception &ex) {
 		rollback_error = ErrorData(ex);
 	}
@@ -130,16 +168,69 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	transaction->Finalize(context);
 }
 
+bool TransactionContext::LeaveTransaction(MetaTransaction &transaction, bool commit, bool &commit_result) {
+	auto result = transaction.Leave(commit);
+	commit_result = result.commit;
+	return result.last;
+}
+
+string TransactionContext::ShareTransaction() {
+	if (!HasActiveTransaction() || auto_commit) {
+		throw TransactionException("a transaction can only be shared from within a BEGIN TRANSACTION block");
+	}
+	return current_transaction->ShareTransaction();
+}
+
+void TransactionContext::JoinTransaction(const string &share_id) {
+	if (!auto_commit) {
+		throw TransactionException("cannot join a transaction within a transaction");
+	}
+	// find a connection that participates in the shared transaction
+	shared_ptr<MetaTransaction> source;
+	for (auto &connection : ConnectionManager::Get(*context.db).GetConnectionList()) {
+		if (connection.get() == &context) {
+			continue;
+		}
+		source = connection->transaction.GetSharedTransaction(share_id);
+		if (source) {
+			break;
+		}
+	}
+	if (!source || source->IsFinished()) {
+		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
+	}
+	if (ValidChecker::IsInvalidated(*source)) {
+		throw TransactionException("cannot join transaction \"%s\": it was aborted", share_id);
+	}
+	if (!source->Join()) {
+		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
+	}
+	// discard the transaction that was started for this statement and continue in the shared one
+	auto previous = TakeCurrentTransaction();
+	SetCurrentTransaction(source);
+	auto_commit = false;
+	previous->MarkFinished();
+	try {
+		RollbackTransaction(previous, nullptr);
+	} catch (std::exception &) {
+		// the discarded transaction is empty, a failure to end it must not undo the join
+	}
+	for (auto &state : context.GetContext().GetRegisteredState().States()) {
+		state->TransactionBegin(*current_transaction, context);
+	}
+}
+
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
-	current_transaction = nullptr;
+	SetCurrentTransaction(nullptr);
+	active_query_id = MAXIMUM_QUERY_ID;
 }
 
 idx_t TransactionContext::GetActiveQuery() {
 	if (!current_transaction) {
 		throw InternalException("GetActiveQuery called without active transaction");
 	}
-	return current_transaction->GetActiveQuery();
+	return active_query_id;
 }
 
 void TransactionContext::ResetActiveQuery() {
@@ -152,7 +243,7 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 	if (!current_transaction) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}
-	current_transaction->SetActiveQuery(query_number);
+	active_query_id = query_number;
 }
 
 } // namespace duckdb

@@ -177,3 +177,11 @@ SELECT count(*) FROM (
 ) WHERE x != [g % 3];
 ----
 0
+
+# the window segment tree combines two full 16-row sketches, then updates with raw rows that the merged filter must not admit early
+query I
+SELECT approx_top_k(v, 1) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM (
+	SELECT i, substr('aaaaaabbbbbcccccxxxxxxyyyyzzzzcaaabbcc', i, 1) AS v FROM range(1, 39) r(i)
+) QUALIFY i = 38;
+----
+[a]

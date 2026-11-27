@@ -7,6 +7,7 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_json_execute_serialized_sql.cpp
     test_multi_file_column_mapper.cpp
     test_multi_file_lazy_initialization.cpp
     test_table_function_multi_file_list.cpp
@@ -17,18 +18,24 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_monotone_preimage.cpp
+    test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
     test_context.cpp
+    test_shared_transaction.cpp
+    test_shared_transaction_chaos.cpp
+    test_shared_transaction_concurrency.cpp
     test_connect_prepare.cpp
     test_nested_schema_capability.cpp
     test_remote_pushdown_macro_arguments.cpp
     test_remote_pushdown_merge.cpp
     test_os_util.cpp
     test_compression_select.cpp
+    test_dictionary_filter_cache.cpp
     test_connection_callbacks.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
@@ -63,7 +70,7 @@ set(TEST_API_OBJECTS
     test_expanding_statements.cpp
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
-    test_relation_api.cpp
+    test_persisted_view_over_rows.cpp
     test_stream_result_buffer.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
@@ -74,6 +81,7 @@ set(TEST_API_OBJECTS
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
+    test_detach_held_reference.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
@@ -110,10 +118,8 @@ endif()
 
 if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
   include_directories(../../extension/tpch/include)
-  set(TEST_API_OBJECTS
-      ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
-      test_tpch_with_streaming.cpp
-      serialized_plans/test_plan_serialization_bwc.cpp)
+  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_streaming.cpp
+                       serialized_plans/test_plan_serialization_bwc.cpp)
 endif()
 
 if(DUCKDB_EXTENSION_TPCDS_SHOULD_LINK)

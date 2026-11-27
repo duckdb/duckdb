@@ -17,6 +17,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -132,9 +133,10 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
       block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
       any_abandoned(false), radix_ht(radix_ht_p),
-      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())), config(*this),
-      stored_allocators_size(0), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0), size_before_combining(0), max_partition_size(0) {
+      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())),
+      force_external(Settings::Get<DebugForceExternalSetting>(context)), config(*this), stored_allocators_size(0),
+      finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
+      size_before_combining(0), max_partition_size(0) {
 	spill_phase = SpillPhase::NATIVE_ALLOWED;
 
 	SetReservationFloor(context, MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
@@ -391,6 +393,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	registered = false;
 	spilling = false;
 	size_after_abandon = 0;
+	adaptivity.Reset();
 	abandoned_data.reset();
 	abandoned_exported_data.clear();
 	if (!ht) {
@@ -622,7 +625,7 @@ bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &l
 		// every current state is inline, and exporting would only cost
 		return false;
 	}
-	if (gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
+	if (gstate.force_external || gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
 		return true;
 	}
 	if (!gstate.external) {
@@ -780,24 +783,11 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 
-	if (!memory_pressure) {
-		if (RadixHTAdaptivity::TryGrow(gstate, lstate)) {
-			return;
-		}
-		RadixHTAdaptivity::MaybeSkipLookups(gstate, lstate);
+	const auto adaptivity_result = lstate.adaptivity.HandleSinkBoundary(gstate, lstate, memory_pressure);
+	if (adaptivity_result == RadixHTAdaptivity::SinkResult::GROWN) {
+		return;
 	}
-
-	bool abandoned = false;
-	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
-		// Keep the materialized rows and clear only the local pointer table
-		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
-		gstate.any_abandoned = true;
-		ht.Abandon();
-		abandoned = true;
-		if (!memory_pressure) {
-			RadixHTAdaptivity::MaybeResumeLookups(gstate, lstate);
-		}
-	}
+	bool abandoned = adaptivity_result == RadixHTAdaptivity::SinkResult::ABANDONED;
 
 	// Check if we need to repartition
 	const auto radix_bits_before = ht.GetRadixBits();
@@ -853,8 +843,11 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
-	// Set any_combined, then check one last time whether we need to repartition
-	gstate.any_combined = true;
+	// Finish any in-flight partition update before freezing the target.
+	if (!gstate.any_combined) {
+		const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+		gstate.any_combined = true;
+	}
 	MaybeRepartition(context.client, gstate, lstate, true);
 
 	auto &ht = *lstate.ht;
@@ -968,8 +961,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 		// If true there is no need to combine, it was all done by a single thread in a single HT.
 		// This is the case when only one thread contributed data and the HT never overflowed its
-		// capacity (which would have caused Abandon() to be called, creating duplicates).
-		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned;
+		// capacity (which would have caused Abandon() to be called, creating duplicates) or exported states.
+		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned &&
+		                       gstate.uncombined_exported_data.empty();
 
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
 		const auto n_partitions = uncombined_partition_data.size();

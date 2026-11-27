@@ -8,6 +8,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/sort_key_prefix.hpp"
 #include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -83,6 +84,9 @@ struct MergePrefixLess {
 	}
 
 	bool operator()(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+		if (lhs.part0 != rhs.part0) {
+			return lhs.part0 < rhs.part0;
+		}
 		const auto lhs_size = lhs.GetHeapSize();
 		const auto rhs_size = rhs.GetHeapSize();
 		D_ASSERT(lhs_size > SORT_KEY::INLINE_LENGTH && rhs_size > SORT_KEY::INLINE_LENGTH);
@@ -782,6 +786,14 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 			    unsafe_array_ptr<const SORT_KEY>(merged_partition_keys, merged_partition_count), run_boundaries);
 			if (prefix != 0) {
 				// Sorted endpoints establish this prefix for every key in each gathered fragment.
+				unsafe_array_ptr<SORT_KEY> keys(merged_partition_keys, merged_partition_count);
+				SortKeyPrefixScope<array_ptr_iterator<SORT_KEY>> prefix_scope(keys.begin(), keys.end());
+				for (auto &key : keys) {
+					D_ASSERT(key.GetHeapSize() >= prefix);
+					uint64_t word = 0;
+					memcpy(&word, key.GetData() + prefix, MinValue<idx_t>(sizeof(word), key.GetHeapSize() - prefix));
+					prefix_scope.Set(key, BSwapIfLE(word));
+				}
 				const MergePrefixLess<SORT_KEY> compare(prefix);
 				const auto prefix_fallback = [&](SORT_KEY *begin, SORT_KEY *end) {
 					duckdb_pdqsort::pdqsort_branchless(begin, end, compare);
@@ -959,7 +971,7 @@ static idx_t CollectMergeByteSamples(const SortedRunMerger &merger, const TupleD
 		ExternalBlockIteratorState key_state(*run.key_data, nullptr);
 		idx_t begin = 0;
 		for (idx_t interval_idx = 0; interval_idx < intervals; interval_idx++) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 			const auto width = interval_size + (interval_idx < remainder);
 			const auto end = begin + width;
 			const auto phase = (width / run_count) * run_idx + ((width % run_count) * run_idx) / run_count;

@@ -1,0 +1,17 @@
+diff --git a/src/planning/pruning/iceberg_predicate.cpp b/src/planning/pruning/iceberg_predicate.cpp
+index 47cbd7323..b4829115b 100644
+--- a/src/planning/pruning/iceberg_predicate.cpp
++++ b/src/planning/pruning/iceberg_predicate.cpp
+@@ -179,9 +179,9 @@ static bool TryEvaluateVariantScalarBound(ClientContext &context, const Expressi
+ 	Vector bound_vector(bound, count_t(1));
+ 	VariantIterator iterator(bound_vector);
+ 	switch (iterator.Root(0).GetTypeId()) {
+-	case VariantLogicalType::VARIANT_NULL:
+-	case VariantLogicalType::OBJECT:
+-	case VariantLogicalType::ARRAY:
++	case LogicalTypeId::SQLNULL:
++	case LogicalTypeId::STRUCT:
++	case LogicalTypeId::LIST:
+ 		// Missing fields and reconstructed containers are not scalar bounds.
+ 		return false;
+ 	default:

@@ -179,8 +179,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 	left.estimated_cardinality = lhs_cardinality;
 	right.estimated_cardinality = rhs_cardinality;
 	auto left_state = FindDirectRecursiveStateScan(left, recursive_cte_planning);
@@ -264,13 +264,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	if (can_iejoin) {
-		return Make<PhysicalIEJoin>(op, left, right, std::move(op.conditions), op.join_type, op.estimated_cardinality,
-		                            std::move(op.filter_pushdown));
+		return Make<PhysicalIEJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
+		                            op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 	if (can_merge) {
 		// range join: use piecewise merge join, which emits full child layouts
 		auto pruned = ExtractPrunedJoinProjection(op, left, right, true, true);
-		auto &join = Make<PhysicalPiecewiseMergeJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalPiecewiseMergeJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
 		                                              op.estimated_cardinality, std::move(op.filter_pushdown));
 		return RestorePrunedJoinProjection(op, join, std::move(pruned));
 	}
@@ -278,7 +278,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		// inequality join: use nested loop, which only applies the left map of a MARK join
 		auto pruned = ExtractPrunedJoinProjection(op, left, right, op.join_type != JoinType::MARK, true);
 		D_ASSERT(op.left_projection_map.empty() || op.join_type == JoinType::MARK);
-		auto &join = Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalNestedLoopJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
 		                                          op.estimated_cardinality, std::move(op.filter_pushdown));
 		return RestorePrunedJoinProjection(op, join, std::move(pruned));
 	}
@@ -312,7 +312,7 @@ static bool IsPruningMap(const vector<ProjectionIndex> &projection_map, idx_t in
 }
 
 PhysicalPlanGenerator::PrunedJoinProjection
-PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalComparisonJoin &op, const PhysicalOperator &left,
+PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalJoin &op, const PhysicalOperator &left,
                                                    const PhysicalOperator &right, bool expand_left, bool expand_right) {
 	PrunedJoinProjection info;
 	const auto left_width = left.GetTypes().size();
@@ -375,7 +375,7 @@ PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalComparisonJoin &op, co
 	return info;
 }
 
-PhysicalOperator &PhysicalPlanGenerator::RestorePrunedJoinProjection(LogicalComparisonJoin &op, PhysicalOperator &join,
+PhysicalOperator &PhysicalPlanGenerator::RestorePrunedJoinProjection(LogicalJoin &op, PhysicalOperator &join,
                                                                      PrunedJoinProjection info) {
 	if (!info.active) {
 		return join;

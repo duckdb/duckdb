@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -88,18 +89,27 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || !filter_state.can_cache) {
-		// Cached evaluation requires safe predicates and complete value validity.
-		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
-		return;
-	}
-	bool needs_row_validity = false;
-	if (!filter_includes_validity) {
+	bool use_specialized_filter =
+	    has_filter && validity_has_filter && scan_entire_vector && !verify_fetch_row && filter_state.can_cache;
+	if (use_specialized_filter && !filter_includes_validity) {
 		lock_guard<mutex> guard(stats_lock);
-		needs_row_validity = state.current->GetNode().GetStats().CanHaveNull();
+		use_specialized_filter = !state.current->GetNode().GetStats().CanHaveNull();
 	}
-	if (needs_row_validity) {
-		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+	if (!use_specialized_filter) {
+		// Avoid constructing dictionary selections when few rows remain or only validity is tested.
+		if (compression && compression->type == CompressionType::COMPRESSION_RLE && !verify_fetch_row &&
+		    result.GetVectorType() == VectorType::FLAT_VECTOR &&
+		    (count <= target_count / 2 || IsDirectNullCheckFilter(filter))) {
+			const auto scan_count = ScanVector(transaction, vector_index, state, result, target_count,
+			                                   ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count,
+			                     ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			FlatVector::SetSize(result, count_t(scan_count));
+			ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, count);
+		} else {
+			// Cached evaluation requires safe predicates and complete value validity.
+			ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		}
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
@@ -188,11 +198,7 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DuckTableEntr
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
-	unique_ptr<BaseStatistics> stats;
-	{
-		lock_guard<mutex> update_guard(update_lock);
-		stats = updates ? updates->GetStatistics() : nullptr;
-	}
+	auto stats = ColumnData::GetUpdateStatistics();
 	auto validity_stats = validity->GetUpdateStatistics();
 	if (!stats && !validity_stats) {
 		return nullptr;

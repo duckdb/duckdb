@@ -27,6 +27,7 @@ else()
       shell_profiler_renderer.cpp
       shell_progress_bar.cpp
       shell_render_table_metadata.cpp
+      shell_thread_stack_size.cpp
       shell_windows.cpp
       $<TARGET_OBJECTS:duckdb_linenoise>)
 
@@ -44,7 +45,24 @@ endif()
 
 add_executable(shell shell_main.cpp)
 
-target_link_libraries(shell duckdb_shell duckdb_static
+set(SHELL_DUCKDB_LIBRARY duckdb_static)
+string(TOUPPER "${CMAKE_BUILD_TYPE}" SHELL_BUILD_TYPE)
+set(SHELL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${SHELL_BUILD_TYPE}}")
+if(NOT WIN32
+   AND NOT EMSCRIPTEN
+   AND TARGET duckdb
+   AND SHELL_CXX_FLAGS MATCHES "-fsanitize=[^ ]*address")
+  set(SHELL_DUCKDB_LIBRARY duckdb)
+  set_target_properties(shell PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
+  if(APPLE)
+    set_property(
+      TARGET shell
+      APPEND
+      PROPERTY BUILD_RPATH "@loader_path/src")
+  endif()
+endif()
+
+target_link_libraries(shell duckdb_shell ${SHELL_DUCKDB_LIBRARY}
                       ${DUCKDB_EXTRA_LINK_FLAGS})
 link_threads(shell "")
 if(STATIC_LIBCPP)
@@ -52,7 +70,9 @@ if(STATIC_LIBCPP)
   target_link_libraries(shell -static-libstdc++ -static-libgcc)
 endif()
 
-link_extension_libraries(shell "")
+if(SHELL_DUCKDB_LIBRARY STREQUAL "duckdb_static")
+  link_extension_libraries(shell "")
+endif()
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell duckdb_utf8proc)

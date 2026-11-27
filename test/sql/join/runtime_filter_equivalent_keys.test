@@ -62,6 +62,16 @@ JOIN c ON TRY_CAST(b.k AS TINYINT)=c.k;
 ----
 100
 
+# Distinct cast filters traverse the same cycle of equivalent columns.
+query II
+SELECT count(*),sum(a.k)
+FROM a JOIN b ON a.id=b.id AND a.k=b.k
+JOIN d ON b.id=d.id AND b.k=d.k AND d.k=a.k
+JOIN c c1 ON TRY_CAST(a.k AS TINYINT)=c1.k
+JOIN c c2 ON TRY_CAST(d.k AS SMALLINT)=c2.k;
+----
+100	4200
+
 # NULL-safe origin filters can use ordinary equality links.
 query I
 SELECT count(*) FROM a JOIN b ON a.id=b.id AND a.k=b.k

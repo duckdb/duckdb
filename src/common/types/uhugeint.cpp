@@ -1,6 +1,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
@@ -59,20 +60,10 @@ const uhugeint_t Uhugeint::POWERS_OF_TEN[] {
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(100)};
 
 string Uhugeint::ToString(uhugeint_t input) {
-	uhugeint_t remainder;
-	string result;
-	while (true) {
-		if (!input.lower && !input.upper) {
-			break;
-		}
-		input = Uhugeint::DivMod(input, 10, remainder);
-		result = string(1, UnsafeNumericCast<char>('0' + remainder.lower)) + result; // NOLINT
-	}
-	if (result.empty()) {
-		// value is zero
-		return "0";
-	}
-	return result;
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(input, end);
+	return string(start, end);
 }
 
 //===--------------------------------------------------------------------===//
@@ -120,15 +111,13 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	}
 
 	// if any of these products are set to a non-zero value, there is always an overflow
-	if (products[2][1] || products[1][0] || products[2][0]) {
+	if (products[3][0] || products[3][1] || products[3][2] || products[2][0] || products[2][1] || products[1][0]) {
 		return false;
 	}
 
 	// if the high bits of any of these are set, there is always an overflow
-	if (products[1][1] & 0xffffffff00000000 || products[3][0] & 0xffffffff00000000 ||
-	    products[3][3] & 0xffffffff00000000 || products[3][2] & 0xffffffff00000000 ||
-	    products[3][1] & 0xffffffff00000000 || products[2][2] & 0xffffffff00000000 ||
-	    products[0][0] & 0xffffffff00000000) {
+	if (products[0][0] & 0xffffffff00000000 || products[1][1] & 0xffffffff00000000 ||
+	    products[2][2] & 0xffffffff00000000 || products[3][3] & 0xffffffff00000000) {
 		return false;
 	}
 
@@ -154,6 +143,11 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	third32 += fourth32 >> 32;
 	second32 += third32 >> 32;
 	first32 += second32 >> 32;
+
+	// check if the combination of the different products resulted in an overflow
+	if (first32 & 0xffffffff00000000) {
+		return false;
+	}
 
 	// remove carry from current digit
 	fourth32 &= 0xffffffff;
@@ -241,52 +235,26 @@ uhugeint_t Abs(uhugeint_t n) {
 	return (n);
 }
 
-static uint8_t Bits(uhugeint_t x) {
-	uint8_t out = 0;
-	if (x.upper) {
-		out = 64;
-		for (uint64_t upper = x.upper; upper; upper >>= 1) {
-			++out;
-		}
-	} else {
-		for (uint64_t lower = x.lower; lower; lower >>= 1) {
-			++out;
-		}
-	}
-	return out;
-}
-
 uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
 	if (rhs == 0) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	remainder = uhugeint_t(0);
-	if (rhs == uhugeint_t(1)) {
+	if (rhs == 1) {
+		remainder = uhugeint_t(0);
 		return lhs;
-	} else if (lhs == rhs) {
+	}
+	if (lhs == rhs) {
+		remainder = uhugeint_t(0);
 		return uhugeint_t(1);
-	} else if (lhs == uhugeint_t(0) || lhs < rhs) {
+	}
+	if (lhs < rhs) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	uhugeint_t result = 0;
-	for (uint8_t idx = Bits(lhs); idx > 0; --idx) {
-		result <<= 1;
-		remainder <<= 1;
-
-		if (((lhs >> (idx - 1U)) & 1) != 0) {
-			remainder += 1;
-		}
-
-		if (remainder >= rhs) {
-			remainder -= rhs;
-			result += 1;
-		}
-	}
-	return result;
+	const auto result = Uint128DivMod(lhs.upper, lhs.lower, rhs.upper, rhs.lower);
+	remainder = uhugeint_t(result.remainder_upper, result.remainder_lower);
+	return uhugeint_t(result.quotient_upper, result.quotient_lower);
 }
 
 template <>

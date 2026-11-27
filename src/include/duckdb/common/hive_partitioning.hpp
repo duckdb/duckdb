@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/original/std/sstream.hpp"
 
@@ -116,6 +117,8 @@ protected:
 	hive_partition_map_t local_partition_map;
 	//! The columns that make up the key
 	vector<idx_t> group_by_columns;
+	//! Hashes the key columns
+	ChunkHasher hasher;
 	//! Thread-local pre-allocated vector for hashes
 	Vector hashes_v;
 	//! Thread-local pre-allocated HivePartitionKeys

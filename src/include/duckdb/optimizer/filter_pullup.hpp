@@ -14,23 +14,26 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class FilterPullup {
 public:
-	explicit FilterPullup(bool pullup = false, bool add_column = false)
-	    : can_pullup(pullup), can_add_column(add_column) {
+	//! The context is needed for the collations an EXCEPT / INTERSECT compares its columns with
+	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = false)
+	    : context(context), can_pullup(pullup), can_add_column(add_column) {
 	}
 
 	//! Perform filter pullup
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 private:
+	optional_ptr<ClientContext> context;
 	vector<unique_ptr<Expression>> filters_expr_pullup;
 
 	// only pull up filters when there is a fork
 	bool can_pullup = false;
 
-	// identify case the branch is a set operation (INTERSECT or EXCEPT)
+	// Whether a projection can carry additional columns needed by pulled filters.
 	bool can_add_column = false;
 
 private:
@@ -54,6 +57,11 @@ private:
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
 	//! Pullup the filters on the partitions of a window
 	unique_ptr<LogicalOperator> PullupWindow(unique_ptr<LogicalOperator> op);
+	//! Derive key constraints, retaining the original filters below the operator.
+	unique_ptr<LogicalOperator> PullupAggregate(unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> PullupUnion(unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> ReturnConstraints(unique_ptr<LogicalOperator> op,
+	                                              vector<unique_ptr<Expression>> constraints);
 	//! Pullup filter in LogicalIntersect or LogicalExcept op
 	unique_ptr<LogicalOperator> PullupSetOperation(unique_ptr<LogicalOperator> op);
 	//! Pullup filter in both sides of a join
@@ -61,9 +69,6 @@ private:
 
 	//! Finish pull up at this operator
 	unique_ptr<LogicalOperator> FinishPullup(unique_ptr<LogicalOperator> op);
-	//! special treatment for SetOperations and projections
-	void ProjectSetOperation(LogicalProjection &proj);
-
 }; // end FilterPullup
 
 } // namespace duckdb
