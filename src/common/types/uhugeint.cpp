@@ -235,52 +235,26 @@ uhugeint_t Abs(uhugeint_t n) {
 	return (n);
 }
 
-static uint8_t Bits(uhugeint_t x) {
-	uint8_t out = 0;
-	if (x.upper) {
-		out = 64;
-		for (uint64_t upper = x.upper; upper; upper >>= 1) {
-			++out;
-		}
-	} else {
-		for (uint64_t lower = x.lower; lower; lower >>= 1) {
-			++out;
-		}
-	}
-	return out;
-}
-
 uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
 	if (rhs == 0) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	remainder = uhugeint_t(0);
-	if (rhs == uhugeint_t(1)) {
+	if (rhs == 1) {
+		remainder = uhugeint_t(0);
 		return lhs;
-	} else if (lhs == rhs) {
+	}
+	if (lhs == rhs) {
+		remainder = uhugeint_t(0);
 		return uhugeint_t(1);
-	} else if (lhs == uhugeint_t(0) || lhs < rhs) {
+	}
+	if (lhs < rhs) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	uhugeint_t result = 0;
-	for (uint8_t idx = Bits(lhs); idx > 0; --idx) {
-		result <<= 1;
-		remainder <<= 1;
-
-		if (((lhs >> (idx - 1U)) & 1) != 0) {
-			remainder += 1;
-		}
-
-		if (remainder >= rhs) {
-			remainder -= rhs;
-			result += 1;
-		}
-	}
-	return result;
+	const auto result = Uint128DivMod(lhs.upper, lhs.lower, rhs.upper, rhs.lower);
+	remainder = uhugeint_t(result.remainder_upper, result.remainder_lower);
+	return uhugeint_t(result.quotient_upper, result.quotient_lower);
 }
 
 template <>
