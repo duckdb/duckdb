@@ -916,6 +916,23 @@ void ExtensionDirectoriesSetting::OnSet(SettingCallbackInfo &info, Value &input)
 			throw InvalidInputException("%s setting elements cannot be NULL", ExtensionDirectoriesSetting::Name);
 		}
 	}
+	if (!info.db) {
+		return;
+	}
+	vector<string> directories;
+	for (auto &directory : ListValue::GetChildren(input)) {
+		directories.push_back(StringValue::Get(directory));
+	}
+	auto validated = ExtensionHelper::ValidateExtensionDirectories(
+	    FileSystem::GetFileSystem(*info.db), directories, Settings::Get<ExtensionDirectorySetting>(info.config));
+	if (validated == directories) {
+		return;
+	}
+	vector<Value> values;
+	for (auto &directory : validated) {
+		values.emplace_back(directory);
+	}
+	input = Value::LIST(LogicalType::VARCHAR, std::move(values));
 }
 
 //===----------------------------------------------------------------------===//
