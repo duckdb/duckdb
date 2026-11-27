@@ -180,9 +180,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/distinctness.hpp"
-#include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_simplification.hpp"
-#include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
@@ -2155,26 +2153,6 @@ DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const ch
 	return static_cast<DialectCompatibilityMode>(StringUtil::StringToEnum(GetDialectCompatibilityModeValues(), 2, "DialectCompatibilityMode", value));
 }
 
-const StringUtil::EnumStringLiteral *GetDistinctCountSourceValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(DistinctCountSource::CARDINALITY), "CARDINALITY" },
-		{ static_cast<uint32_t>(DistinctCountSource::MIN_MAX), "MIN_MAX" },
-		{ static_cast<uint32_t>(DistinctCountSource::HLL), "HLL" },
-		{ static_cast<uint32_t>(DistinctCountSource::EXACT), "EXACT" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value) {
-	return StringUtil::EnumToString(GetDistinctCountSourceValues(), 4, "DistinctCountSource", static_cast<uint32_t>(value));
-}
-
-template<>
-DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value) {
-	return static_cast<DistinctCountSource>(StringUtil::StringToEnum(GetDistinctCountSourceValues(), 4, "DistinctCountSource", value));
-}
-
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DistinctType::DISTINCT), "DISTINCT" },
@@ -3584,28 +3562,6 @@ const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode val
 template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value) {
 	return static_cast<JoinFilterPushdownMode>(StringUtil::StringToEnum(GetJoinFilterPushdownModeValues(), 2, "JoinFilterPushdownMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetJoinOrderOperatorTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(JoinOrderOperatorType::INNER), "INNER" },
-		{ static_cast<uint32_t>(JoinOrderOperatorType::LEFT), "LEFT" },
-		{ static_cast<uint32_t>(JoinOrderOperatorType::SEMI), "SEMI" },
-		{ static_cast<uint32_t>(JoinOrderOperatorType::ANTI), "ANTI" },
-		{ static_cast<uint32_t>(JoinOrderOperatorType::MARK), "MARK" },
-		{ static_cast<uint32_t>(JoinOrderOperatorType::CROSS_PRODUCT), "CROSS_PRODUCT" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value) {
-	return StringUtil::EnumToString(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", static_cast<uint32_t>(value));
-}
-
-template<>
-JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value) {
-	return static_cast<JoinOrderOperatorType>(StringUtil::StringToEnum(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {

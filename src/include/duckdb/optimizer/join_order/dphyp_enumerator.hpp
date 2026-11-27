@@ -19,6 +19,7 @@ public:
 	DPHypEnumerator(QueryGraphManager &graph, const QueryGraphEdges &edges, JoinOrderCandidateEvaluator &evaluator,
 	                JoinOrderPlanMap plans);
 
+public:
 	//! Return true when traversal finishes, even if no complete plan exists; false when the pair budget is exhausted.
 	bool Solve();
 	//! Reset the pair budget and neighbor cache for another pass, retaining the existing memo.
@@ -39,6 +40,7 @@ private:
 	QueryGraphManager &query_graph_manager;
 	const QueryGraphEdges &query_graph;
 	JoinOrderCandidateEvaluator &evaluator;
+
 	JoinOrderPlanMap plans;
 	idx_t pairs = 0;
 	unordered_map<idx_t, vector<reference<JoinRelationSet>>> neighbor_set_cache;

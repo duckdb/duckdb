@@ -20,6 +20,7 @@ class ClientContext;
 class Expression;
 class LogicalAggregate;
 class LogicalComparisonJoin;
+class LogicalDistinct;
 class LogicalGet;
 class LogicalOperator;
 class LogicalProjection;
@@ -36,8 +37,8 @@ enum class DistinctnessPropagation : uint8_t {
 
 //! Structural proofs that the output of an operator has at most one row per value of a set of columns, where NULLs
 //! count as one value (like for DISTINCT and GROUP BY). This is the one place where unique sets are inferred.
-//! The sources are the groups of an aggregate with a single grouping set and the PRIMARY KEY / UNIQUE NOT NULL
-//! constraints of a scanned table. They are forwarded through operators that never duplicate rows (see
+//! The sources are DISTINCT keys, the groups of an aggregate with a single grouping set and PRIMARY KEY / UNIQUE NOT
+//! NULL constraints of a scanned table. They are forwarded through operators that never duplicate rows (see
 //! DistinctnessPropagation). Statistics (distinct counts) are estimates and are never used.
 //! The unique sets of an operator are computed once and cached by the identity of the operator, so that a
 //! bottom-up pass over a plan stays linear. An instance is therefore only valid for the analysis of a stable plan:
@@ -71,6 +72,7 @@ private:
 	vector<column_binding_set_t> ComputeUniqueSets(LogicalOperator &op);
 	static vector<column_binding_set_t> ComputeScanUniqueSets(LogicalGet &get);
 	static vector<column_binding_set_t> ComputeAggregateUniqueSets(LogicalAggregate &aggr);
+	vector<column_binding_set_t> ComputeDistinctUniqueSets(LogicalDistinct &distinct);
 	vector<column_binding_set_t> ComputeProjectionUniqueSets(LogicalProjection &projection);
 	vector<column_binding_set_t> ComputeJoinUniqueSets(LogicalComparisonJoin &join);
 	bool IsDistinctOnJoinKeys(LogicalComparisonJoin &join, idx_t child_idx);

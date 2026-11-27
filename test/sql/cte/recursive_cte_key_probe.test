@@ -814,7 +814,7 @@ bfs(node) USING KEY (node) AS (
 )
 SELECT * FROM bfs;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*ANTI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN[\s\S]*INNER.*
+physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*Join Type: (?:ANTI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN|RIGHT_ANTI[\s\S]*REC_REC_CTE_SCAN[\s\S]*HASH_JOIN)[\s\S]*Join Type: INNER[\s\S]*REC_CTE_SCAN[\s\S]*COLUMN_DATA_SCAN.*
 
 # Candidate generation also stays below an explicit recurring-state SEMI join.
 query II
@@ -832,7 +832,7 @@ bfs(node) USING KEY (node) AS (
 )
 SELECT * FROM bfs;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*SEMI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN[\s\S]*INNER.*
+physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*Join Type: (?:SEMI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN|RIGHT_SEMI[\s\S]*REC_REC_CTE_SCAN[\s\S]*HASH_JOIN)[\s\S]*Join Type: INNER[\s\S]*REC_CTE_SCAN[\s\S]*COLUMN_DATA_SCAN.*
 
 # Filters on the recurring state scan retain the fallback.
 query II

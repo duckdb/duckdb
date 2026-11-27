@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
@@ -128,6 +129,9 @@ optional<RelationStats> RelationStatsExtractor::ExtractInternal(LogicalOperator 
 	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY && child_stats.size() == 1) {
 		return RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), child_stats[0], *this);
 	}
+	if (op.type == LogicalOperatorType::LOGICAL_DISTINCT && child_stats.size() == 1) {
+		return RelationStatisticsHelper::ExtractDistinctStats(op.Cast<LogicalDistinct>(), child_stats[0], *this);
+	}
 	return RelationStatisticsHelper::ExtractOperatorStats(op, context, child_stats);
 }
 
@@ -167,6 +171,7 @@ optional<RelationStats> RelationStatsExtractor::ExtractCTERef(LogicalCTERef &cte
 	if (!definition_stats) {
 		return {};
 	}
+	cache.at(*definition).EnsureMaterializedProducerIdentity();
 	return RelationStatisticsHelper::RebindOutputStats(*definition_stats, cte_ref);
 }
 

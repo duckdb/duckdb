@@ -18,6 +18,8 @@ class QueryGraphManager;
 class JoinOrderLinearizer {
 public:
 	JoinOrderLinearizer(QueryGraphManager &graph, CardinalityEstimator &estimator);
+
+public:
 	bool BuildTree();
 	RankedJoinOrder GetOrder(RelationIndex root);
 	//! Compare every root using the tree proxy before choosing one order for interval DP.
@@ -25,8 +27,10 @@ public:
 
 private:
 	struct Block {
+	public:
 		Block(RelationIndex relation, double multiplier);
 
+	public:
 		vector<RelationIndex> relations;
 		JoinOrderRank rank;
 	};
@@ -43,6 +47,7 @@ private:
 private:
 	QueryGraphManager &graph;
 	CardinalityEstimator &estimator;
+
 	vector<double> cardinalities;
 	vector<Edge> tree;
 };

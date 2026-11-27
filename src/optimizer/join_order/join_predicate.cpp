@@ -83,11 +83,26 @@ RelationIndex JoinOrderUtil::GetBindingRelation(const ColumnBinding &binding) {
 	return RelationIndex(binding.table_index.index);
 }
 
+static bool IsDirectValueComparison(const FilterInfo &filter) {
+	auto type = JoinOrderUtil::GetJoinPredicateComparisonType(filter);
+	if (type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return false;
+	}
+	auto &comparison = filter.filter->Cast<BoundFunctionExpression>();
+	auto &left = BoundComparisonExpression::Left(comparison);
+	auto &right = BoundComparisonExpression::Right(comparison);
+	return left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       left.GetReturnType().EqualsIncludingCollation(right.GetReturnType()) &&
+	       left.Cast<BoundColumnRefExpression>().Depth() == 0 && right.Cast<BoundColumnRefExpression>().Depth() == 0;
+}
+
 JoinPredicate::JoinPredicate(idx_t index, FilterInfo &filter, JoinPredicateClass predicate_class,
                              ColumnBinding left_equality_binding, ColumnBinding right_equality_binding)
     : index(index), filter(filter), predicate_class(predicate_class),
       comparison_type(JoinOrderUtil::GetJoinPredicateComparisonType(filter)),
-      left_equality_binding(left_equality_binding), right_equality_binding(right_equality_binding) {
+      direct_value_equality(IsDirectValueComparison(filter)), left_equality_binding(left_equality_binding),
+      right_equality_binding(right_equality_binding) {
 }
 
 idx_t JoinPredicate::GetIndex() const {
@@ -140,12 +155,20 @@ optional_ptr<JoinRelationSet> JoinPredicate::GetSemanticRightSetOptional() const
 	return filter.get().semantic_right_set;
 }
 
-const ColumnBinding &JoinPredicate::GetStatsBinding(bool left) const {
-	return left ? filter.get().left_binding : filter.get().right_binding;
+const ColumnBinding &JoinPredicate::GetLeftStatsBinding() const {
+	return filter.get().left_binding;
 }
 
-const ColumnBinding &JoinPredicate::GetEqualityBinding(bool left) const {
-	return left ? left_equality_binding : right_equality_binding;
+const ColumnBinding &JoinPredicate::GetRightStatsBinding() const {
+	return filter.get().right_binding;
+}
+
+const ColumnBinding &JoinPredicate::GetLeftEqualityBinding() const {
+	return left_equality_binding;
+}
+
+const ColumnBinding &JoinPredicate::GetRightEqualityBinding() const {
+	return right_equality_binding;
 }
 
 bool JoinPredicate::HasValidJoinEndpoints() const {
@@ -180,6 +203,10 @@ bool JoinPredicate::IsEquivalencePredicate() const {
 	return CanBuildEqualityClosure();
 }
 
+bool JoinPredicate::IsDirectValueEquality() const {
+	return direct_value_equality;
+}
+
 bool JoinPredicate::IsResidualFilter() const {
 	auto &info = filter.get();
 	if (info.join_type != JoinType::INNER) {
@@ -204,14 +231,6 @@ void JoinPredicate::SetEqualityClassIndex(optional_idx equality_class_index) {
 
 optional_idx JoinPredicate::GetEqualityClassIndex() const {
 	return equality_class_index;
-}
-
-void JoinPredicate::SetCompositeJoinPair(JoinRelationSet &pair) {
-	composite_join_pair = pair;
-}
-
-optional_ptr<JoinRelationSet> JoinPredicate::GetCompositeJoinPair() const {
-	return composite_join_pair;
 }
 
 JoinEqualityPredicateEdge::JoinEqualityPredicateEdge(JoinPredicate &predicate, RelationIndex left_relation,
@@ -251,21 +270,6 @@ idx_t JoinEqualityGroups::GetGroup(const ColumnBinding &binding) {
 	return FindRoot(entry->second);
 }
 
-void RelationPairEqualitySummary::AddEquality(idx_t equality_class_index, ColumnBinding first_binding,
-                                              ColumnBinding second_binding) {
-	if (std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(), equality_class_index) ==
-	    direct_equality_class_indices.end()) {
-		direct_equality_class_indices.push_back(equality_class_index);
-	}
-	first_relation_bindings.insert(first_binding);
-	second_relation_bindings.insert(second_binding);
-}
-
-bool RelationPairEqualitySummary::HasDirectCompositeEquality() const {
-	return direct_equality_class_indices.size() >= 2 && first_relation_bindings.size() >= 2 &&
-	       second_relation_bindings.size() >= 2;
-}
-
 void JoinPredicateModel::Clear() {
 	predicates.clear();
 	all_predicates.clear();
@@ -273,7 +277,6 @@ void JoinPredicateModel::Clear() {
 	selectivity_predicates.clear();
 	graph_predicates.clear();
 	equality_classes.clear();
-	equality_pairs.clear();
 }
 
 JoinPredicate &JoinPredicateModel::RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
@@ -299,11 +302,6 @@ void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 		equality_join_predicates.push_back(edge.predicate);
 	}
 	equality_classes.push_back(std::move(equality_class));
-}
-
-void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,
-                                                    ColumnBinding first_binding, ColumnBinding second_binding) {
-	equality_pairs[pair].AddEquality(equality_class_index, first_binding, second_binding);
 }
 
 optional_ptr<const JoinPredicate> JoinPredicateModel::GetPredicateByFilterIndex(idx_t filter_index) const {
@@ -336,19 +334,6 @@ const vector<reference<JoinPredicate>> &JoinPredicateModel::GetGraphPredicates()
 
 const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const {
 	return equality_classes;
-}
-
-optional_ptr<const RelationPairEqualitySummary> JoinPredicateModel::GetDirectEqualityPair(JoinRelationSet &pair) const {
-	auto entry = equality_pairs.find(pair);
-	if (entry == equality_pairs.end()) {
-		return nullptr;
-	}
-	return entry->second;
-}
-
-bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
-	auto summary = GetDirectEqualityPair(pair);
-	return summary && summary->HasDirectCompositeEquality();
 }
 
 } // namespace duckdb

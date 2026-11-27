@@ -86,8 +86,6 @@ public:
 	const vector<RelationStats> GetRelationStats();
 	void SetSourceStats(shared_ptr<const JoinOrderSourceStats> stats);
 	const join_column_sources_t &GetColumnSources() const;
-	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
 	void PrintRelationStats();
 
@@ -99,6 +97,7 @@ private:
 		bool has_throwing_predicate;
 	};
 
+private:
 	bool ExtractJoinRelation(JoinOrderOptimizer &optimizer, PendingRelation relation,
 	                         vector<reference<LogicalOperator>> &filter_operators,
 	                         vector<PendingRelation> &pending_relations);
@@ -109,6 +108,10 @@ private:
 	void GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings);
 	void RegisterRelationBindings(LogicalOperator &op, RelationIndex relation_id, const RelationStats &stats);
 	optional<RelationStats> AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats);
+
+public:
+	//! A mapping of base table index -> index into relations array (relation number)
+	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
 private:
 	ClientContext &context;

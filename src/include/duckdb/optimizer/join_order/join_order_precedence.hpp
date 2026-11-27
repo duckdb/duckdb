@@ -17,6 +17,8 @@ class JoinOrderPrecedence {
 public:
 	JoinOrderPrecedence(QueryGraphManager &graph, CardinalityEstimator &estimator,
 	                    JoinOrderCandidateEvaluator &evaluator, const CapturedJoinOrderPlan &witness);
+
+public:
 	//! Build the scaffold and choose one rooted order with a legal prescribed construction.
 	//! Returns an empty order when the scaffold is not separable or no rooted construction succeeds.
 	vector<RelationIndex> GetBestOrder();
@@ -31,9 +33,11 @@ private:
 	};
 
 	struct Atom {
+	public:
 		Atom(vector<RelationIndex> relations, double multiplier, double preparation,
 		     idx_t group = DConstants::INVALID_INDEX);
 
+	public:
 		vector<RelationIndex> relations;
 		JoinOrderRank rank;
 		double log_preparation;
@@ -41,16 +45,20 @@ private:
 	};
 
 	struct Block {
+	public:
 		Block(Atom atom, vector<RelationIndex> prerequisites);
 
+	public:
 		vector<Atom> atoms;
 		JoinOrderRank rank;
 		vector<RelationIndex> prerequisites;
 	};
 
 	struct Node {
+	public:
 		explicit Node(Block block);
 
+	public:
 		Block block;
 		vector<idx_t> children;
 	};
@@ -94,6 +102,7 @@ private:
 	CardinalityEstimator &estimator;
 	JoinOrderCandidateEvaluator &evaluator;
 	const CapturedJoinOrderPlan &witness;
+
 	vector<double> cardinalities;
 	vector<Edge> edges;
 	vector<Mask> checked_components;

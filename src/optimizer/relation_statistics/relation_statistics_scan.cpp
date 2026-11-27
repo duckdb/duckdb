@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/finite_filter_selection.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -13,7 +14,6 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -23,8 +23,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-
-#include <cmath>
 
 namespace duckdb {
 
@@ -122,27 +120,12 @@ static DistinctCount GetDistinctCountFromStats(BaseStatistics &base_stats, idx_t
 	return DistinctCount(0, DistinctCountSource::CARDINALITY);
 }
 
-struct FilterEstimate {
-	CardinalityValue cardinality;
-	bool supported;
-	bool proven_empty = false;
-
-	void Combine(const FilterEstimate &other) {
-		cardinality = MinValue(cardinality, other.cardinality);
-		supported &= other.supported;
-		proven_empty |= other.proven_empty;
-	}
-};
-
-static CardinalityValue FilterFraction(CardinalityValue cardinality, double fraction) {
-	return cardinality * CardinalityValue(MaxValue(0.0, MinValue(fraction, 1.0)));
-}
-
 class IntegerRangeEstimate {
 public:
 	explicit IntegerRangeEstimate(const BaseStatistics &statistics) : statistics(statistics) {
 	}
 
+public:
 	bool AddBound(ExpressionType comparison, const Value &constant) {
 		if (constant.IsNull() || !constant.type().EqualsIncludingCollation(statistics.GetType()) ||
 		    statistics.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(statistics)) {
@@ -207,33 +190,30 @@ private:
 	bool has_bounds = false;
 };
 
-static optional_ptr<const RelationColumnStats> FilterColumn(const Expression &expr,
-                                                            const RelationColumnStatsLookup &columns,
-                                                            const vector<ColumnBinding> &positional_bindings) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		auto &ref = expr.Cast<BoundColumnRefExpression>();
-		return ref.Depth() == 0 ? columns.Find(ref.Binding()) : nullptr;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		auto index = expr.Cast<BoundReferenceExpression>().Index();
-		if (index < positional_bindings.size()) {
-			return columns.Find(positional_bindings[index]);
+template <class FUNC>
+static void VisitFilterConjuncts(const Expression &expression, FUNC &&callback) {
+	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		for (auto &child : expression.Cast<BoundConjunctionExpression>().GetChildren()) {
+			VisitFilterConjuncts(*child, callback);
 		}
+	} else {
+		callback(expression);
 	}
-	return nullptr;
 }
 
 static FilterEstimate EstimateNullCheckRows(CardinalityValue cardinality, const BoundOperatorExpression &expr,
                                             const RelationColumnStatsLookup &columns,
                                             const vector<ColumnBinding> &positional_bindings) {
 	auto &children = expr.GetChildren();
-	if (children.size() != 1 || !FilterColumn(*children[0], columns, positional_bindings)) {
+	if (children.size() != 1 ||
+	    !RelationStatisticsHelper::FindFilterColumn(*children[0], columns, positional_bindings)) {
 		return {cardinality, false};
 	}
 	const auto selectivity = RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-	return {FilterFraction(cardinality, expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL ? selectivity
-	                                                                                                 : 1 - selectivity),
-	        true};
+	return {
+	    RelationStatisticsHelper::FilterFraction(
+	        cardinality, expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL ? selectivity : 1 - selectivity),
+	    true};
 }
 
 static FilterEstimate EstimateEqualityRows(CardinalityValue cardinality, ExpressionType type,
@@ -243,27 +223,15 @@ static FilterEstimate EstimateEqualityRows(CardinalityValue cardinality, Express
 	if (cardinality == 0) {
 		return {0, true};
 	}
-	if (column.total_domain.source == DistinctCountSource::CARDINALITY) {
-		return {FilterFraction(cardinality, equal ? selectivity : 1 - selectivity), true};
+	if (!column.total_domain.has_usable_domain) {
+		return {RelationStatisticsHelper::FilterFraction(cardinality, equal ? selectivity : 1 - selectivity), true};
 	}
 	auto domain = MinValue(cardinality, column.current_domain.distinct_count);
 	if (domain == 0) {
 		return {cardinality, false};
 	}
 	auto fraction = MinValue(CardinalityValue(1), CardinalityValue(1) / domain);
-	auto rows = cardinality * (equal ? fraction : CardinalityValue(1) - fraction);
-	// Retain the existing equality-filter ceiling independently of fractional join estimates.
-	// Do not inflate a fractional input or materialize a scaled estimate outside double's range.
-	if (equal && rows > 1) {
-		auto value = rows.GetDouble();
-		if (std::isfinite(value)) {
-			auto rounded = std::ceil(value);
-			if (rounded > value) {
-				rows = MinValue(cardinality, CardinalityValue(rounded));
-			}
-		}
-	}
-	return {rows, true};
+	return {cardinality * (equal ? fraction : CardinalityValue(1) - fraction), true};
 }
 
 static FilterEstimate EstimateComparisonRows(CardinalityValue cardinality, const BoundFunctionExpression &comparison,
@@ -273,10 +241,10 @@ static FilterEstimate EstimateComparisonRows(CardinalityValue cardinality, const
 	const auto selectivity = RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 	auto &children = comparison.GetChildren();
 	auto type = comparison.GetExpressionType();
-	auto column = FilterColumn(*children[0], columns, positional_bindings);
+	auto column = RelationStatisticsHelper::FindFilterColumn(*children[0], columns, positional_bindings);
 	optional_ptr<const Expression> value = *children[1];
 	if (!column) {
-		column = FilterColumn(*children[1], columns, positional_bindings);
+		column = RelationStatisticsHelper::FindFilterColumn(*children[1], columns, positional_bindings);
 		value = *children[0];
 		type = FlipComparisonExpression(type);
 	}
@@ -287,15 +255,15 @@ static FilterEstimate EstimateComparisonRows(CardinalityValue cardinality, const
 	if (value->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
 	    value->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 		if (type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM) {
-			return {FilterFraction(cardinality,
-			                       type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ? selectivity : 1 - selectivity),
+			return {RelationStatisticsHelper::FilterFraction(
+			            cardinality, type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ? selectivity : 1 - selectivity),
 			        true};
 		}
 		return {0, true, true};
 	}
 	if (pruning == FilterPropagateResult::FILTER_TRUE_OR_NULL && type != ExpressionType::COMPARE_DISTINCT_FROM &&
 	    type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		return {FilterFraction(cardinality, 1 - selectivity), true};
+		return {RelationStatisticsHelper::FilterFraction(cardinality, 1 - selectivity), true};
 	}
 	switch (type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -311,7 +279,7 @@ static FilterEstimate EstimateComparisonRows(CardinalityValue cardinality, const
 		    range->AddBound(type, value->Cast<BoundConstantExpression>().GetValue())) {
 			return {cardinality, true};
 		}
-		return {FilterFraction(cardinality, selectivity), true};
+		return {RelationStatisticsHelper::FilterFraction(cardinality, selectivity), true};
 	default:
 		return {cardinality, false};
 	}
@@ -353,7 +321,9 @@ static FilterEstimate EstimateFilterRows(CardinalityValue cardinality, const Exp
 	// Preserve the existing scan-specific non-null NOT LIKE estimate.
 	if (scan_statistics && expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
 	    expr.Cast<BoundFunctionExpression>().Function().GetName() == "!~~" && !scan_statistics->CanHaveNull()) {
-		return {FilterFraction(cardinality, 1 - RelationStatisticsHelper::DEFAULT_SELECTIVITY), true};
+		return {
+		    RelationStatisticsHelper::FilterFraction(cardinality, 1 - RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+		    true};
 	}
 	if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL ||
 	    expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
@@ -373,7 +343,8 @@ static void ApplyFilterEstimate(RelationStats &stats, FilterEstimate estimate) {
 	if (!estimate.supported) {
 		// An unsupported conjunct retains its fallback even when another conjunct has a weaker estimate.
 		estimate.cardinality = MinValue(
-		    estimate.cardinality, FilterFraction(stats.cardinality, RelationStatisticsHelper::DEFAULT_SELECTIVITY));
+		    estimate.cardinality,
+		    RelationStatisticsHelper::FilterFraction(stats.cardinality, RelationStatisticsHelper::DEFAULT_SELECTIVITY));
 	}
 	RelationStatisticsHelper::ApplyCardinality(stats, estimate.cardinality);
 }
@@ -515,8 +486,9 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	return ExtractGetStats(get, context, NodeStatistics(base_table_cardinality));
 }
 
-RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context,
-                                                        const NodeStatistics &source_stats) {
+RelationStats
+RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context, const NodeStatistics &source_stats,
+                                          optional_ptr<column_binding_map_t<DistinctCount>> source_domains) {
 	D_ASSERT(source_stats.has_estimated_cardinality);
 	auto base_table_cardinality = source_stats.estimated_cardinality;
 	RelationStats result;
@@ -536,33 +508,75 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		auto column_statistics = GetColumnStatistics(get, context, column_id);
 		auto total_domain = column_statistics ? GetDistinctCountFromStats(*column_statistics, base_table_cardinality)
 		                                      : DistinctCount(0, DistinctCountSource::CARDINALITY);
-		if (total_domain.distinct_count == 0) {
+		if (source_stats.has_max_cardinality && source_stats.max_cardinality == 0) {
+			total_domain = DistinctCount(0, DistinctCountSource::EXACT);
+		} else if (total_domain.distinct_count == 0) {
 			total_domain = DistinctCount(base_table_cardinality, DistinctCountSource::CARDINALITY);
 		}
 		result.columns.emplace_back(binding, total_domain,
 		                            Identifier(get.GetName() + "." + get.GetColumnName(column_id)));
+		if (source_stats.has_max_cardinality) {
+			result.columns.back().TightenPopulationBound(source_stats.max_cardinality);
+		}
 		if (column_statistics && column_statistics->GetType().EqualsIncludingCollation(get.GetColumnType(column_id))) {
+			result.columns.back().can_have_null = column_statistics->CanHaveNull();
 			scan_statistics.push_back(std::move(*column_statistics));
 		} else {
 			scan_statistics.push_back(BaseStatistics::CreateUnknown(get.GetColumnType(column_id)));
 		}
 	}
+	CaptureUniqueKeys(get, result, context, CardinalityValue(base_table_cardinality));
+	if (source_domains) {
+		for (auto &column : result.columns) {
+			source_domains->emplace(column.binding, column.total_domain);
+		}
+	}
+	FiniteFilterSelection finite(result);
+	for (auto &entry : get.table_filters) {
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ExtractGetStats");
+		vector<ColumnBinding> bindings {ColumnBinding(get.table_index, entry.GetIndex())};
+		auto &statistics = scan_statistics[entry.GetIndex().GetIndex()];
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			finite.AddOptionalSourceFacts(*filter.expr, bindings, statistics);
+			continue;
+		}
+		VisitFilterConjuncts(*filter.expr, [&](const Expression &expression) {
+			// An exclusion outside a proven source range does not remove a population value.
+			auto proven_true = !expression.HasParameter() &&
+			                   ExpressionFilter::CheckExpressionStatistics(context, expression, statistics) ==
+			                       FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			finite.Add(expression, bindings, proven_true, statistics);
+		});
+	}
+	auto estimate = finite.Apply(result);
+	const auto filtered_rows = result.cardinality;
 	RelationColumnStatsLookup columns(result);
-	FilterEstimate estimate {base_table_cardinality, true};
 	for (auto &entry : get.table_filters) {
 		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ExtractGetStats");
 		vector<ColumnBinding> bindings {ColumnBinding(get.table_index, entry.GetIndex())};
 		D_ASSERT(filter.column_indexes.size() <= 1);
 		auto &statistics = scan_statistics[entry.GetIndex().GetIndex()];
 		IntegerRangeEstimate range(statistics);
-		estimate.Combine(
-		    EstimateFilterRows(base_table_cardinality, *filter.expr, columns, bindings, context, statistics, range));
+		VisitFilterConjuncts(*filter.expr, [&](const Expression &expression) {
+			// Statistics-based impossibility remains a proof, including a selected literal outside the source range.
+			if (finite.IsApplied(expression)) {
+				auto pruning = ExpressionFilter::CheckExpressionStatistics(context, expression, statistics);
+				if (pruning == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+				    pruning == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+					estimate.Combine({0, true, true});
+				}
+			} else {
+				estimate.Combine(
+				    EstimateFilterRows(filtered_rows, expression, columns, bindings, context, statistics, range));
+			}
+		});
 		auto fraction = range.Fraction();
 		if (fraction) {
 			// Intersect same-column bounds before applying the default-selectivity floor.
 			auto range_cardinality =
-			    *fraction == 0 ? CardinalityValue(0)
-			                   : FilterFraction(base_table_cardinality, MaxValue(DEFAULT_SELECTIVITY, *fraction));
+			    *fraction == 0
+			        ? CardinalityValue(0)
+			        : RelationStatisticsHelper::FilterFraction(filtered_rows, MaxValue(DEFAULT_SELECTIVITY, *fraction));
 			estimate.Combine({range_cardinality, true, *fraction == 0});
 		}
 	}
@@ -570,7 +584,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		// the scan skips the row groups whose zonemaps cannot satisfy the filters: their rows bound the estimate
 		auto current_estimate = estimate.cardinality;
 		if (!estimate.supported) {
-			current_estimate = MinValue(current_estimate, FilterFraction(base_table_cardinality, DEFAULT_SELECTIVITY));
+			current_estimate = MinValue(current_estimate,
+			                            RelationStatisticsHelper::FilterFraction(filtered_rows, DEFAULT_SELECTIVITY));
 		}
 		// an estimate of at most one row cannot be improved
 		if (current_estimate > 1) {
@@ -581,6 +596,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		}
 	}
 	ApplyFilterEstimate(result, estimate);
+	finite.PublishNullRejection(result);
 	for (auto &column : result.columns) {
 		for (auto &entry : get.table_filters) {
 			if (ExpressionFilter::IsOptionalFilter(entry.Filter()) || entry.GetIndex() != column.binding.column_index) {
@@ -590,16 +606,52 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			ApplyDirectFilterDomain(column, *filter.expr, {});
 		}
 	}
-	vector<RelationColumnStats> output_columns;
+	vector<ColumnBinding> output_bindings;
 	for (auto binding : get.GetColumnBindings()) {
 		if (binding.table_index == get.table_index) {
-			output_columns.push_back(result.columns[binding.column_index.GetIndex()]);
+			output_bindings.push_back(binding);
 		}
 	}
-	result.columns = std::move(output_columns);
 	result.stats_initialized = true;
 	D_ASSERT(base_table_cardinality == 0 || base_table_cardinality >= result.cardinality);
-	return result;
+	auto projected_stats = ProjectOutputStats(result, output_bindings);
+	if (!projected_stats) {
+		throw InternalException("Could not project scan statistics onto its output columns");
+	}
+	return *projected_stats;
+}
+
+static void CaptureFilterEqualities(const Expression &expression, RelationStats &stats) {
+	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		for (auto &child : expression.Cast<BoundConjunctionExpression>().GetChildren()) {
+			CaptureFilterEqualities(*child, stats);
+		}
+		return;
+	}
+	if (expression.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+	    expression.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return;
+	}
+	auto &comparison = expression.Cast<BoundFunctionExpression>();
+	vector<idx_t> columns;
+	for (auto &child : comparison.GetChildren()) {
+		if (child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return;
+		}
+		auto &ref = child->Cast<BoundColumnRefExpression>();
+		auto column = stats.FindColumn(ref.Binding());
+		if (ref.Depth() != 0 || !column.IsValid()) {
+			return;
+		}
+		columns.push_back(column.GetIndex());
+	}
+	if (columns.size() == 2 && columns[0] != columns[1]) {
+		auto &children = comparison.GetChildren();
+		if (children[0]->GetReturnType().EqualsIncludingCollation(children[1]->GetReturnType())) {
+			stats.value_equivalent_columns.push_back(columns);
+		}
+		stats.equivalent_columns.push_back(std::move(columns));
+	}
 }
 
 optional<RelationStats> RelationStatisticsHelper::ExtractFilterStats(LogicalFilter &filter,
@@ -618,12 +670,24 @@ RelationStats RelationStatisticsHelper::ConditionFilterStats(const RelationStats
                                                              const vector<unique_ptr<Expression>> &expressions,
                                                              const vector<ColumnBinding> &bindings) {
 	auto result = child_stats;
-	RelationColumnStatsLookup columns(child_stats);
-	FilterEstimate estimate {child_stats.cardinality, true};
 	for (auto &expression : expressions) {
-		estimate.Combine(EstimateFilterRows(child_stats.cardinality, *expression, columns, bindings));
+		CaptureFilterEqualities(*expression, result);
+	}
+	FiniteFilterSelection finite(result);
+	for (auto &expression : expressions) {
+		VisitFilterConjuncts(*expression, [&](const Expression &child) { finite.Add(child, bindings); });
+	}
+	auto estimate = finite.Apply(result);
+	RelationColumnStatsLookup columns(result);
+	for (auto &expression : expressions) {
+		VisitFilterConjuncts(*expression, [&](const Expression &child) {
+			if (!finite.IsApplied(child)) {
+				estimate.Combine(EstimateFilterRows(result.cardinality, child, columns, bindings));
+			}
+		});
 	}
 	ApplyFilterEstimate(result, estimate);
+	finite.PublishNullRejection(result);
 	for (auto &column : result.columns) {
 		for (auto &expression : expressions) {
 			ApplyDirectFilterDomain(column, *expression, column.binding);
@@ -676,6 +740,7 @@ RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpress
 		if (expression_get.children.size() == 1 &&
 		    expression_get.children[0]->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 			result.columns.back().semi_anti_join_domain_evidence.TightenDomainBound(expression_get.expressions.size());
+			result.columns.back().TightenPopulationBound(expression_get.expressions.size());
 		}
 	}
 	result.Verify(expression_get.GetColumnBindings());
@@ -698,6 +763,7 @@ RelationStats RelationStatisticsHelper::ExtractColumnDataGetStats(LogicalColumnD
 		if (column_data_get.collection.get_owned_unique()) {
 			result.columns.back().semi_anti_join_domain_evidence.TightenDomainBound(
 			    column_data_get.collection->Count());
+			result.columns.back().TightenPopulationBound(column_data_get.collection->Count());
 		}
 	}
 	result.CapCurrentDomainsToCardinality();

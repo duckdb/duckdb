@@ -20,7 +20,7 @@ logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"200".*
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM input WHERE contains(s, '1') AND k != 0;
 ----
-logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"200".*
+logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"199".*
 
 # Broad integer interpolation still respects the other conjunct's fallback.
 query II

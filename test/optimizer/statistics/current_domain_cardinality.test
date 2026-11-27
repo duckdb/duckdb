@@ -29,12 +29,12 @@ SELECT k FROM current_domain_values WHERE k < 5 GROUP BY k;
 3
 4
 
-# Direct IN/OR bounds are combined before the single-key group estimate. Once an
-# IN list is expanded to OR predicates, repeated equalities are conservatively summed.
+# Finite selection deduplicates alternatives before the single-key group estimate,
+# including an IN list expanded to OR predicates.
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k IN (2, 4, 4, 8) GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~4 rows.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~3 rows.*
 
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k = 2 OR k = 8 GROUP BY k;

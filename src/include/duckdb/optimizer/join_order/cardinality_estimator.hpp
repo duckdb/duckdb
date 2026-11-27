@@ -19,11 +19,11 @@ namespace duckdb {
 class FilterInfo;
 class JoinPredicateModel;
 struct CardinalityEstimatorState;
-struct CompositeJoinPairStats;
-struct SelectivityState;
+struct EqualityComponent;
 struct FilterInfoWithTotalDomains;
-struct SelectivitySubgraph;
 struct LogicalJoinStats;
+
+enum class InnerEqualityView { STATISTICAL, DIRECT_VALUE };
 
 class CardinalityEstimator {
 public:
@@ -43,50 +43,30 @@ public:
 
 private:
 	optional_ptr<const LogicalJoinStats> FindBoundary(JoinRelationSet &set, optional_ptr<JoinRelationSet> &region);
-	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding);
+	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding,
+	                                            optional_ptr<const vector<EqualityComponent>> components = nullptr);
 	optional<RelationColumnStats> ProjectInputColumn(JoinRelationSet &set, ColumnBinding binding,
 	                                                 optional_ptr<const LogicalJoinStats> boundary,
 	                                                 optional_ptr<JoinRelationSet> region);
 	SemiAntiJoinCardinalityEstimate EstimateMembership(const LogicalJoinStats &boundary, JoinRelationSet &left,
 	                                                   JoinRelationSet &right, vector<SemiAntiJoinDomain> &domains);
+
 	void InitEquivalentRelations();
 	void UpdateTotalDomains(RelationIndex relation, const RelationStats &stats, const join_column_sources_t &sources);
-	void RestrictFilterDomains(const vector<RelationStats> &relation_stats);
 	bool IsFilterApplicable(const FilterInfo &filter, JoinRelationSet &set) const;
 	CardinalityValue GetNumerator(JoinRelationSet &set);
+	vector<pair<ColumnBinding, ColumnBinding>> GetInnerEqualities(JoinRelationSet &set, InnerEqualityView view) const;
+	bool PreservesSupport(JoinRelationSet &set, idx_t relation);
 	CardinalityValue GetInnerSelectivity(JoinRelationSet &set);
 	CardinalityValue GetJoinSelectivity(JoinRelationSet &set, JoinRelationSet &left, JoinRelationSet &right);
 	CardinalityValue GetSelectivity(JoinRelationSet &set);
-	void ProcessSelectivityEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
-	                            SelectivityState &state);
-	void CreateSelectivitySubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,
-	                               JoinRelationSet &edge_right_set, SelectivityState &state);
-	void ExtendSelectivitySubgraph(idx_t subgraph_index, FilterInfoWithTotalDomains &edge,
-	                               JoinRelationSet &edge_left_set, JoinRelationSet &edge_right_set,
-	                               bool can_increment_existing_join, SelectivityState &state);
-	void MergeSelectivitySubgraphs(const vector<idx_t> &subgraph_connections, FilterInfoWithTotalDomains &edge,
-	                               SelectivityState &state);
-	void MergeDisconnectedSelectivitySubgraphs(SelectivityState &state);
 	bool SingleColumnFilter(const FilterInfo &filter_info);
 
 	//! Selectivity calculation
 	CardinalityValue CalculateInnerJoinSelectivity(CardinalityValue base_selectivity,
 	                                               FilterInfoWithTotalDomains &filter);
-	CardinalityValue GetLeftJoinSelectivity(const JoinOrderOperator &join_operator);
-	bool ApplyJoinIncrement(CardinalityValue &target_selectivity, FilterInfoWithTotalDomains &edge,
-	                        reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                        reference_set_t<JoinRelationSet> &capped_join_pairs, JoinRelationSet &scope,
-	                        optional_ptr<JoinRelationSet> join_pair = nullptr);
-	bool ApplyJoinPairCap(CardinalityValue &target_selectivity, JoinRelationSet &join_pair,
-	                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                      reference_set_t<JoinRelationSet> &capped_join_pairs);
-	bool ApplyCompositeJoinPairCaps(CardinalityValue &target_selectivity, JoinRelationSet &scope,
-	                                reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                                reference_set_t<JoinRelationSet> &capped_join_pairs);
-	CardinalityValue GetJoinPairCap(JoinRelationSet &join_pair);
-	//! The number of key combinations of a join pair whose equalities cover a unique key of one of its relations,
-	//! or 0 if they cover neither relation's key.
-	CardinalityValue GetUniqueJoinPairDomain(JoinRelationSet &join_pair);
+	CardinalityValue GetLeftJoinSelectivity(const JoinOrderOperator &join_operator, JoinRelationSet &left,
+	                                        JoinRelationSet &right);
 
 	void AddRelationStats(const FilterInfo &filter_info);
 	bool EmptyFilter(const FilterInfo &filter_info);

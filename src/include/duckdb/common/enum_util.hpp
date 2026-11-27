@@ -218,8 +218,6 @@ enum class DestroyBufferUpon : uint8_t;
 
 enum class DialectCompatibilityMode : uint8_t;
 
-enum class DistinctCountSource : uint8_t;
-
 enum class DistinctType : uint8_t;
 
 enum class DistinctnessPropagation : uint8_t;
@@ -339,8 +337,6 @@ enum class IntegerRounding : uint8_t;
 enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
-
-enum class JoinOrderOperatorType : uint8_t;
 
 enum class JoinRefType : uint8_t;
 
@@ -1011,9 +1007,6 @@ template<>
 const char* EnumUtil::ToChars<DialectCompatibilityMode>(DialectCompatibilityMode value);
 
 template<>
-const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
-
-template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
@@ -1192,9 +1185,6 @@ const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
 const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
-
-template<>
-const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value);
 
 template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
@@ -2059,9 +2049,6 @@ template<>
 DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const char *value);
 
 template<>
-DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
-
-template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -2240,9 +2227,6 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
-
-template<>
-JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value);
 
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
