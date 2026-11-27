@@ -122,7 +122,7 @@ bool RelationManager::RegisterRelation(LogicalOperator &op, optional_ptr<Logical
 	auto &unique_sets = distinctness.GetUniqueSets(op);
 	auto &unique_keys = relation->stats.unique_keys;
 	unique_keys.clear();
-	unique_keys.reserve(MinValue(unique_sets.size(), Distinctness::MAX_UNIQUE_SETS));
+	unique_keys.reserve(MinValue<idx_t>(unique_sets.size(), Distinctness::MAX_UNIQUE_SETS));
 	for (auto &bindings : unique_sets) {
 		vector<idx_t> key;
 		key.reserve(bindings.size());
