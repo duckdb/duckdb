@@ -21,7 +21,7 @@ public:
 	}
 
 public:
-	//! Initialize the ART builder by passing a reference to the root node.
+	//! Initialize the ART builder with the root, which the first entry writes into.
 	void Init(NodePtr &node_ptr, const idx_t end) {
 		root_ptr = node_ptr;
 		s.emplace(NodePtr(), 0, 0, end, 0);
