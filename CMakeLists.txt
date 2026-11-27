@@ -1144,7 +1144,6 @@ if(NOT EXTENSION_CONFIG_BUILD)
   include_directories(third_party/fsst)
   include_directories(third_party/fmt/include)
   include_directories(third_party/hyperloglog)
-  include_directories(third_party/fastpforlib)
   include_directories(third_party/skiplist)
   include_directories(third_party/ska_sort)
   include_directories(third_party/fast_float)
@@ -1380,7 +1379,6 @@ if(PREBUILT_BINARY)
 
   foreach(
     DUCKDB_PREBUILT_THIRD_PARTY
-    fastpforlib
     fmt
     fsst
     hyperloglog
@@ -1410,7 +1408,6 @@ if(NOT EXTENSION_CONFIG_BUILD)
   if(PREBUILT_BINARY)
     message(STATUS "Prebuilt DuckDB helper libraries are built on demand")
   else()
-    add_third_party(fastpforlib)
     add_third_party(fmt)
     add_third_party(fsst)
     add_third_party(hyperloglog)

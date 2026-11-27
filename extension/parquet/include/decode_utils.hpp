@@ -101,49 +101,8 @@ public:
 			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 
-		if constexpr (std::is_unsigned<T>::value && (sizeof(T) == 4 || sizeof(T) == 8)) {
-			if (count >= 128) {
-				if (cast_pointer_to_uint64(src.GetCurrentLoc()) % sizeof(uint32_t) == 0) {
-					BitpackingPrimitives::UnPackBufferWithFrame<T>(data_ptr_cast(dst), src.GetCurrentLoc(), count,
-					                                               width, 0);
-					src.UnsafeInc(count * width / BITPACK_DLEN);
-					return;
-				}
-				T aligned_data[1024];
-				for (idx_t i = 0; i < count; i += 1024) {
-					const auto batch_count = MinValue<idx_t>(count - i, 1024);
-					const auto read_size = batch_count * width / BITPACK_DLEN;
-					memcpy(aligned_data, src.GetCurrentLoc(), read_size);
-					BitpackingPrimitives::UnPackBufferWithFrame<T>(data_ptr_cast(dst + i), data_ptr_cast(aligned_data),
-					                                               batch_count, width, 0);
-					src.UnsafeInc(read_size);
-				}
-				return;
-			}
-		}
-
-		if (cast_pointer_to_uint64(src.GetCurrentLoc()) % sizeof(T) == 0) {
-			// Fast path: aligned
-			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.GetCurrentLoc(), count, width);
-			src.UnsafeInc(count * width / BITPACK_DLEN);
-			return;
-		}
-
-		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
-			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / BITPACK_DLEN;
-
-			// Buffer for alignment
-			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-
-			// Copy over to aligned buffer
-			memcpy(aligned_data, src.GetCurrentLoc(), next_read);
-
-			// Unpack
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);
-
-			src.UnsafeInc(next_read);
-			dst += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		}
+		BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.GetCurrentLoc(), count, width);
+		src.UnsafeInc(count * width / BITPACK_DLEN);
 	}
 
 	template <class T>
