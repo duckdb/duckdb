@@ -34,6 +34,7 @@ set(TEST_API_OBJECTS
     test_nested_schema_capability.cpp
     test_remote_pushdown_macro_arguments.cpp
     test_remote_pushdown_merge.cpp
+    test_delete_returning_virtual_columns.cpp
     test_os_util.cpp
     test_compression_select.cpp
     test_dictionary_filter_cache.cpp
