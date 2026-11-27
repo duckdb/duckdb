@@ -1,0 +1,44 @@
+diff --git a/src/sqlite_db.cpp b/src/sqlite_db.cpp
+index 18471fd..57ebc71 100644
+--- a/src/sqlite_db.cpp
++++ b/src/sqlite_db.cpp
+@@ -210,7 +210,7 @@ void SQLiteDB::VerifyCanAccessLocalFile(ClientContext &context, const string &pa
+ 		return;
+ 	}
+ 	// native SQLite opens local files itself, so check the file access settings of DuckDB here
+-	if (!DBConfig::GetConfig(context).CanAccessFile(path, FileType::FILE_TYPE_REGULAR)) {
++	if (!DBConfig::GetConfig(context).CanAccessFile(context.GetContext(), path, FileType::FILE_TYPE_REGULAR)) {
+ 		throw PermissionException("Cannot access file \"%s\" - file system operations are disabled by configuration",
+ 		                          path);
+ 	}
+diff --git a/src/sqlite_duckdb_vfs_cache.cpp b/src/sqlite_duckdb_vfs_cache.cpp
+index 86829f9..e60944b 100644
+--- a/src/sqlite_duckdb_vfs_cache.cpp
++++ b/src/sqlite_duckdb_vfs_cache.cpp
+@@ -371,7 +371,7 @@ void DuckDBCachedFile::InitializeFromRemote() {
+ 	// context's OpenerFileSystem, whose OpenFile throws PermissionException before any network I/O
+ 	// when the path is not permitted. The VFS adds no bypass; it must open via the context filesystem
+ 	// (no explicit opener) so that gate always applies.
+-	auto new_handle = new_fs->OpenFile(file_info, flags);
++	auto new_handle = new_fs->OpenFile(context.GetContext(), file_info, flags);
+ 	// Fetch the size once: the remote file is read-only and immutable, so this avoids a per-read size
+ 	// lookup that could otherwise cost an HTTP round trip.
+ 	const auto size = static_cast<sqlite3_int64>(new_handle->GetFileSize());
+@@ -393,7 +393,7 @@ void DuckDBCachedFile::InitializeFromRemote() {
+ 			const string wal_path = BuildSidecarUrl(path, "-wal");
+ 			idx_t wal_size = 0;
+ 			try {
+-				wal_size = new_fs->OpenFile(OpenFileInfo(wal_path), flags)->GetFileSize();
++				wal_size = new_fs->OpenFile(context.GetContext(), OpenFileInfo(wal_path), flags)->GetFileSize();
+ 			} catch (const std::exception &e) {
+ 				if (!SidecarConfirmedAbsent(e)) {
+ 					throw IOException(
+@@ -420,7 +420,7 @@ void DuckDBCachedFile::InitializeFromRemote() {
+ 			const string journal_path = BuildSidecarUrl(path, "-journal");
+ 			bool hot_journal = false;
+ 			try {
+-				auto journal_handle = new_fs->OpenFile(OpenFileInfo(journal_path), flags);
++				auto journal_handle = new_fs->OpenFile(context.GetContext(), OpenFileInfo(journal_path), flags);
+ 				if (journal_handle->GetFileSize() > 0) {
+ 					data_t first = 0;
+ 					journal_handle->Read(1, 0).CopyTo(data_ptr_cast(&first), 1);
