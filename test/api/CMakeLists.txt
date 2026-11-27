@@ -85,6 +85,7 @@ set(TEST_API_OBJECTS
     test_detach_held_reference.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
+    test_parser_error_annotation.cpp
     test_dialect_extension.cpp
     test_query_node_copy.cpp
     test_statement_tostring.cpp
