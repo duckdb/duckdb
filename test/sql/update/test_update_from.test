@@ -157,3 +157,33 @@ select * from docs;
 ----
 1	1
 2	3
+
+# a row matched more than once takes all of its columns from the same match
+statement ok
+CREATE TABLE multi (a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO multi VALUES (-1, -1);
+
+statement ok
+UPDATE multi SET a = i, b = CASE WHEN i % 2 = 0 THEN i END FROM range(32) s(i);
+
+query I
+SELECT count(*) FROM multi WHERE a BETWEEN 0 AND 31 AND b IS NOT DISTINCT FROM CASE WHEN a % 2 = 0 THEN a END
+----
+1
+
+# an in-place update checks the constraints of every match, also of the matches it does not write
+statement ok
+CREATE TABLE checked (id INTEGER, v INTEGER CHECK (v > 0));
+
+statement ok
+INSERT INTO checked VALUES (1, 1), (2, 1);
+
+statement ok
+CREATE TABLE checked_src AS SELECT * FROM (VALUES (2, 5), (1, -1), (1, 5)) t(id, v);
+
+statement error
+UPDATE checked SET v = checked_src.v FROM checked_src WHERE checked.id = checked_src.id
+----
+CHECK constraint failed on table "checked" with expression CHECK((v > 0))

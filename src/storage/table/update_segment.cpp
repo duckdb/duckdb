@@ -1480,7 +1480,9 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	for (idx_t i = 0; i < count; i++) {
 		sorted_sel.set_index(i, sel.get_index(i));
 	}
-	std::sort(sorted_sel.data(), sorted_sel.data() + count, [&](sel_t l, sel_t r) { return ids[l] < ids[r]; });
+	// every column keeps the last entry of a repeated row id, so a row never mixes values of different entries
+	std::sort(sorted_sel.data(), sorted_sel.data() + count,
+	          [&](sel_t l, sel_t r) { return ids[l] == ids[r] ? l > r : ids[l] < ids[r]; });
 	// eliminate any duplicates
 	idx_t pos = 1;
 	for (idx_t i = 1; i < count; i++) {
