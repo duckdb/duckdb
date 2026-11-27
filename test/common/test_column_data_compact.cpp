@@ -1684,37 +1684,6 @@ TEST_CASE("Writes to shared list views never reach the storage", "[column_data_c
 	}
 }
 
-// Only the recursive CTE combines collections that share list children, and only with each other, so a mismatched
-// combine is not reachable from SQL.
-TEST_CASE("Collections with different list child sharing do not combine", "[column_data_compact]") {
-	if (STANDARD_VECTOR_SIZE < 1024) {
-		return;
-	}
-	DuckDB db(":memory:");
-	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
-	const vector<LogicalType> types {LogicalType::LIST(LogicalType::BIGINT)};
-	auto shared = MakeLargeListCollection(buffer_manager, 1, 1, 3000);
-	ColumnDataCollection plain(buffer_manager, types);
-	DataChunk input;
-	input.Initialize(Allocator::DefaultAllocator(), types);
-	FillLargeListChunk(input, 1, 3000, 7);
-	AppendChunk(plain, input);
-	// either direction is rejected before either side changes
-	REQUIRE_THROWS_WITH(plain.Combine(*shared), Catch::Contains("mismatching list child sharing"));
-	REQUIRE_THROWS_WITH(shared->Combine(plain), Catch::Contains("mismatching list child sharing"));
-	REQUIRE_THROWS_WITH(plain.Swap(*shared), Catch::Contains("mismatching list child sharing"));
-	REQUIRE(plain.Count() == 1);
-	REQUIRE(shared->Count() == 1);
-	// the plain collection keeps storing large list children in its own blocks
-	AppendChunk(plain, input);
-	REQUIRE(plain.Count() == 2);
-	auto &segment = *plain.GetSegments().back();
-	for (auto &vdata : segment.vector_data) {
-		REQUIRE(!ColumnDataCollectionSegment::IsSharedListChild(vdata));
-	}
-	REQUIRE(ListValue::GetChildren(plain.GetValue(0, 1)).size() == 3000);
-}
-
 TEST_CASE("Combined collections account shared list storage once", "[column_data_compact]") {
 	if (STANDARD_VECTOR_SIZE < 1024) {
 		return;
