@@ -52,3 +52,37 @@ statement error
 FROM read_csv('{TEST_DIR}/invalid_latin1.csv', encoding = 'latin-1')
 ----
 File is not latin-1 encoded
+
+# built-in encoding aliases (utf8, utf_8, utf16, utf_16, latin1, latin_1)
+statement ok
+COPY (SELECT 'abcdefghijklm☃' AS value) TO '{TEST_DIR}/utf8_valid.csv' (HEADER true)
+
+foreach enc utf8 utf_8 UTF8 UTF_8
+
+query I
+SELECT value
+FROM read_csv('{TEST_DIR}/utf8_valid.csv', encoding = '{enc}')
+----
+abcdefghijklm☃
+
+endloop
+
+foreach enc utf16 utf_16 UTF16 UTF_16
+
+query I
+SELECT value
+FROM read_csv('{TEST_DIR}/utf16_boundary.csv', encoding = '{enc}')
+----
+abcdefghijklm☃
+
+endloop
+
+foreach enc latin1 latin_1 LATIN1 LATIN_1
+
+query I
+SELECT value
+FROM read_csv('{TEST_DIR}/latin1_boundary.csv', encoding = '{enc}')
+----
+abcdefghijklmnopé
+
+endloop

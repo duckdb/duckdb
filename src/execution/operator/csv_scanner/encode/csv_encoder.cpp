@@ -45,7 +45,8 @@ void CSVEncoderBuffer::Reset() {
 CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_find, idx_t buffer_size)
     : context(context_p), pass_on_byte(0) {
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
-	if (encoding_name == "utf-8") {
+	if (EncodingFunction::IsUTF8(encoding_name)) {
+		encoding_name = "utf-8";
 		// UTF-8 is read straight into the CSV buffers (see CSVFileHandle::Read), the encoder buffers are never used
 		return;
 	}

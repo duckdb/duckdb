@@ -271,19 +271,37 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	encode_t utf16_be_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
 		EncodeUTF8ToUTF16<true>(input, input_size, output, written);
 	};
-	auto utf16 = EncodingFunction::Create("utf-16", utf16_decode, utf16_le_encode, 4, 2);
-	// A stream is decoded with a fixed byte order, picked by the byte order mark at its start
-	auto byte_order_marks = Value::LIST({ByteOrderMark("\xFE\xFF", "utf-16be"), ByteOrderMark("", "utf-16le")});
-	utf16.ApplyToFunctions([&](ScalarFunction &function) {
-		function.GetProperties().SetProperty(EncodingFunction::BYTE_ORDER_MARKS_PROPERTY, byte_order_marks);
-	});
-	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2), utf16,
-	                  EncodingFunction::Create("utf-16le", utf16_le_decode, utf16_le_encode, 4, 2),
-	                  EncodingFunction::Create("utf-16be", utf16_be_decode, utf16_be_encode, 4, 2)}) {
-		CreateScalarFunctionInfo info(set);
+	auto register_encoding = [&](ScalarFunctionSet set, bool is_alias) {
+		if (is_alias) {
+			set.ApplyToFunctions([](ScalarFunction &function) {
+				function.GetProperties().SetProperty(EncodingFunction::IS_ALIAS_PROPERTY, Value::BOOLEAN(true));
+			});
+		}
+		CreateScalarFunctionInfo info(std::move(set));
 		EncodingFunction::SetSchema(info);
 		info.internal = true;
 		catalog.CreateFunction(transaction, info);
+	};
+	for (const char *name : {"latin-1", "latin1", "latin_1"}) {
+		register_encoding(EncodingFunction::Create(name, latin1_decode, latin1_encode, 1, 2),
+		                  !StringUtil::Equals(name, "latin-1"));
+	}
+	// A stream is decoded with a fixed byte order, picked by the byte order mark at its start
+	auto byte_order_marks = Value::LIST({ByteOrderMark("\xFE\xFF", "utf-16be"), ByteOrderMark("", "utf-16le")});
+	for (const char *name : {"utf-16", "utf16", "utf_16"}) {
+		auto utf16 = EncodingFunction::Create(name, utf16_decode, utf16_le_encode, 4, 2);
+		utf16.ApplyToFunctions([&](ScalarFunction &function) {
+			function.GetProperties().SetProperty(EncodingFunction::BYTE_ORDER_MARKS_PROPERTY, byte_order_marks);
+		});
+		register_encoding(std::move(utf16), !StringUtil::Equals(name, "utf-16"));
+	}
+	for (const char *name : {"utf-16le", "utf16le", "utf_16_le", "utf-16-le"}) {
+		register_encoding(EncodingFunction::Create(name, utf16_le_decode, utf16_le_encode, 4, 2),
+		                  !StringUtil::Equals(name, "utf-16le"));
+	}
+	for (const char *name : {"utf-16be", "utf16be", "utf_16_be", "utf-16-be"}) {
+		register_encoding(EncodingFunction::Create(name, utf16_be_decode, utf16_be_encode, 4, 2),
+		                  !StringUtil::Equals(name, "utf-16be"));
 	}
 }
 
