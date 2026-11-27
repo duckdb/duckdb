@@ -156,7 +156,9 @@ public:
 
 			// status is GATE_SET, if we've passed a gate in the previous iteration.
 			// In that case, we have not adjusted the reference.
-			if (status == GateStatus::GATE_NOT_SET && active_node_ptr.GetGateStatus() == GateStatus::GATE_SET) {
+			// v1.1 could write inlined leaves with a gate. Ignore it.
+			if (status == GateStatus::GATE_NOT_SET && active_node_ptr.GetGateStatus() == GateStatus::GATE_SET &&
+			    active_node_ptr.GetType() != NType::LEAF_INLINED) {
 				if (!art.IsUnique()) {
 					// Enter a gate.
 					active_key_ref = row_id;
@@ -286,7 +288,9 @@ public:
 
 		while (current.Get().HasMetadata()) {
 			// Enter gate.
-			if (status == GateStatus::GATE_NOT_SET && current.Get().GetGateStatus() == GateStatus::GATE_SET) {
+			// v1.1 could write inlined leaves with a gate. Ignore it.
+			if (status == GateStatus::GATE_NOT_SET && current.Get().GetGateStatus() == GateStatus::GATE_SET &&
+			    current.Get().GetType() != NType::LEAF_INLINED) {
 				status = GateStatus::GATE_SET;
 				current_key_ref = row_id;
 				depth = 0;
