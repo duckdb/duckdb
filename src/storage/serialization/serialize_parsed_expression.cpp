@@ -294,7 +294,7 @@ void SubqueryExpression::Serialize(Serializer &serializer) const {
 unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SubqueryExpression>(new SubqueryExpression());
 	deserializer.ReadProperty<SubqueryType>(200, "subquery_type", result->subquery_type);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(201, "subquery", result->subquery);
+	result->subquery = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(201, "subquery"));
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "child", result->child);
 	deserializer.ReadProperty<ExpressionType>(203, "comparison_type", result->comparison_type);
 	return std::move(result);

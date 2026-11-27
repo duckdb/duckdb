@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement {
 public:
@@ -46,6 +49,9 @@ public:
 	virtual string ToString() const = 0;
 	//! Create a copy of this SelectStatement
 	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;
+
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<SQLStatement> Deserialize(Deserializer &deserializer);
 
 public:
 public:

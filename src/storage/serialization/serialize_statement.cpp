@@ -5,12 +5,66 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
+
+void SQLStatement::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<StatementType>(50, "type", type, StatementType::SELECT_STATEMENT);
+}
+
+unique_ptr<SQLStatement> SQLStatement::Deserialize(Deserializer &deserializer) {
+	auto type = deserializer.ReadPropertyWithExplicitDefault<StatementType>(50, "type", StatementType::SELECT_STATEMENT);
+	unique_ptr<SQLStatement> result;
+	switch (type) {
+	case StatementType::DELETE_STATEMENT:
+		result = DeleteStatement::Deserialize(deserializer);
+		break;
+	case StatementType::INSERT_STATEMENT:
+		result = InsertStatement::Deserialize(deserializer);
+		break;
+	case StatementType::SELECT_STATEMENT:
+		result = SelectStatement::Deserialize(deserializer);
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		result = UpdateStatement::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of SQLStatement!");
+	}
+	return result;
+}
+
+void DeleteStatement::Serialize(Serializer &serializer) const {
+	SQLStatement::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<DeleteQueryNode>>(100, "node", node);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", named_param_map);
+}
+
+unique_ptr<SQLStatement> DeleteStatement::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<DeleteStatement>(new DeleteStatement());
+	result->node = unique_ptr_cast<QueryNode, DeleteQueryNode>(deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node"));
+	deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
+	return std::move(result);
+}
+
+void InsertStatement::Serialize(Serializer &serializer) const {
+	SQLStatement::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<InsertQueryNode>>(100, "node", node);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", named_param_map);
+}
+
+unique_ptr<SQLStatement> InsertStatement::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<InsertStatement>(new InsertStatement());
+	result->node = unique_ptr_cast<QueryNode, InsertQueryNode>(deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node"));
+	deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
+	return std::move(result);
+}
 
 void MergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MergeActionType>(100, "action_type", action_type);
@@ -53,15 +107,16 @@ unique_ptr<OnConflictInfo> OnConflictInfo::Deserialize(Deserializer &deserialize
 }
 
 void SelectStatement::Serialize(Serializer &serializer) const {
+	SQLStatement::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
 	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", named_param_map);
 }
 
-unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deserializer) {
+unique_ptr<SQLStatement> SelectStatement::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node", result->node);
 	deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
-	return result;
+	return std::move(result);
 }
 
 void UpdateSetInfo::Serialize(Serializer &serializer) const {
@@ -76,6 +131,19 @@ unique_ptr<UpdateSetInfo> UpdateSetInfo::Deserialize(Deserializer &deserializer)
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(101, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "expressions", result->expressions);
 	return result;
+}
+
+void UpdateStatement::Serialize(Serializer &serializer) const {
+	SQLStatement::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<UpdateQueryNode>>(100, "node", node);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", named_param_map);
+}
+
+unique_ptr<SQLStatement> UpdateStatement::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<UpdateStatement>(new UpdateStatement());
+	result->node = unique_ptr_cast<QueryNode, UpdateQueryNode>(deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node"));
+	deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
+	return std::move(result);
 }
 
 } // namespace duckdb

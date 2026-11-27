@@ -293,7 +293,8 @@
       {
         "id": 200,
         "name": "select_statement",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "base": "SQLStatement"
       },
       {
         "id": 201,

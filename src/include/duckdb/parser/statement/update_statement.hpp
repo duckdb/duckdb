@@ -61,6 +61,9 @@ protected:
 public:
 	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<SQLStatement> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

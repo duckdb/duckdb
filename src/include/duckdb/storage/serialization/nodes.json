@@ -15,6 +15,7 @@
         "id": 101,
         "name": "query",
         "type": "SelectStatement*",
+        "base": "SQLStatement",
         "version": "v2.0.0",
         "status": "read_only",
         "serialize_property": "GetQueryForSerialization(serializer)"

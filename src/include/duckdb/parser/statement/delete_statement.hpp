@@ -15,6 +15,8 @@
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
 
 class DeleteStatement : public SQLStatement {
 public:
@@ -31,6 +33,9 @@ protected:
 public:
 	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<SQLStatement> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

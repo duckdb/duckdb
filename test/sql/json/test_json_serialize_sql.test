@@ -161,12 +161,12 @@ SELECT * FROM json_execute_serialized_sql(json_serialize_sql('WITH a(i) as (SELE
 statement error
 SELECT json_deserialize_sql('{ "statements": [ {"expression_class": "BOUND_COMPARISON"}]}');
 ----
-Parser Error: Error parsing json: no select node found in json
+Parser Error: Error parsing json: no query node found in json
 
 statement error
 SELECT * FROM json_execute_serialized_sql('{ "statements": [ {"expression_class": "BOUND_COMPARISON"}]}');
 ----
-Parser Error: Error parsing json: no select node found in json
+Parser Error: Error parsing json: no query node found in json
 
 # Deserialization reports missing properties and container/type mismatches
 statement error
