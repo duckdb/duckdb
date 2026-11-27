@@ -15,5 +15,4 @@ EXPLAIN (FORMAT JSON)
 SELECT count(DISTINCT x) FILTER (WHERE keep)
 FROM distinct_ungrouped_filter;
 ----
-logical_opt	<REGEX>:.*"name":\s*"FILTER".*"Groups":\s*"x".*"Expressions":\s*"count_star\(\)".*
-
+logical_opt	<REGEX>:.*"Filters":\s*"keep".*"Groups":\s*"x".*"Expressions":\s*"count_star\(\)".*

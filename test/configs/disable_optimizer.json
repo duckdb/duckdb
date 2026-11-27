@@ -29,9 +29,10 @@
       ]
     },
     {
-      "reason": "Checks that an ungrouped DISTINCT FILTER is placed below deduplication.",
+      "reason": "Checks input-filter extraction and placement for ungrouped aggregates.",
       "paths": [
-        "test/sql/aggregate/distinct/rewrite/distinct_ungrouped_filter_plan.test"
+        "test/sql/aggregate/distinct/rewrite/distinct_ungrouped_filter_plan.test",
+        "test/sql/optimizer/aggregate_filter_pushdown_plan.test"
       ]
     },
     {

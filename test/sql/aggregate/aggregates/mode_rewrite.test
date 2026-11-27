@@ -202,13 +202,33 @@ CREATE TABLE mode_rewrite_errors(value VARCHAR, keep BOOLEAN);
 statement ok
 INSERT INTO mode_rewrite_errors VALUES ('bad', false), ('1', true);
 
-# FILTER does not suppress evaluation errors in aggregate arguments
+# Mandatory lowering preserves eager argument evaluation without filter pushdown.
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
 statement error
 SELECT mode(value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
 ----
 <REGEX>:Conversion Error:.*
 
-# FILTER does not suppress evaluation errors in aggregate ordering
+# The same applies to aggregate ordering.
+statement error
+SELECT mode(value ORDER BY value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
+----
+<REGEX>:Conversion Error:.*
+
+statement ok
+RESET disabled_optimizers;
+
+# Invalid values on required input must still fail with filter pushdown enabled.
+statement ok
+UPDATE mode_rewrite_errors SET keep = true WHERE value = 'bad';
+
+statement error
+SELECT mode(value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
+----
+<REGEX>:Conversion Error:.*
+
 statement error
 SELECT mode(value ORDER BY value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
 ----

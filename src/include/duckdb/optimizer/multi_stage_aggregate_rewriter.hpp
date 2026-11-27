@@ -28,6 +28,7 @@ public:
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 	bool WasChanged() const;
+	bool HasNewFilters() const;
 
 private:
 	bool TryRewrite(unique_ptr<LogicalOperator> &op);
@@ -40,6 +41,7 @@ private:
 	bool rewrite_distinct;
 	optional_ptr<const column_binding_map_t<unique_ptr<BaseStatistics>>> statistics;
 	bool changed = false;
+	bool has_new_filters = false;
 	column_binding_map_t<ColumnBinding> replacement_map;
 };
 

@@ -292,9 +292,9 @@ TEST_CASE("Full checkpoint defers remapped collections under vacuum exclusion", 
 		CheckpointReleaseGuard release_guard {database};
 		database.StartCheckpoint(fail_checkpoint, "CHECKPOINT data");
 
-		// A table scan still sees the old layout. The filter inside SUM does not request an index probe.
+		// A table scan still sees the old layout; the CASE condition cannot become an index probe.
 		REQUIRE_NO_FAIL(con.Query("BEGIN"));
-		RequireScalar(con, "SELECT sum(rowid) FILTER (WHERE k=2048) FROM a", 2048);
+		RequireScalar(con, "SELECT sum(CASE WHEN k=2048 THEN rowid END) FROM a", 2048);
 		auto &attached = Catalog::GetCatalog(*con.context, "data").GetAttached();
 		auto &transaction_manager = DuckTransactionManager::Get(attached);
 		REQUIRE(!transaction_manager.TryGetVacuumLock());

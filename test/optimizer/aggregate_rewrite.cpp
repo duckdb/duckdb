@@ -6,12 +6,15 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
 
@@ -184,4 +187,33 @@ TEST_CASE("Aggregate rewrite policies own strategy selection", "[optimizer][aggr
 	REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() == 3);
 	REQUIRE(cost_calls == 0);
 	REQUIRE(rewrite_calls == 0);
+}
+
+TEST_CASE("Aggregate rewriting requests pushdown only for new input filters", "[optimizer][aggregate_rewrite]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	string sql;
+	bool expect_filter = false;
+	SECTION("Unfiltered DISTINCT") {
+		sql = "SELECT count(DISTINCT i) FROM range(10) t(i)";
+	}
+	SECTION("Filtered branches") {
+		sql = "SELECT count(DISTINCT i) FILTER (WHERE i < 3), sum(i) FILTER (WHERE i > 7) "
+		      "FROM range(10) t(i)";
+		expect_filter = true;
+	}
+	SECTION("Grouped aggregates retain their filters") {
+		sql = "SELECT count(DISTINCT i) FILTER (WHERE i < 3) FROM range(10) t(i) GROUP BY i % 2";
+	}
+	con.context->RunFunctionInTransaction([&]() {
+		Parser parser(*con.context);
+		parser.ParseQuery(sql);
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		Optimizer optimizer(*planner.binder, *con.context);
+		MultiStageAggregateRewriter rewriter(optimizer, AggregateRewritePolicy::UNCONDITIONAL, true);
+		rewriter.VisitOperator(planner.plan);
+		REQUIRE(rewriter.WasChanged());
+		REQUIRE(rewriter.HasNewFilters() == expect_filter);
+	});
 }

@@ -1,0 +1,173 @@
+# name: test/sql/optimizer/aggregate_filter_pushdown_plan.test
+# description: Input-filter extraction for regular and multi-stage aggregates
+# group: [optimizer]
+
+statement ok
+CREATE TABLE aggregate_filter_plans AS
+	SELECT i AS x, i % 17 AS y, i % 100 = 0 AS p, i % 100 = 1 AS q
+	FROM range(10000) t(i);
+
+statement ok
+SET explain_output='optimized_only';
+
+# A shared predicate moves to the scan and is removed from the aggregates.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p), count(*) FILTER (WHERE p)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"p".*"Groups":\s*"",\s*"Expressions":\s*\[\s*"sum_no_overflow\(x\)",\s*"count_star\(\)"\s*\].*
+
+# A throwing source projection does not itself prevent filtering its output.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p)
+FROM (SELECT x::INTEGER AS x, p FROM aggregate_filter_plans) t;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"p".*"Groups":\s*"",\s*"Expressions":\s*"sum_no_overflow\(x\)".*
+
+# Avoid an extra multi-column OR that cannot be fully applied by a scan.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p), sum(x) FILTER (WHERE q), count(*) FILTER (WHERE p)
+FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*("name":\s*"FILTER"|"Filters":\s*"[^"]+").*
+
+# Single-column disjunctions prune row groups; the aggregate filters remain.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE x < 10), count(*) FILTER (WHERE x > 9990)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"optional: [^"]*OR[^"]*".*"Groups":\s*"",\s*"Expressions":[^}]*FILTER \(WHERE.*
+
+# Factoring the new OR exposes the common predicate below the join.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(l.x) FILTER (WHERE l.p AND r.x = 10),
+       sum(l.x) FILTER (WHERE l.p AND r.x = 20)
+FROM aggregate_filter_plans l JOIN aggregate_filter_plans r ON l.y = r.y;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"name":\s*"SEQ_SCAN".*"Filters":\s*"p".*
+
+# Keep the common predicate even when the residual OR references two columns.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p AND x < 10), count(*) FILTER (WHERE p AND y < 5)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"p".*"Groups":\s*"",\s*"Expressions":[^}]*FILTER \(WHERE.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p AND x < 10), count(*) FILTER (WHERE p AND y < 5)
+FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*"name":\s*"FILTER".*
+
+# Optional-only CTE consumers cannot justify pruning the shared producer.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT y) FILTER (WHERE p),
+       sum(x) FILTER (WHERE x < 10), count(*) FILTER (WHERE x > 9990)
+FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*"Filters":\s*"[^"]+".*
+
+# Retain an optional filter through optimization when the source cannot consume it.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE x < 2), sum(x) FILTER (WHERE x > 3)
+FROM (SELECT i + 1 AS x, i % 2 AS unused FROM range(6) t(i)) t;
+----
+logical_opt	<REGEX>:.*__internal_tablefilter_optional.*
+
+statement ok
+SET explain_output='physical_only';
+
+# Such a filter has no row-evaluation role and is removed during physical planning.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE x < 2), sum(x) FILTER (WHERE x > 3)
+FROM (SELECT i + 1 AS x, i % 2 AS unused FROM range(6) t(i)) t;
+----
+physical_plan	<!REGEX>:.*"name":\s*"FILTER".*
+
+statement ok
+SET explain_output='optimized_only';
+
+# An unrestricted aggregate prevents a global prefilter.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(x) FILTER (WHERE p), count(*) FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*("name":\s*"FILTER"|"Filters":\s*"[^"]+").*
+
+# Separately filtered DISTINCT branches contribute an OR filter to the shared input.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT x) FILTER (WHERE p), sum(DISTINCT y) FILTER (WHERE q)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*\(p OR q\).*
+
+# The derived predicate does not duplicate an existing filter on the CTE producer.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT x) FILTER (WHERE p), sum(DISTINCT y) FILTER (WHERE q)
+FROM aggregate_filter_plans WHERE p OR q;
+----
+logical_opt	<!REGEX>:.*"Expressions":\s*\[\s*"\(p OR q\)",\s*"\(p OR q\)".*
+
+# The regular branch can remove its shared predicate after splitting off DISTINCT.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT x) FILTER (WHERE p), sum(y) FILTER (WHERE q), count(*) FILTER (WHERE q)
+FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*"Groups":\s*"",\s*"Expressions":[^}]*FILTER \(WHERE.*
+
+# Frequency recipes filter before grouping and do not keep a redundant predicate key.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT mode(x) FILTER (WHERE p), entropy(x) FILTER (WHERE p), histogram(x) FILTER (WHERE p)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"p".*"Groups":\s*"x",\s*"Expressions":\s*"count_star\(\)".*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT entropy(x) FILTER (WHERE p), histogram(x) FILTER (WHERE q)
+FROM aggregate_filter_plans;
+----
+logical_opt	<REGEX>:.*\(p OR q\).*
+
+# Grouped aggregates cannot discard groups rejected by all predicates.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT y, sum(x) FILTER (WHERE p), count(*) FILTER (WHERE p)
+FROM aggregate_filter_plans GROUP BY y;
+----
+logical_opt	<!REGEX>:.*("name":\s*"FILTER"|"Filters":\s*"[^"]+").*
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+# The named gate covers extraction during branch construction.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT x) FILTER (WHERE p), sum(x) FILTER (WHERE q)
+FROM aggregate_filter_plans;
+----
+logical_opt	<!REGEX>:.*("name":\s*"FILTER"|"Filters":\s*"[^"]+").*
+
+# It also covers the filter pushdown invoked internally by the CTE filter pusher.
+query II
+EXPLAIN (FORMAT JSON)
+WITH c AS MATERIALIZED (
+	SELECT sum(x) FILTER (WHERE p) AS s FROM aggregate_filter_plans
+)
+SELECT * FROM c WHERE s > 0;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"",\s*"Expressions":\s*"sum_no_overflow\(x\) FILTER \(WHERE p\)".*

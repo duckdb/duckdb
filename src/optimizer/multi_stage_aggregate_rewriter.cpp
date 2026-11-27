@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/aggregate_filter_extractor.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -44,12 +45,15 @@ struct DistinctAggregateSet {
 };
 
 struct AggregateRewriteSet {
-	AggregateRewriteSet(idx_t source_index, unique_ptr<AggregateRewritePlan> plan_p) : plan(std::move(plan_p)) {
+	AggregateRewriteSet(idx_t source_index, unique_ptr<AggregateRewritePlan> plan_p,
+	                    unique_ptr<Expression> input_filter_p)
+	    : plan(std::move(plan_p)), input_filter(std::move(input_filter_p)) {
 		aggregate_indices.push_back(source_index);
 		results.push_back(std::move(plan->result));
 	}
 
 	unique_ptr<AggregateRewritePlan> plan;
+	unique_ptr<Expression> input_filter;
 	vector<idx_t> aggregate_indices;
 	vector<unique_ptr<Expression>> results;
 };
@@ -184,27 +188,9 @@ static unique_ptr<LogicalOperator> CreateProjection(Optimizer &optimizer, unique
 	return std::move(projection);
 }
 
-static bool DistinctInputsCanThrow(const BoundAggregateExpression &aggregate) {
-	for (auto &child : aggregate.GetChildren()) {
-		if (child->CanThrow()) {
-			return true;
-		}
-	}
-	if (!aggregate.GetOrderBys()) {
-		return false;
-	}
-	for (auto &order : aggregate.GetOrderBys()->orders) {
-		if (order.expression->CanThrow()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate &aggr, const DistinctAggregateSet &set,
                                          unique_ptr<LogicalOperator> input,
-                                         const column_binding_map_t<ColumnBinding> &input_replacements,
-                                         bool input_has_volatile) {
+                                         const column_binding_map_t<ColumnBinding> &input_replacements) {
 	const idx_t group_count = aggr.groups.size();
 	auto &source_aggregate = aggr.expressions[set.source_index]->Cast<BoundAggregateExpression>();
 
@@ -243,14 +229,7 @@ static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate 
 		distinct_groups.push_back(AggregateRewriteHelper::CopyAndRebind(*order_expr, input_replacements));
 	}
 	optional_idx filter_column_offset;
-	if (source_aggregate.GetFilter() && group_count == 0 && !input_has_volatile &&
-	    !DistinctInputsCanThrow(source_aggregate)) {
-		// Ungrouped output is one row, so filter first unless that could skip volatile or throwing inputs.
-		auto filter = make_uniq<LogicalFilter>(
-		    AggregateRewriteHelper::CopyAndRebind(*source_aggregate.GetFilter(), input_replacements));
-		filter->AddChild(std::move(input));
-		input = std::move(filter);
-	} else if (source_aggregate.GetFilter()) {
+	if (source_aggregate.GetFilter()) {
 		// Keeping FILTER as a deduplication key preserves argument evaluation and groups with no qualifying rows.
 		filter_column_offset = distinct_groups.size();
 		distinct_groups.push_back(
@@ -323,8 +302,10 @@ static optional_idx FindExpression(const vector<unique_ptr<Expression>> &express
 	return optional_idx();
 }
 
-static bool TryMergeRewrite(AggregateRewriteSet &target, idx_t source_index, AggregateRewritePlan &candidate) {
-	if (target.plan->stages.size() != candidate.stages.size() || target.plan->result_stage != candidate.result_stage) {
+static bool TryMergeRewrite(AggregateRewriteSet &target, idx_t source_index, AggregateRewritePlan &candidate,
+                            const unique_ptr<Expression> &input_filter) {
+	if (target.plan->stages.size() != candidate.stages.size() || target.plan->result_stage != candidate.result_stage ||
+	    !Expression::Equals(target.input_filter, input_filter)) {
 		return false;
 	}
 
@@ -748,6 +729,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 	}
 
 	AggregateRewriteHelper::StageVolatileAggregateInputs(optimizer, aggr, op->children[0]);
+	AggregateFilterExtractor filter_extractor(optimizer, aggr);
 
 	vector<DistinctAggregateSet> distinct_sets;
 	vector<AggregateRewriteSet> rewrite_sets;
@@ -756,6 +738,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		auto &expr = aggr.expressions[aggregate_idx];
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
 		if (rewrite_candidates[aggregate_idx]) {
+			auto input_filter = filter_extractor.Extract({aggregate_idx});
 			AggregateRewriteInput rewrite_input(optimizer, aggr, aggregate);
 			auto rewrite = aggregate.Function().GetRewriteCallback()(rewrite_input);
 			if (!rewrite) {
@@ -763,13 +746,13 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 			}
 			bool merged = false;
 			for (auto &set : rewrite_sets) {
-				if (TryMergeRewrite(set, aggregate_idx, *rewrite)) {
+				if (TryMergeRewrite(set, aggregate_idx, *rewrite, input_filter)) {
 					merged = true;
 					break;
 				}
 			}
 			if (!merged) {
-				rewrite_sets.emplace_back(aggregate_idx, std::move(rewrite));
+				rewrite_sets.emplace_back(aggregate_idx, std::move(rewrite), std::move(input_filter));
 			}
 			continue;
 		}
@@ -825,33 +808,45 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 
 	vector<BranchResult> branches;
 	vector<unique_ptr<LogicalOperator>> branch_plans;
-	auto CreateBranchInput = [&](column_binding_map_t<ColumnBinding> &input_replacements) {
+	auto CreateBranchInput = [&](column_binding_map_t<ColumnBinding> &input_replacements,
+	                             unique_ptr<Expression> input_filter) {
+		unique_ptr<LogicalOperator> input;
 		if (!needs_cte) {
-			return std::move(op->children[0]);
+			input = std::move(op->children[0]);
+		} else {
+			input = AggregateRewriteHelper::CreateCTERef(optimizer, cte_index, input_types, input_names, input_bindings,
+			                                             input_replacements);
 		}
-		return AggregateRewriteHelper::CreateCTERef(optimizer, cte_index, input_types, input_names, input_bindings,
-		                                            input_replacements);
+		if (input_filter) {
+			RebindRewriteExpression(input_filter, input_replacements);
+			auto filter = make_uniq<LogicalFilter>(std::move(input_filter));
+			filter->AddChild(std::move(input));
+			input = std::move(filter);
+			has_new_filters = true;
+		}
+		return input;
 	};
 
-	const bool input_has_volatile = aggr.groups.empty() && op->children[0]->HasVolatileExpressions();
 	for (auto &set : distinct_sets) {
 		column_binding_map_t<ColumnBinding> input_replacements;
-		auto branch = CreateDistinctBranch(optimizer, aggr, set, CreateBranchInput(input_replacements),
-		                                   input_replacements, input_has_volatile);
+		auto input_filter = filter_extractor.Extract(set.aggregate_indices);
+		auto input = CreateBranchInput(input_replacements, std::move(input_filter));
+		auto branch = CreateDistinctBranch(optimizer, aggr, set, std::move(input), input_replacements);
 		branch_plans.push_back(std::move(branch.plan));
 		branches.push_back(std::move(branch));
 	}
 	for (auto &set : rewrite_sets) {
 		column_binding_map_t<ColumnBinding> input_replacements;
-		auto branch =
-		    CreateRewriteBranch(optimizer, aggr, set, CreateBranchInput(input_replacements), input_replacements);
+		auto input = CreateBranchInput(input_replacements, std::move(set.input_filter));
+		auto branch = CreateRewriteBranch(optimizer, aggr, set, std::move(input), input_replacements);
 		branch_plans.push_back(std::move(branch.plan));
 		branches.push_back(std::move(branch));
 	}
 	if (!regular_aggregates.empty()) {
 		column_binding_map_t<ColumnBinding> input_replacements;
-		auto branch = CreateRegularBranch(optimizer, aggr, regular_aggregates, CreateBranchInput(input_replacements),
-		                                  input_replacements);
+		auto input_filter = filter_extractor.Extract(regular_aggregates);
+		auto input = CreateBranchInput(input_replacements, std::move(input_filter));
+		auto branch = CreateRegularBranch(optimizer, aggr, regular_aggregates, std::move(input), input_replacements);
 		branch_plans.push_back(std::move(branch.plan));
 		branches.push_back(std::move(branch));
 	}
@@ -919,6 +914,10 @@ void MultiStageAggregateRewriter::VisitOperator(unique_ptr<LogicalOperator> &op)
 
 bool MultiStageAggregateRewriter::WasChanged() const {
 	return changed;
+}
+
+bool MultiStageAggregateRewriter::HasNewFilters() const {
+	return has_new_filters;
 }
 
 unique_ptr<Expression> MultiStageAggregateRewriter::VisitReplace(BoundColumnRefExpression &expr,
