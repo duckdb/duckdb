@@ -1,0 +1,281 @@
+# name: test/optimizer/filter_pullup_projected_predicates.test
+# description: Export predicates on projected columns and computed expressions without removing their guards
+# group: [optimizer]
+
+statement ok
+CREATE TABLE source_rows AS
+SELECT i AS k, i % 7 AS hidden, repeat('x', (i % 11)::INTEGER) AS s
+FROM range(200) t(i);
+
+statement ok
+CREATE TABLE target_rows AS
+SELECT i % 200 AS k, i % 11 AS n FROM range(20000) t(i);
+
+# A hidden filter must not prevent the visible filter from reaching the other join input.
+query I
+SELECT count(*)
+FROM (SELECT k FROM source_rows WHERE k <> 7 AND hidden = 1) p
+JOIN target_rows t ON p.k = t.k;
+----
+2900
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k FROM source_rows WHERE k <> 7 AND hidden = 1) p
+JOIN target_rows t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*k != 7.*
+
+# The original string is hidden, but its projected length can carry the predicate.
+query I
+SELECT count(*)
+FROM (SELECT length(s) AS n FROM source_rows WHERE length(s) = 5 AND hidden = 1) p
+JOIN target_rows t ON p.n = t.n;
+----
+3636
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT length(s) AS n FROM source_rows WHERE length(s) = 5 AND hidden = 1) p
+JOIN target_rows t ON p.n = t.n;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*n = 5.*
+
+# Match the outer expression before its children; preserve repeated and reordered outputs.
+query III
+SELECT p.n, p.again, count(*)
+FROM (
+    SELECT lower(s) AS text, length(lower(s)) AS n, length(lower(s)) AS again, 5 AS constant
+    FROM source_rows
+    WHERE length(lower(s)) = 5 AND hidden = 1
+) p
+JOIN target_rows t ON p.n = t.n
+GROUP BY p.n, p.again;
+----
+5	5	3636
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT p.n, p.again, p.constant
+FROM (
+    SELECT lower(s) AS text, length(lower(s)) AS n, length(lower(s)) AS again, 5 AS constant
+    FROM source_rows
+    WHERE length(lower(s)) = 5 AND hidden = 1
+) p
+JOIN target_rows t ON p.n = t.n;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*n = 5.*
+
+query I
+SELECT count(*)
+FROM (
+    SELECT n AS reordered, k, n AS repeated FROM (
+        SELECT k, length(s) AS n FROM source_rows
+        WHERE k <> 7 AND hidden = 1 AND length(s) IN (2, 5, 9)
+    )
+) p
+JOIN target_rows t ON p.k = t.k AND p.reordered = t.n AND p.repeated = t.n;
+----
+60
+
+statement ok
+CREATE TABLE nullable(s VARCHAR, hidden INTEGER);
+
+statement ok
+INSERT INTO nullable VALUES ('a', 1), ('aa', 1), ('bb', 0), ('abc', 1), (NULL, 1), ('aa', 1);
+
+query I
+SELECT count(*)
+FROM (SELECT length(s) AS n FROM nullable WHERE length(s) = 2 AND hidden = 1) p
+JOIN (VALUES (1), (2), (3), (NULL)) t(n) ON p.n = t.n;
+----
+2
+
+query I
+SELECT count(*)
+FROM (SELECT length(s) AS n FROM nullable WHERE length(s) IS NULL AND hidden = 1) p
+JOIN (VALUES (1), (2), (3), (NULL)) t(n) ON p.n IS NOT DISTINCT FROM t.n;
+----
+1
+
+# Set operations keep their original schema and duplicate semantics.
+query I
+SELECT length(s) FROM nullable WHERE length(s) = 2 AND hidden = 1
+INTERSECT ALL
+SELECT n FROM (VALUES (1), (2), (2), (2), (NULL)) t(n);
+----
+2
+2
+
+query I
+SELECT length(s) FROM nullable WHERE length(s) = 2 AND hidden = 1
+EXCEPT ALL
+SELECT n FROM (VALUES (1), (2), (NULL)) t(n);
+----
+2
+
+# Preserve comparisons even when they are also projected as Boolean outputs.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k, k <> 7 AS keep FROM source_rows WHERE k <> 7) p
+JOIN target_rows t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*k != 7.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k, k <> 7 AS keep FROM source_rows WHERE k <> 7 AND hidden = 1) p
+JOIN target_rows t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*k != 7.*
+
+# Keep the numeric comparison when it is also projected as a computed Boolean output.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT p.keep
+FROM (
+    SELECT length(s) AS n, length(s) = 5 AS keep
+    FROM source_rows WHERE length(s) = 5 AND hidden = 1
+) p
+JOIN target_rows t ON p.n = t.n;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_rows"[^}]*"Filters": [^}]*n = 5.*
+
+# Unsupported Boolean predicates must not be duplicated when they cannot reach a sibling scan.
+statement ok
+CREATE TABLE predicate_rows AS
+SELECT i AS k, i % 7 AS hidden, i::VARCHAR AS s FROM range(200) t(i);
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k, s FROM predicate_rows WHERE contains(s, '1') AND hidden = 1) p
+JOIN target_rows t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*predicate_rows"[^}]*"Filters": [^}]*"contains\(s, '1'\)".*
+
+# Equal floating-point constants are not necessarily interchangeable function arguments.
+query I
+SELECT count(*)
+FROM (
+    SELECT atan2('0'::DOUBLE, x) AS a
+    FROM (VALUES (-1::DOUBLE)) v(x)
+    WHERE atan2('-0'::DOUBLE, x) < 0
+) p
+CROSS JOIN (VALUES (1), (2)) t(i);
+----
+2
+
+# The constant-representation guard also applies when exporting facts.
+statement ok
+CREATE TABLE raw_keys AS
+SELECT i::INTEGER AS x, i % 2 AS hidden FROM range(-2, 2) t(i);
+
+# Bringing facts together must not merge expressions with distinguishable constants.
+query I
+SELECT count(*)
+FROM (
+    SELECT x FROM raw_keys
+    WHERE atan2(CASE WHEN x < 0 THEN '0'::DOUBLE ELSE '1'::DOUBLE END, '-1'::DOUBLE) = pi()
+      AND hidden = -1
+) p
+JOIN (
+    SELECT x FROM raw_keys
+    WHERE atan2(CASE WHEN x < 0 THEN '-0'::DOUBLE ELSE '1'::DOUBLE END, '-1'::DOUBLE) = -pi()
+      AND hidden = -1
+) q USING (x);
+----
+1
+
+# Equality of join keys does not imply equality of their text representations.
+query I
+SELECT count(*)
+FROM (
+    SELECT x FROM (VALUES ('-0'::DOUBLE, 1)) a(x, h)
+    WHERE x::VARCHAR = '-0.0' AND h = 1
+) p
+JOIN (VALUES ('0'::DOUBLE)) t(x) ON p.x = t.x;
+----
+1
+
+statement ok
+CREATE SEQUENCE outer_join_sequence;
+
+query I
+SELECT count(r.k)
+FROM (SELECT k FROM source_rows WHERE k <> 7 AND hidden = 1) p
+LEFT JOIN (VALUES (7), (1)) r(k)
+ON p.k = r.k AND p.k + 1 = r.k + nextval('outer_join_sequence');
+----
+0
+
+query I
+SELECT currval('outer_join_sequence');
+----
+2
+
+# Disable restoration by pushdown to expose guards lost during pullup.
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+statement ok
+CREATE TABLE guarded(s VARCHAR, hidden INTEGER);
+
+statement ok
+INSERT INTO guarded VALUES ('42', 1), ('bad', 1), ('7', 0);
+
+statement ok
+CREATE TABLE match_keys AS SELECT 42 AS k;
+
+query TI
+SELECT p.s, r.k
+FROM (SELECT s FROM guarded WHERE s <> 'bad' AND hidden = 1) p
+LEFT JOIN match_keys r ON CAST(p.s AS INTEGER) = r.k;
+----
+42	42
+
+statement ok
+INSERT INTO source_rows VALUES (9223372036854775807, 0, 'bad');
+
+query I
+SELECT count(*)
+FROM (SELECT k FROM source_rows WHERE k = 42 AND hidden = 0) p
+JOIN target_rows t ON p.k + 100 < t.k;
+----
+5700
+
+# A volatile join operand must retain its evaluation per input row.
+statement ok
+CREATE SEQUENCE join_sequence;
+
+query I
+SELECT count(*)
+FROM (SELECT k FROM source_rows WHERE k = 42 AND hidden = 0) p
+JOIN match_keys r ON nextval('join_sequence') + p.k = r.k + 1;
+----
+1
+
+query I
+SELECT currval('join_sequence');
+----
+1
+
+# A computed alias must not carry an original guard through a later projection.
+statement ok
+SET disabled_optimizers = 'filter_pushdown,join_order,projection_pullup';
+
+query TI
+SELECT p.n, r.k
+FROM (
+    SELECT n FROM (
+        SELECT s, lower(s) AS n FROM (VALUES ('42'), ('BAD')) g(s)
+        WHERE lower(s) <> 'bad'
+    ) a
+) p
+LEFT JOIN (VALUES (42)) r(k) ON p.n::INTEGER = r.k;
+----
+42	42
