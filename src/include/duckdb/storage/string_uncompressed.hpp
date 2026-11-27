@@ -146,6 +146,7 @@ public:
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
 		StatsWriter<string_t> stats_writer(stats.GetType());
+		optional_ptr<const string_t> last_value;
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
@@ -191,7 +192,12 @@ public:
 			}
 
 			// we have space: write the string
-			stats_writer.Update(source_data[source_idx]);
+			if (last_value && source_data[source_idx] == *last_value) {
+				stats_writer.UpdateRepeated(source_data[source_idx]);
+			} else {
+				stats_writer.Update(source_data[source_idx]);
+				last_value = source_data[source_idx];
+			}
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
