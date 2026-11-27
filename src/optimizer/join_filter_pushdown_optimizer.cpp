@@ -200,8 +200,8 @@ bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
 }
 
 struct FilterColumnHash {
-	hash_t operator()(const JoinFilterPushdownColumn &column) const {
-		auto result = CombineHash(Hash(column.join_filter_idx), ColumnBindingHashFunction()(column.probe_column_index));
+	static hash_t HashWithBinding(const JoinFilterPushdownColumn &column, ColumnBinding binding) {
+		auto result = CombineHash(Hash(column.join_filter_idx), ColumnBindingHashFunction()(binding));
 		result = CombineHash(result, column.storage_type.Hash());
 		result = CombineHash(result, Hash(uint8_t(column.mode)));
 		if (column.input_expression) {
@@ -209,16 +209,23 @@ struct FilterColumnHash {
 		}
 		return result;
 	}
+
+	hash_t operator()(const JoinFilterPushdownColumn &column) const {
+		return HashWithBinding(column, column.probe_column_index);
+	}
 };
 
 struct FilterColumnEquality {
-	bool operator()(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) const {
-		if (a.join_filter_idx != b.join_filter_idx || a.probe_column_index != b.probe_column_index ||
-		    a.storage_type != b.storage_type || a.mode != b.mode ||
+	static bool EqualsIgnoringBinding(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) {
+		if (a.join_filter_idx != b.join_filter_idx || a.storage_type != b.storage_type || a.mode != b.mode ||
 		    bool(a.input_expression) != bool(b.input_expression)) {
 			return false;
 		}
 		return !a.input_expression || a.input_expression->Equals(*b.input_expression);
+	}
+
+	bool operator()(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) const {
+		return a.probe_column_index == b.probe_column_index && EqualsIgnoringBinding(a, b);
 	}
 };
 
@@ -513,30 +520,56 @@ bool FilterTargetFinder::CanSkipSubtreeInternal(const LogicalOperator &op) {
 	return true;
 }
 
+// The traversal borrows only from its immutable input columns, never from the growing worklist.
+// Copies become owned filter columns only after equality expansion has finished.
+struct EquivalentFilterColumn {
+	reference<const JoinFilterPushdownColumn> source;
+	ColumnBinding binding;
+
+	struct Hash {
+		hash_t operator()(const EquivalentFilterColumn &column) const {
+			return FilterColumnHash::HashWithBinding(column.source.get(), column.binding);
+		}
+	};
+	struct Equality {
+		bool operator()(const EquivalentFilterColumn &a, const EquivalentFilterColumn &b) const {
+			return a.binding == b.binding &&
+			       FilterColumnEquality::EqualsIgnoringBinding(a.source.get(), b.source.get());
+		}
+	};
+};
+
 vector<JoinFilterPushdownColumn>
 FilterTargetFinder::ExpandEquivalentFilterColumns(const filter_equality_graph_t &equalities,
                                                   const vector<JoinFilterPushdownColumn> &columns) {
 	D_ASSERT(!equalities.empty());
-	vector<JoinFilterPushdownColumn> result;
-	filter_column_set_t seen;
+	vector<EquivalentFilterColumn> pending;
+	unordered_set<EquivalentFilterColumn, EquivalentFilterColumn::Hash, EquivalentFilterColumn::Equality> seen;
 	for (auto &column : columns) {
-		if (seen.insert(column.Copy()).second) {
-			result.push_back(column.Copy());
+		EquivalentFilterColumn initial {column, column.probe_column_index};
+		if (seen.insert(initial).second) {
+			pending.push_back(initial);
 		}
 	}
-	for (idx_t i = 0; i < result.size(); i++) {
-		auto entry = equalities.find(result[i].probe_column_index);
+	for (idx_t i = 0; i < pending.size(); i++) {
+		auto entry = equalities.find(pending[i].binding);
 		if (entry == equalities.end()) {
 			continue;
 		}
 		for (auto &binding : entry->second) {
-			auto inferred = result[i].Copy();
-			inferred.probe_column_index = binding;
-			auto inserted = seen.insert(std::move(inferred));
-			if (inserted.second) {
-				result.push_back(inserted.first->Copy());
+			auto inferred = pending[i];
+			inferred.binding = binding;
+			if (seen.insert(inferred).second) {
+				pending.push_back(inferred);
 			}
 		}
+	}
+	vector<JoinFilterPushdownColumn> result;
+	result.reserve(pending.size());
+	for (auto &column : pending) {
+		auto inferred = column.source.get().Copy();
+		inferred.probe_column_index = column.binding;
+		result.push_back(std::move(inferred));
 	}
 	return result;
 }
