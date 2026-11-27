@@ -13,6 +13,7 @@
 namespace duckdb {
 
 class ParallelHyperLogLogLocalState;
+class TupleDataCollection;
 
 class SortStrategy {
 public:
@@ -23,9 +24,11 @@ public:
 	static unique_ptr<SortStrategy> Factory(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	                                        const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                                        const vector<unique_ptr<BaseStatistics>> &partitions_stats,
-	                                        idx_t estimated_cardinality, bool require_payload = false);
+	                                        const OperatorPartitionInfo &partition_info, idx_t estimated_cardinality,
+	                                        bool require_payload = false,
+	                                        optional_idx partition_limit = optional_idx());
 
-	explicit SortStrategy(const Types &input_types);
+	explicit SortStrategy(const Types &input_types, optional_idx partition_limit = optional_idx());
 	virtual ~SortStrategy() = default;
 
 public:
@@ -34,12 +37,13 @@ public:
 	//===--------------------------------------------------------------------===//
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const = 0;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &client) const = 0;
+	virtual SinkNextBatchType NextBatch(ExecutionContext &, OperatorSinkNextBatchInput &) const;
 	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const = 0;
 	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const = 0;
 	virtual SinkFinalizeType Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const = 0;
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                                     const ProgressData source_progress) const = 0;
-	virtual void Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const;
+	virtual void Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const;
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -71,6 +75,11 @@ public:
 	using ChunkRows = vector<ChunkRow>;
 	virtual const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const = 0;
 
+	//! Takes the buffered rows of a hash bin that is known to hold a single partition key out of the strategy, so that
+	//! the caller can read them directly instead of sorting or materializing the bin (which must not happen
+	//! afterwards). Call after Finalize and GetGlobalSourceState. The default knows no such bins.
+	virtual unique_ptr<TupleDataCollection> TryTakeSinglePartition(idx_t hash_bin, GlobalSourceState &source) const;
+
 	virtual void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const;
 
 public:
@@ -80,6 +89,8 @@ public:
 	vector<column_t> scan_ids;
 	//! Key columns in the sorted output. Needed for prefix computations.
 	vector<column_t> sort_ids;
+	//! The maximum number of rows in a partition
+	optional_idx partition_limit;
 };
 
 } // namespace duckdb

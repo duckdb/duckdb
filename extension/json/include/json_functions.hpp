@@ -18,6 +18,7 @@ namespace duckdb {
 class TableRef;
 class Expression;
 class ClientContext;
+class Context;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
@@ -31,7 +32,8 @@ public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONCommon::JSONPathType path_type);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
-	static JSONCommon::JSONPathType CheckPath(const Value &path_val, string &path, idx_t &len);
+	static JSONCommon::JSONPathType CheckPath(Context &context, const Value &path_val, string &path, idx_t &len);
+	static void ResolveTypes(ResolveScalarFunctionTypesInput &input);
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 
 public:
@@ -64,9 +66,9 @@ public:
 struct JSONFunctionLocalState : public FunctionLocalState {
 public:
 	explicit JSONFunctionLocalState(Allocator &allocator);
-	explicit JSONFunctionLocalState(ClientContext &context);
+	explicit JSONFunctionLocalState(Context &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
-	                                           FunctionData *bind_data);
+	                                           optional_ptr<const FunctionData> bind_data);
 	static unique_ptr<FunctionLocalState> InitCastLocalState(CastLocalStateParameters &parameters);
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
@@ -81,7 +83,7 @@ public:
 	static vector<TableFunctionSet> GetTableFunctions();
 	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
 	                                                optional_ptr<ReplacementScanData> data);
-	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
+	static TableFunction GetJSONTableFunction(Identifier name, shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
 	static ScalarFunction GetJSONCopyToGeoJSONFunction();
@@ -156,6 +158,8 @@ private:
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+	static TableFunction GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info);
+	static TableFunctionSet GetReadSingleJSONFileFunction();
 
 	static TableFunctionSet GetJSONEachFunction();
 	static TableFunctionSet GetJSONTreeFunction();

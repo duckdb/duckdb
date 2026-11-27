@@ -1,10 +1,13 @@
 #include "duckdb/planner/expression_nullability.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -13,9 +16,24 @@
 
 namespace duckdb {
 
-NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p,
-                                                     optional_ptr<LogicalOperator> plan_root_p)
-    : context(context_p), plan_root(plan_root_p) {
+bool ExpressionBecomesNull(const Expression &expr,
+                           const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &column = expr.Cast<BoundColumnRefExpression>();
+		return column_becomes_null(column);
+	}
+	if (!expr.PropagatesNullValues()) {
+		return false;
+	}
+	bool child_becomes_null = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		child_becomes_null |= ExpressionBecomesNull(child, column_becomes_null);
+	});
+	return child_becomes_null;
+}
+
+NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p, LogicalOperator &plan_root_p)
+    : context(context_p), plan_root(plan_root_p), has_dml_cte(plan_root.CTEContainsDML()) {
 }
 
 static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) {
@@ -30,7 +48,7 @@ static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) 
 	return true;
 }
 
-static bool FilterRejectsNull(const Expression &filter, const Expression &expr) {
+bool FilterRejectsNull(const Expression &filter, const Expression &expr) {
 	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.GetChildren()) {
@@ -88,11 +106,8 @@ static bool JoinOutputPreservesChildNonNullability(JoinType join_type, idx_t chi
 }
 
 optional_ptr<LogicalCTE> NotNullExpressionAnalyzer::FindCTE(TableIndex cte_index) {
-	if (!plan_root) {
-		return nullptr;
-	}
 	vector<reference<LogicalOperator>> operators;
-	operators.push_back(*plan_root);
+	operators.push_back(plan_root);
 	while (!operators.empty()) {
 		auto &op = operators.back().get();
 		operators.pop_back();
@@ -108,6 +123,12 @@ optional_ptr<LogicalCTE> NotNullExpressionAnalyzer::FindCTE(TableIndex cte_index
 }
 
 bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression &expr, vector<TableIndex> &seen_ctes) {
+	if (expr.IsVolatile()) {
+		return false;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return !expr.Cast<BoundConstantExpression>().GetValue().IsNull();
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op.Cast<LogicalProjection>();
@@ -183,7 +204,7 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 			}
 		}
 		auto table = get.GetTable();
-		if (!table) {
+		if (!table || has_dml_cte) {
 			return false;
 		}
 		auto &column_index = get.GetColumnIndex(binding);
@@ -194,6 +215,30 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 		auto stats = table->GetStatistics(context, column_index.GetPrimaryIndex());
 		// unknown statistics must not count as proof of non-nullability
 		return stats && stats->CanHaveNoNull() && !stats->CanHaveNull();
+	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		ColumnBinding binding;
+		if (!GetColumnRefBinding(expr, binding)) {
+			return false;
+		}
+		auto &get = op.Cast<LogicalColumnDataGet>();
+		// Borrowed collections can be populated after planning.
+		if (binding.table_index != get.table_index || !get.collection.get_owned_unique() ||
+		    binding.column_index.GetIndex() >= get.GetColumnIds().size()) {
+			return false;
+		}
+		for (auto &chunk : get.collection->Chunks({get.GetColumnIds()[binding.column_index.GetIndex()]})) {
+			auto validity = chunk.data[0].Validity();
+			if (validity.CannotHaveNull()) {
+				continue;
+			}
+			for (idx_t i = 0; i < validity.size(); i++) {
+				if (!validity.IsValid(i)) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		ColumnBinding binding;
@@ -212,11 +257,11 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 		auto column_index = binding.column_index.GetIndex();
 		auto &cte_source = *cte->children[0];
 		auto source_bindings = cte_source.GetColumnBindings();
-		if (column_index >= source_bindings.size() || column_index >= cte_source.types.size()) {
+		if (column_index >= source_bindings.size()) {
 			return false;
 		}
 		seen_ctes.push_back(cte_ref.cte_index);
-		auto source_expr = BoundColumnRefExpression(cte_source.types[column_index], source_bindings[column_index]);
+		auto source_expr = BoundColumnRefExpression(expr.GetReturnType(), source_bindings[column_index]);
 		auto result = IsNotNull(cte_source, source_expr, seen_ctes);
 		seen_ctes.pop_back();
 		return result;

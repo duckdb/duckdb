@@ -2,11 +2,6 @@ add_subdirectory(column)
 add_subdirectory(row)
 add_subdirectory(variant)
 
-if(${EXIT_TIME_DESTRUCTORS_WARNING})
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
-endif()
-
 add_library_unity(
   duckdb_common_types
   OBJECT
@@ -35,6 +30,7 @@ add_library_unity(
   validity_mask.cpp
   value.cpp
   bignum.cpp
+  bignum_decimal.cpp
   vector_buffer.cpp
   vector.cpp
   vector_cache.cpp

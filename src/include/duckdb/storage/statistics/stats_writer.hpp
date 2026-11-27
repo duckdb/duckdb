@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -15,6 +16,9 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
+
+#include <limits>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -61,7 +65,11 @@ struct StatsWriter : public BaseStatsWriter {
 
 	inline void Clear() {
 		ClearBase();
-		min = NumericLimits<T>::Maximum();
+		if constexpr (std::is_floating_point_v<T>) {
+			min = std::numeric_limits<T>::quiet_NaN();
+		} else {
+			min = NumericLimits<T>::Maximum();
+		}
 		max = NumericLimits<T>::Minimum();
 	}
 
@@ -71,8 +79,7 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void UpdateMinMax(T new_value) {
-		min = LessThan::Operation(new_value, min) ? new_value : min;
-		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		NumericStats::UpdateValue(new_value, min, max);
 	}
 
 	void Merge(BaseStatistics &target) const {
@@ -103,12 +110,31 @@ struct StatsWriter<void> : public BaseStatsWriter {
 	}
 };
 
+//! Lexicographic compare of two 12-byte string prefixes that are zero-padded past the string length, as the
+//! inline area of a string_t is. Returns <0, 0 or >0 like memcmp.
+static inline int CompareInlineBytes(const_data_ptr_t a, const_data_ptr_t b) {
+	const uint32_t a_prefix = Load<uint32_t>(a);
+	const uint32_t b_prefix = Load<uint32_t>(b);
+	if (a_prefix != b_prefix) {
+		return BSwapIfLE(a_prefix) < BSwapIfLE(b_prefix) ? -1 : 1;
+	}
+	const uint64_t a_rest = Load<uint64_t>(a + sizeof(uint32_t));
+	const uint64_t b_rest = Load<uint64_t>(b + sizeof(uint32_t));
+	if (a_rest != b_rest) {
+		return BSwapIfLE(a_rest) < BSwapIfLE(b_rest) ? -1 : 1;
+	}
+	return 0;
+}
+
 template <>
 struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
-	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR),
+	      is_geometry(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY),
+	      geometry_model(Geometry::GetModel(type)),
+	      is_bignum(BaseStatistics::GetStatsType(type) == StatisticsType::BIGNUM_STATS) {
 		Clear();
 	}
 
@@ -116,6 +142,9 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		ClearBase();
 		if (is_geometry) {
 			geometry_stats.SetEmpty();
+		} else if (is_bignum) {
+			bignum_min.clear();
+			bignum_max.clear();
 		} else {
 			is_set = false;
 			min_size = 0;
@@ -130,12 +159,17 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	inline void Update(const string_t &value) {
 		SetHasValid();
 		if (is_geometry) {
-			geometry_stats.Update(value);
+			geometry_stats.Update(value, geometry_model);
+			return;
+		}
+		if (is_bignum) {
+			UpdateBignum(value);
 			return;
 		}
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
-
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		// without inlining a short string only has `size` readable bytes
 		auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 		if (is_set) {
 			// compare to current min/max
@@ -158,6 +192,32 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 			max_size = size;
 			is_set = true;
 		}
+#else
+		// a string_t always has CURRENT_MAX_STRING_MINMAX_SIZE readable bytes at its data pointer, zero-padded
+		// past the length when inlined, so min and max are kept as zero-padded prefixes and compared as integers
+		static_assert(StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE == string_t::INLINE_LENGTH,
+		              "the string statistics prefix is the inline area of a string_t");
+		if (is_set) {
+			// the prefix compare covers the first min(size, min_size) bytes exactly because the shorter side is
+			// zero-padded, and the length breaks a tie
+			auto min_cmp = CompareInlineBytes(data, min);
+			if (min_cmp < 0 || (min_cmp == 0 && size < min_size)) {
+				memcpy(min, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+				min_size = size;
+			}
+			auto max_cmp = CompareInlineBytes(data, max);
+			if (max_cmp > 0 || (max_cmp == 0 && size > max_size)) {
+				memcpy(max, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+				max_size = size;
+			}
+		} else {
+			memcpy(min, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+			memcpy(max, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+			min_size = size;
+			max_size = size;
+			is_set = true;
+		}
+#endif
 		if (size > max_string_length) {
 			max_string_length = UnsafeNumericCast<uint32_t>(size);
 		}
@@ -183,15 +243,31 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 			return;
 		}
 		SetHasValid();
-		total_string_length += value.GetSize();
+		if (!is_bignum) {
+			total_string_length += value.GetSize();
+		}
 	}
 
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {
-			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
+			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats, geometry_model);
+		} else if (is_bignum) {
+			BignumStats::Merge(other, string_t(bignum_min), string_t(bignum_max));
 		} else {
 			StringStats::Merge(other, *this);
+		}
+	}
+
+private:
+	//! The byte order of the BIGNUM encoding is the numeric order; the exact min/max blobs are kept while a vector is
+	//! written, the statistics they are merged into cut them to the bound size
+	inline void UpdateBignum(const string_t &value) {
+		if (bignum_min.empty() || LessThan::Operation(value, string_t(bignum_min))) {
+			bignum_min.assign(value.GetData(), value.GetSize());
+		}
+		if (bignum_max.empty() || GreaterThan::Operation(value, string_t(bignum_max))) {
+			bignum_max.assign(value.GetData(), value.GetSize());
 		}
 	}
 
@@ -207,7 +283,11 @@ private:
 	idx_t total_string_length;
 	bool is_varchar;
 	bool is_geometry;
+	GeometryModel geometry_model;
+	bool is_bignum;
 	GeometryStatsData geometry_stats;
+	string bignum_min;
+	string bignum_max;
 };
 
 } // namespace duckdb

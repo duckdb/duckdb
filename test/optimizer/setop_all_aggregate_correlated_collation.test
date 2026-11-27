@@ -1,0 +1,68 @@
+# name: test/optimizer/setop_all_aggregate_correlated_collation.test
+# description: An EXCEPT ALL / INTERSECT ALL in a correlated subquery compares the correlated columns as they are, without a collation of the outer column
+# group: [optimizer]
+
+statement ok
+CREATE TABLE outer_rows(s VARCHAR COLLATE "binary");
+
+statement ok
+INSERT INTO outer_rows VALUES ('a'), ('A');
+
+# 0: the join plan, 1: the aggregate plan, 2 / 3: without the filters moving around the set operation,
+# 4: without the optimizer, where the physical planner runs the set operation
+loop i 0 5
+
+statement ok
+SET disabled_optimizers = CASE {i} WHEN 0 THEN 'set_operation_aggregate' WHEN 2 THEN 'filter_pushdown' WHEN 3 THEN 'filter_pullup' ELSE '' END;
+
+statement ok
+SET enable_optimizer = ({i} <> 4);
+
+# the correlated columns are compared as they are: a collation would mix the rows of outer rows it treats as equal
+statement ok
+SET default_collation = 'nocase';
+
+query TI
+SELECT s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.s) = 97 EXCEPT ALL SELECT 1 WHERE ascii(o.s) = 65)) FROM (VALUES ('a'), ('A')) o(s) ORDER BY s COLLATE "binary"
+----
+A	0
+a	1
+
+query TI
+SELECT s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.s) = 97 INTERSECT ALL SELECT 1 WHERE ascii(o.s) = 65)) FROM (VALUES ('a'), ('A')) o(s) ORDER BY s COLLATE "binary"
+----
+A	0
+a	0
+
+query TI
+SELECT o.s, (SELECT count(*) FROM (SELECT 1 AS k INTERSECT ALL SELECT 1 FROM range(2) WHERE o.s COLLATE "binary" = 'a')) FROM outer_rows o ORDER BY s COLLATE "binary"
+----
+A	0
+a	1
+
+query TI
+SELECT o.s, (SELECT count(*) FROM (SELECT 1 AS k EXCEPT ALL SELECT 1 FROM range(2) WHERE o.s COLLATE "binary" = 'a')) FROM outer_rows o ORDER BY s COLLATE "binary"
+----
+A	1
+a	0
+
+statement ok
+RESET default_collation;
+
+# a collated string inside a nested correlated column
+query TI
+SELECT o.st.s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.st.s) = 97 EXCEPT ALL SELECT 1 WHERE ascii(o.st.s) = 65)) FROM (SELECT {'s': s COLLATE NOCASE} AS st FROM (VALUES ('a'), ('A')) t(s)) o ORDER BY ascii(o.st.s)
+----
+A	0
+a	1
+
+query TI
+SELECT o.st.s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.st.s) = 97 INTERSECT ALL SELECT 1 WHERE ascii(o.st.s) = 65)) FROM (SELECT {'s': s COLLATE NOCASE} AS st FROM (VALUES ('a'), ('A')) t(s)) o ORDER BY ascii(o.st.s)
+----
+A	0
+a	0
+
+statement ok
+SET enable_optimizer = true;
+
+endloop

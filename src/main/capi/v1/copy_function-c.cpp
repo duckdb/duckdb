@@ -300,12 +300,12 @@ struct CCopyToGlobalState : GlobalFunctionData {
 };
 
 struct CCopyToGlobalInitInfo {
-	CCopyToGlobalInitInfo(ClientContext &context, FunctionData &bind_data, const string &file_path)
+	CCopyToGlobalInitInfo(ClientContext &context, const FunctionData &bind_data, const string &file_path)
 	    : context(context), bind_data(bind_data), file_path(file_path) {
 	}
 
 	ClientContext &context;
-	FunctionData &bind_data;
+	const FunctionData &bind_data;
 	const string &file_path;
 
 	string error;
@@ -315,7 +315,7 @@ struct CCopyToGlobalInitInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-unique_ptr<GlobalFunctionData> CCopyToGlobalInit(ClientContext &context, FunctionData &bind_data,
+unique_ptr<GlobalFunctionData> CCopyToGlobalInit(ClientContext &context, const FunctionData &bind_data,
                                                  const string &file_path) {
 	auto &bind_info = bind_data.Cast<CCopyToBindInfo>();
 	auto &function_info = bind_info.function_info->Cast<CCopyFunctionInfo>();
@@ -417,7 +417,7 @@ const char *duckdb_copy_function_global_init_get_file_path(duckdb_copy_function_
 namespace duckdb {
 namespace {
 
-unique_ptr<LocalFunctionData> CCopyToLocalInit(ExecutionContext &context, FunctionData &bind_data) {
+unique_ptr<LocalFunctionData> CCopyToLocalInit(ExecutionContext &context, const FunctionData &bind_data) {
 	// This isnt exposed to the C-API yet, so we just return empty local function data
 	return make_uniq<LocalFunctionData>();
 }
@@ -431,18 +431,18 @@ namespace duckdb {
 namespace {
 
 struct CCopyToSinkInfo {
-	CCopyToSinkInfo(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate)
+	CCopyToSinkInfo(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate)
 	    : context(context), bind_data(bind_data), gstate(gstate) {
 	}
 
 	ClientContext &context;
-	FunctionData &bind_data;
+	const FunctionData &bind_data;
 	GlobalFunctionData &gstate;
 	string error;
 	bool success = true;
 };
 
-void CCopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void CCopyToSink(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                  LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_info = bind_data.Cast<CCopyToBindInfo>();
 	auto &function_info = bind_info.function_info->Cast<CCopyFunctionInfo>();
@@ -450,6 +450,9 @@ void CCopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunct
 	// Flatten input (we dont support compressed execution yet!)
 	// TODO: Dont flatten!
 	input.Flatten();
+	for (auto &vector : input.data) {
+		PrepareCAPIVector(vector);
+	}
 
 	CCopyToSinkInfo copy_to_sink_info(context.client, bind_data, gstate);
 
@@ -531,7 +534,7 @@ void *duckdb_copy_function_sink_get_global_state(duckdb_copy_function_sink_info 
 namespace duckdb {
 namespace {
 
-void CCopyToCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void CCopyToCombine(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                     LocalFunctionData &lstate) {
 	// Do nothing for now (this isnt exposed to the C-API yet)
 }
@@ -546,19 +549,19 @@ namespace duckdb {
 namespace {
 
 struct CCopyToFinalizeInfo {
-	CCopyToFinalizeInfo(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate)
+	CCopyToFinalizeInfo(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate)
 	    : context(context), bind_data(bind_data), gstate(gstate) {
 	}
 
 	ClientContext &context;
-	FunctionData &bind_data;
+	const FunctionData &bind_data;
 	GlobalFunctionData &gstate;
 
 	string error;
 	bool success = true;
 };
 
-void CCopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+void CCopyToFinalize(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &bind_info = bind_data.Cast<CCopyToBindInfo>();
 	auto &function_info = bind_info.function_info->Cast<CCopyFunctionInfo>();
 
@@ -650,12 +653,12 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 	auto &tf_info = info.tf.function_info->Cast<CTableFunctionInfo>();
 	auto result = make_uniq<CTableBindData>(tf_info);
 
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto param_it = info.tf.named_parameters.find(Identifier(opt.first));
-		if (param_it == info.tf.named_parameters.end()) {
+		auto option_schema = info.tf.GetSignature().GetTypedKwargs();
+		if (!option_schema || !option_schema->Find(Identifier(opt.first))) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
 			                      info.tf.name.c_str());
@@ -724,14 +727,21 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 	if (!tf_info.bind || !tf_info.init || !tf_info.function) {
 		return;
 	}
-	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
-		if (duckdb::TypeVisitor::Contains(it->second, duckdb::LogicalTypeId::INVALID)) {
+	for (auto &param : tf.GetSignature().GetParameters()) {
+		// a variadic parameter carries no type of its own
+		if (param.IsVariadic()) {
+			continue;
+		}
+		if (duckdb::TypeVisitor::Contains(param.GetType(), duckdb::LogicalTypeId::INVALID)) {
 			return;
 		}
 	}
-	for (const auto &argument : tf.GetArguments()) {
-		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
-			return;
+	auto option_schema = tf.GetSignature().GetTypedKwargs();
+	if (option_schema) {
+		for (auto &option : option_schema->GetOptions()) {
+			if (duckdb::TypeVisitor::Contains(option.type, duckdb::LogicalTypeId::INVALID)) {
+				return;
+			}
 		}
 	}
 

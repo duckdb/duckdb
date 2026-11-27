@@ -44,6 +44,8 @@ public:
 	//! Rewrite `path`'s tracked name from `old_name` to `new_name`.
 	//! Silent no-op if `path` is not tracked or the tracked name is not `old_name`.
 	void RenameDatabasePath(const string &path, const Identifier &old_name, const Identifier &new_name);
+	//! Whether the (canonicalized) path is in use by an attached database
+	bool IsDatabasePath(const string &path) const;
 
 private:
 	//! The lock to add entries to the db_paths map

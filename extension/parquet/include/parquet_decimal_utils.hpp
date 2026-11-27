@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/bignum.hpp"
+
 #include "column_reader.hpp"
-#include "reader/templated_column_reader.hpp"
 
 namespace duckdb {
 
@@ -31,29 +32,38 @@ public:
 			auto byte = *(pointer + (size - i - 1));
 			res_ptr[i] = positive ? byte : byte ^ 0xFF;
 		}
+		bool invalid = false;
 		// Verify that there are only 0s here
-		if (size > sizeof(PHYSICAL_TYPE)) {
-			for (idx_t i = sizeof(PHYSICAL_TYPE); i < size; i++) {
-				auto byte = *(pointer + (size - i - 1));
-				if (!positive) {
-					byte ^= 0xFF;
-				}
-				if (byte != 0) {
-					throw InvalidInputException("Invalid decimal encoding in Parquet file");
-				}
+		for (idx_t i = sizeof(PHYSICAL_TYPE); i < size; i++) {
+			auto byte = *(pointer + (size - i - 1));
+			if (!positive) {
+				byte ^= 0xFF;
 			}
+			invalid |= byte != 0;
+		}
+		invalid |= res < 0;
+		if (invalid) {
+			ThrowInvalidDecimalEncoding();
 		}
 		if (!positive) {
-			res += 1;
-			return -res;
+			// Negate before subtracting one to keep the minimum signed value representable.
+			return -res - 1;
 		}
 		return res;
 	}
 
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
-};
 
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size, const ParquetColumnSchema &schema);
+	//! Converts a big-endian two's complement Parquet decimal into the BIGNUM blob of a wide decimal
+	static string ReadWideDecimalValue(const_data_ptr_t pointer, idx_t size);
+	//! The number of bytes of the FIXED_LEN_BYTE_ARRAY that decimals of the given width are written in, enough to
+	//! hold the width, rounded up to a multiple of 8 bytes
+	static idx_t WideDecimalByteLength(uint32_t width);
+	//! Writes the BIGNUM blob of a wide decimal as a big-endian two's complement value of byte_length bytes
+	static void WriteWideDecimal(const bignum_t &value, idx_t byte_length, data_ptr_t result);
+
+private:
+	[[noreturn]] static void ThrowInvalidDecimalEncoding();
+};
 
 } // namespace duckdb

@@ -1,0 +1,49 @@
+# name: test/sql/copy/parquet/encryption/multi_page_encryption.test
+# description: Filtered scans of an encrypted Parquet file with multiple data pages per column chunk and an AAD (issue #28822)
+# group: [encryption]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA add_parquet_key('arrow_key_generated_files', '0123456789abcdef')
+
+# file written by parquet-rs 57 with a uniform footer key: 5000 rows of (id BIGINT, value VARCHAR),
+# dictionary + 10 data pages per column chunk, pages encrypted with an AAD that includes the page ordinal
+statement ok
+CREATE VIEW multi_page AS FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/multi_page_uniform_encryption.parquet',
+	encryption_config={footer_key: 'arrow_key_generated_files'})
+
+# full scan reads every page of a chunk
+query II
+SELECT count(*), sum(id) FROM multi_page
+----
+5000	12497500
+
+# Top-N re-enters page reading with a dynamic filter
+query II
+SELECT id, value FROM multi_page ORDER BY id DESC LIMIT 3
+----
+4999	val4999
+4998	val4998
+4997	val4997
+
+# a pushed-down filter reads the filter column with page skipping
+query III
+SELECT count(*), min(id), sum(id) FROM multi_page WHERE id > 4489
+----
+510	4490	2419695
+
+# point lookup skips rows in both the filter column and the payload column
+query I
+SELECT value FROM multi_page WHERE id = 2500
+----
+val2500
+
+query II
+SELECT id, value FROM multi_page ORDER BY id LIMIT 2
+----
+0	val0
+1	val1

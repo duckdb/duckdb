@@ -6,15 +6,17 @@ add_library_unity(
   alter_table_function_info.cpp
   alter_table_info.cpp
   alter_database_info.cpp
+  alter_macro_info.cpp
+  alter_schema_info.cpp
   attach_info.cpp
   comment_on_column_info.cpp
   connect_info.cpp
+  external_resource_options.cpp
   copy_info.cpp
   create_info.cpp
   create_function_info.cpp
   create_index_info.cpp
   create_aggregate_function_info.cpp
-  create_collation_info.cpp
   create_coordinate_system_info.cpp
   create_copy_function_info.cpp
   create_macro_info.cpp

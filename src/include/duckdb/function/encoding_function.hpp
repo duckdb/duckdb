@@ -9,94 +9,59 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/compression_type.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/function/function.hpp"
-#include "duckdb/storage/data_pointer.hpp"
-#include "duckdb/storage/storage_info.hpp"
+#include <functional>
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
-struct DBConfig;
+//! Decodes a prefix of the encoded input to UTF-8 and returns how many input bytes were consumed.
+//! The output has room for input_size * max_output_bytes bytes. Unless is_last is set, an incomplete trailing
+//! character is left unconsumed. With is_last set, all input is consumed or an error is thrown.
+typedef std::function<void(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+                           idx_t &written)>
+    decode_t;
 
-class EncodingFunction;
+//! Encodes UTF-8 input and returns the number of bytes written. The output has room for
+//! input_size * minimum_input_window bytes. Throws if the input has a character the encoding cannot represent.
+typedef std::function<void(const char *input, idx_t input_size, char *output, idx_t &written)> encode_t;
 
-struct CSVEncoderBuffer;
-//! Decode function, basically takes information about the decoded and the encoded buffers.
-typedef void (*encode_t)(CSVEncoderBuffer &encoded_buffer, char *decoded_buffer, idx_t &decoded_buffer_current_position,
-                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
-                         EncodingFunction *encoding_function);
+class ClientContext;
+class ScalarFunctionCatalogEntry;
+class Expression;
 
-//! Encoding Map Entry Struct used for byte replacement
-typedef struct {
-	size_t key_len;
-	const char *key;
-	size_t value_len;
-	const char *value;
-} map_entry_encoding;
+//! An encoding is a set of scalar functions named after the encoding in the system.encodings schema:
+//!   system.encodings."<name>"(BLOB) -> VARCHAR                  decodes the complete input
+//!   system.encodings."<name>"(BLOB, BOOLEAN) -> STRUCT(decoded VARCHAR, consumed BIGINT)
+//!                                                               decodes a prefix of a stream, see decode_t
+//!   system.encodings."<name>"(VARCHAR) -> BLOB                  encodes the input, see encode_t (optional)
+struct EncodingFunction {
+	static constexpr const char *SCHEMA = "encodings";
+	//! Integer function property: the maximum number of input bytes that make up one character
+	static constexpr const char *MINIMUM_INPUT_WINDOW_PROPERTY = "duckdb.encodings.minimum_input_window";
+	//! LIST(STRUCT(mark BLOB, encoding VARCHAR)) function property: a stream that starts with a mark is decoded with
+	//! that encoding. The first matching mark wins, an empty mark matches any stream.
+	static constexpr const char *BYTE_ORDER_MARKS_PROPERTY = "duckdb.encodings.byte_order_marks";
 
-class EncodingFunction {
-public:
-	DUCKDB_API EncodingFunction() : encode_function(nullptr), max_bytes_per_iteration(0) {
-	}
-
-	DUCKDB_API EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
-	                            const idx_t lookup_bytes)
-	    : name(encode_name), encode_function(encode_function), max_bytes_per_iteration(bytes_per_iteration),
-	      lookup_bytes(lookup_bytes) {
-		D_ASSERT(encode_function);
-		D_ASSERT(bytes_per_iteration > 0);
-		D_ASSERT(lookup_bytes > 0);
-	};
-
-	DUCKDB_API EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
-	                            const idx_t lookup_bytes, const map_entry_encoding *map, const size_t map_size)
-	    : conversion_map(map), map_size(map_size), name(encode_name), encode_function(encode_function),
-	      max_bytes_per_iteration(bytes_per_iteration), lookup_bytes(lookup_bytes) {
-		D_ASSERT(encode_function);
-		D_ASSERT(bytes_per_iteration > 0);
-		D_ASSERT(lookup_bytes > 0);
-	};
-
-	DUCKDB_API ~EncodingFunction() {};
-
-	DUCKDB_API string GetName() const {
-		return name;
-	}
-	DUCKDB_API encode_t GetFunction() const {
-		return encode_function;
-	}
-	DUCKDB_API idx_t GetBytesPerIteration() const {
-		return max_bytes_per_iteration;
-	}
-	DUCKDB_API idx_t GetLookupBytes() const {
-		return lookup_bytes;
-	}
-
-	//! Optional conversion map, that indicates byte replacements.
-	const map_entry_encoding *conversion_map {};
-	size_t map_size {};
-
-protected:
-	//! The encoding type of this function (e.g., utf-8)
-	string name;
-	//! The actual encoding function
-	encode_t encode_function;
-	//! How many bytes in the decoded buffer one iteration of the encoded function can cause.
-	//! e.g., one iteration of Latin-1 to UTF-8 can generate max 2 bytes.
-	//! However, one iteration of UTF-16 to UTF-8, can generate up to 3 UTF-8 bytes.
-	idx_t max_bytes_per_iteration;
-	//! How many bytes we have to lookup before knowing the bytes we have to output
-	idx_t lookup_bytes = 1;
-};
-
-//! The set of encoding functions
-struct EncodingFunctionSet {
-	EncodingFunctionSet() {};
-	static void Initialize(DBConfig &config);
-	mutex lock;
-	case_insensitive_map_t<EncodingFunction> functions;
+	//! The name of the scalar function that decodes the encoding
+	DUCKDB_API static string FunctionName(const string &encoding_name);
+	//! Registers the functions of an encoding in the system.encodings schema
+	DUCKDB_API static void SetSchema(CreateFunctionInfo &info);
+	//! The type returned by the streaming overload
+	DUCKDB_API static LogicalType StreamResultType();
+	//! Creates the scalar functions for an encoding that is decoded by the given function
+	DUCKDB_API static ScalarFunctionSet Create(const string &encoding_name, decode_t decode, const encode_t &encode,
+	                                           idx_t minimum_input_window, idx_t max_output_bytes);
+	//! Finds the functions of an encoding, autoloading the encodings extension if needed. Returns null if not found.
+	DUCKDB_API static optional_ptr<ScalarFunctionCatalogEntry> Find(ClientContext &context,
+	                                                                const string &encoding_name);
+	//! The sorted names of all encodings, including utf-8
+	DUCKDB_API static vector<string> GetEncodings(ClientContext &context);
+	//! Binds encode(string, encoding) and decode(blob, encoding) to the function of the encoding. Returns null if the
+	//! encoding is not a constant that names an encoding (e.g. an error option of decode).
+	DUCKDB_API static unique_ptr<Expression> BindCall(ClientContext &context, vector<unique_ptr<Expression>> &children,
+	                                                  bool is_encode);
 };
 
 } // namespace duckdb

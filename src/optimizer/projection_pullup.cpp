@@ -40,32 +40,23 @@ optional_ptr<LogicalOperator> ProjectionPullup::FindParent(LogicalOperator &targ
 
 void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child,
                                                bool stop_at_op) {
+	// Insertion rewrites bindings eagerly, and the child starts an independent replacement scope.
+	FlushReplacements();
 	if (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-		child->ResolveOperatorTypes();
 		auto proj_index = optimizer.binder.GenerateTableIndex();
 		auto child_bindings = child->GetColumnBindings();
-		const auto child_types = child->types;
-		const auto column_count = child_bindings.size();
-
-		vector<unique_ptr<Expression>> expressions;
-		expressions.reserve(column_count);
-		for (idx_t i = 0; i < column_count; i++) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(child_types[i], child_bindings[i]));
-		}
 
 		ColumnBindingReplacer replacer;
-		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		for (idx_t col_idx = 0; col_idx < child_bindings.size(); col_idx++) {
 			const auto &old_binding = child_bindings[col_idx];
 			replacer.replacement_bindings.emplace_back(old_binding,
 			                                           ColumnBinding(proj_index, ProjectionIndex(col_idx)));
 		}
 
-		auto new_projection = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-		if (child->has_estimated_cardinality) {
-			new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+		auto new_projection = LogicalProjection::CreateIdentity(proj_index, std::move(child));
+		if (new_projection->children[0]->has_estimated_cardinality) {
+			new_projection->SetEstimatedCardinality(new_projection->children[0]->estimated_cardinality);
 		}
-
-		new_projection->children.emplace_back(std::move(child));
 		child = std::move(new_projection);
 
 		if (stop_at_op) {
@@ -75,41 +66,36 @@ void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, 
 		}
 		replacer.VisitOperator(*root);
 	}
-	ProjectionPullup next(optimizer, root);
-	next.Optimize(child->children[0]);
+	// the projection kept below this operator is a binding barrier: nothing above it
+	// can reference bindings produced underneath, so the subtree runs its own pass
+	// with the projection as replacement root instead of walking the whole plan for
+	// every pull inside it
+	OptimizeSubtree(optimizer, child, child->children[0]);
 }
 
-void ProjectionPullup::PullUpColrefProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
-                                              vector<ColumnBinding> &proj_bindings) {
-	// LOGICAL_DISTINCT sets `everything_referenced = true` in RemoveUnusedColumns
-	// for its subtree. The projection above it acts as a binding barrier; removing
-	// it lets upstream references point past DISTINCT and breaks column pruning
-	// down to READ_PARQUET. Repro: TPC-DS Q54 regresses 4-5x without this guard.
-	if (proj.children[0]->type == LogicalOperatorType::LOGICAL_DISTINCT) {
-		ProjectionPullup next(optimizer, root);
-		next.Optimize(proj.children[0]);
-		return;
-	}
-	ColumnBindingReplacer replacer;
+void ProjectionPullup::RemoveProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
+                                        vector<ColumnBinding> &proj_bindings) {
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
+		if (proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			D_ASSERT(proj.expressions[i]->GetExpressionType() == ExpressionType::VALUE_CONSTANT);
+			continue;
+		}
 		auto &colref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
-		replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.Binding());
+		replacements.Add(proj_bindings[i], colref.Binding());
 	}
 
-	replacer.stop_operator = proj.children[0];
-	replacer.VisitOperator(*root);
-
-	// Re-run optimization after removing this projection.
-	// Binding rewrites can make parent projections redundant, and without
-	// another pass they would not be eliminated.
+	// Continue through the exposed child. Resolve pending bindings when inspecting operators,
+	// instead of rewriting the entire root for every projection removed.
 	auto child = std::move(op->children[0]);
 	op = std::move(child);
-	Optimize(op);
+	VisitOperator(op);
 
 	return;
 }
 void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
                                                  vector<ColumnBinding> &proj_bindings, idx_t pull_up_to_here) {
+	// Moving a projection inspects output layouts and performs its own eager binding rewrites.
+	FlushReplacements();
 	// Not all expressions are colrefs. We can pull up instead of removing
 	for (idx_t i = 0; i < parents.size(); i++) {
 		LogicalOperator &parent_op = parents[i].get();
@@ -124,8 +110,8 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 			if (join.join_type == JoinType::LEFT || join.join_type == JoinType::RIGHT ||
 			    join.join_type == JoinType::OUTER) {
 				// Recurse into child without pulling up
-				ProjectionPullup next(optimizer, root);
-				next.Optimize(proj.children[0]);
+				ProjectionPullup next(optimizer, root, replacements);
+				next.VisitOperator(proj.children[0]);
 				return;
 			}
 		}
@@ -157,6 +143,8 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 	column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
 	auto projection_to_move = std::move(op);
 	op = std::move(projection_to_move->children[0]);
+	projection_to_move->has_estimated_cardinality = insert_at_node.has_estimated_cardinality;
+	projection_to_move->estimated_cardinality = insert_at_node.estimated_cardinality;
 
 	idx_t next_col = proj.expressions.size();
 	for (idx_t i = 0; i < insert_bindings.size(); i++) {
@@ -183,18 +171,71 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 			}
 		}
 	}
+
+	// The caller's traversal no longer reaches the subtree left behind by the moved projection.
+	ProjectionPullup next(optimizer, root, replacements);
+	next.VisitOperator(op);
+}
+
+static bool HasJoinBelow(const LogicalOperator &op) {
+	reference<const LogicalOperator> current = op;
+	while (current.get().children.size() == 1) {
+		current = *current.get().children[0];
+	}
+	return current.get().children.size() > 1;
+}
+
+// Filter pushdown keeps throwing expressions above projections. Removing a projection over a join would let the join
+// order optimizer evaluate them before the joins that remove rows, also when they reference other relations.
+static bool IsThrowingProjectionFilter(const Expression &expr,
+                                       const column_binding_map_t<unique_ptr<Expression>> &projection_map) {
+	if (!expr.CanThrow()) {
+		return false;
+	}
+	bool references_projection = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (projection_map.find(colref.Binding()) != projection_map.end()) {
+			references_projection = true;
+		}
+	});
+	return references_projection;
 }
 
 void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map,
-                                      bool &can_pull_through) {
+                                      const LogicalProjection &proj, bool &can_pull_through) {
+	const auto keep_throwing_filters_above = HasJoinBelow(proj);
 	// if expressions in the projections are colrefs, we can always pull it up
 	// if it's not a colref, we can pull it up only if it does not appear in the operator enumerate expressions
 	for (idx_t i = parents.size(); i > 0; i--) {
 		idx_t parent_idx = i - 1;
 		LogicalOperator &parent_op = parents[parent_idx].get();
+		// Ancestors may still reference removed projections. Normalize their own bindings before
+		// inspecting expressions so eligibility checks can use ordinary binding lookups.
+		ColumnBindingRewrite::ApplyToOperatorBindings(parent_op, replacements);
 		can_pull_through = true;
 
+		if (parent_op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			// Aggregate and scalar output projections do not hide join relations.
+			if (proj.children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+			    proj.children[0]->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+				can_pull_through = false;
+				break;
+			}
+			// Keep computations below a cross product to avoid multiplying their evaluation.
+			for (auto &entry : projection_map) {
+				auto type = entry.second->GetExpressionType();
+				if (type != ExpressionType::BOUND_COLUMN_REF && type != ExpressionType::VALUE_CONSTANT) {
+					can_pull_through = false;
+					return;
+				}
+			}
+		}
+
 		LogicalOperatorVisitor::EnumerateExpressions(parent_op, [&](unique_ptr<Expression> *expr) {
+			if (keep_throwing_filters_above && IsThrowingProjectionFilter(**expr, projection_map)) {
+				can_pull_through = false;
+				return;
+			}
 			ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child_expr) {
 				if (child_expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 					return;
@@ -221,11 +262,29 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 	}
 }
 
-void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
-	VisitOperator(op);
+void ProjectionPullup::Optimize(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
+	OptimizeSubtree(optimizer, op, op);
+}
+
+void ProjectionPullup::OptimizeSubtree(Optimizer &optimizer, unique_ptr<LogicalOperator> &root,
+                                       unique_ptr<LogicalOperator> &op) {
+	BindingReplacementGraph pending;
+	ProjectionPullup next(optimizer, root, pending);
+	next.VisitOperator(op);
+	next.FlushReplacements();
+}
+
+void ProjectionPullup::FlushReplacements() {
+	if (replacements.Empty()) {
+		return;
+	}
+	CorrelatedColumnBindingReplacer replacer(replacements);
+	replacer.VisitOperator(*root);
+	replacements = BindingReplacementGraph();
 }
 
 void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
+	ColumnBindingRewrite::ApplyToOperatorBindings(*op, replacements);
 	switch (op->type) {
 	// These operators depend on column order.
 	// If their immediate child is a projection, keep it and recurse into the projection’s child.
@@ -238,7 +297,6 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		}
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_CTE_REF:
@@ -247,6 +305,12 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		for (auto &child : op->children) {
 			InsertProjectionBelowOp(op, child, false);
 		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		parents.push_back(*op);
+		VisitOperatorChildren(*op);
+		PopParents(*op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -287,7 +351,6 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op->Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
-
 		// Check if all expressions are simple column refs
 		// Cannot pull this projection up safely if any expression is not a column ref
 		bool all_column_refs = true;
@@ -297,9 +360,9 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 			if (proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				all_column_refs = false;
 			}
-			if (proj.expressions[i]->IsVolatile()) {
-				ProjectionPullup next(optimizer, root);
-				next.Optimize(proj.children[0]);
+			if (proj.expressions[i]->IsVolatile() || proj.expressions[i]->CanThrow()) {
+				ProjectionPullup next(optimizer, root, replacements);
+				next.VisitOperator(proj.children[0]);
 				return; // bail
 			}
 		}
@@ -309,15 +372,15 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		// if expressions in the projections are colrefs, we can always pull it up
 		// if it's not a colref, we can pull it up only if it does not appear in the operator enumerate expressions
 		idx_t pull_up_to_here = parents.size();
-		CanPullThrough(projection_map, can_pull_through);
+		CanPullThrough(projection_map, proj, can_pull_through);
 
 		// Partial pullup is intentionally not implemented.
 		// Pulling a projection only partially up could leave it in an intermediate state between operators. This would
 		// reduce the opportunities for join reordering without providing any benefit.
 		if (!can_pull_through) {
 			// Recurse into child;
-			ProjectionPullup next(optimizer, root);
-			next.Optimize(proj.children[0]);
+			ProjectionPullup next(optimizer, root, replacements);
+			next.VisitOperator(proj.children[0]);
 			return;
 		}
 
@@ -329,12 +392,12 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 			// memory blowup.
 			if (op->children[0]->type == LogicalOperatorType::LOGICAL_UNNEST) {
 				parents.push_back(*op);
-				Optimize(op->children[0]);
+				VisitOperator(op->children[0]);
 				PopParents(*op);
 				return;
 			}
 			if (all_column_refs) {
-				PullUpColrefProjection(op, proj, proj_bindings);
+				RemoveProjection(op, proj, proj_bindings);
 				return;
 			}
 			PullUpNonColrefProjection(op, proj, proj_bindings, pull_up_to_here);
@@ -342,7 +405,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		}
 
 		// Recurse on child
-		Optimize(op->children[0]);
+		VisitOperator(op->children[0]);
 		PopParents(*op);
 		return;
 	}
@@ -351,8 +414,38 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	}
 	}
 
-	// Create new optimizer for child (start fresh without any state)
-	ProjectionPullup next(optimizer, root);
+	// Start a fresh pullup scope for the children, sharing pending binding replacements.
+	ProjectionPullup next(optimizer, root, replacements);
 	next.VisitOperatorChildren(*op);
+	ColumnBindingRewrite::ApplyToOperatorBindings(*op, replacements);
+	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
+	    op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = op->children[0]->Cast<LogicalProjection>();
+		if (projection.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			return;
+		}
+		for (auto &expr : projection.expressions) {
+			if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF &&
+			    expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+				return;
+			}
+		}
+		bool can_remove = true;
+		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    **expr, [&](const BoundColumnRefExpression &ref) {
+				    if (ref.Binding().table_index == projection.table_index) {
+					    auto &projected = *projection.expressions[ref.Binding().column_index.GetIndex()];
+					    can_remove &= projected.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+				    }
+			    });
+		});
+		if (!can_remove) {
+			return;
+		}
+		// Aggregate outputs do not depend on the child's column order.
+		auto bindings = projection.GetColumnBindings();
+		next.RemoveProjection(op->children[0], projection, bindings);
+	}
 }
 } // namespace duckdb

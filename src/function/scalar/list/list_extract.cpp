@@ -141,7 +141,7 @@ static unique_ptr<FunctionData> StringExtractBind(BindScalarFunctionInput &input
 		return nullptr;
 	}
 	string error;
-	auto index_value = index->DefaultTryCastAs(LogicalType::BIGINT, &error);
+	auto index_value = index->TryCastAs(input.GetClientContext(), LogicalType::BIGINT, &error);
 	if (!index_value) {
 		// the index is a constant that cannot be converted to an integer at all - report that directly
 		throw ConversionException(error);
@@ -176,6 +176,9 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
 	                    StringExtractBind);
+	sfun.GetSignature().GetParameter(0).SetName("string");
+	sfun.GetSignature().GetParameter(1).SetName("index");
+
 	lfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
@@ -189,11 +192,11 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
-	lfun.GetSignature().GetParameter(0).SetName("array");
+	lfun.GetSignature().GetParameter(0).SetName("list");
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
-	                    StringExtractBind);
+	ScalarFunction sfun({}, LogicalType::VARCHAR, ListExtractFunction, StringExtractBind);
+	sfun.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("index", LogicalType::BIGINT);
 
 	array_extract_set.AddFunction(lfun);
 	array_extract_set.AddFunction(sfun);

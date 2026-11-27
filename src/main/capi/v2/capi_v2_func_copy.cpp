@@ -1,4 +1,7 @@
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_data_source_internal.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -18,20 +21,24 @@ public:
 	duckdb_v2_copy_to_batch_callback_fn to_batch_cb = nullptr;
 	duckdb_v2_copy_to_flush_callback_fn to_flush_cb = nullptr;
 	duckdb_v2_copy_to_finalize_callback_fn to_finalize_cb = nullptr;
+	duckdb_v2_copy_to_statistics_callback_fn to_statistics_cb = nullptr;
 	// COPY ... FROM
 	duckdb_v2_copy_from_bind_callback_fn from_bind_cb = nullptr;
-	duckdb_v2_copy_from_init_global_callback_fn from_init_global_cb = nullptr;
-	duckdb_v2_copy_from_init_local_callback_fn from_init_local_cb = nullptr;
-	duckdb_v2_copy_from_exec_callback_fn from_exec_cb = nullptr;
-	duckdb_v2_copy_from_progress_callback_fn from_progress_cb = nullptr;
+	//! The data source the COPY FROM side scans with. The bind data of a statement refers to it, which the function
+	//! outlives.
+	CV2DataSourceInfo from_source;
+	bool from_source_set = false;
+	//! COPY FROM pushes nothing down: the scan produces every column the bind callback receives
+	CV2ScanOptions from_scan;
 
 	shared_ptr<CV2UserData> user_data = nullptr;
 
 	bool HasCopyTo() const {
-		return to_bind_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb || to_finalize_cb;
+		return to_bind_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb || to_finalize_cb ||
+		       to_statistics_cb;
 	}
 	bool HasCopyFrom() const {
-		return from_bind_cb || from_init_global_cb || from_init_local_cb || from_exec_cb || from_progress_cb;
+		return from_bind_cb || from_source_set;
 	}
 };
 
@@ -44,7 +51,7 @@ public:
 	shared_ptr<CopyFunctionInfo> info;
 };
 
-//! The bind data of a bound COPY statement, in either direction. Besides the user's own bind data it shares
+//! The bind data of a bound COPY TO statement. Besides the user's own bind data it shares
 //! ownership of the function info: the later hooks only receive the bind data, so it is their only route to the
 //! callbacks.
 class CV2CopyFunctionData final : public FunctionData {
@@ -52,18 +59,10 @@ public:
 	shared_ptr<CV2UserData> handle;
 	shared_ptr<CopyFunctionInfo> info;
 
-	// The static estimate a COPY FROM bind callback may set via copy_from_bind_set_cardinality.
-	idx_t cardinality = 0;
-	bool cardinality_is_exact = false;
-	bool cardinality_set = false;
-
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2CopyFunctionData>();
 		copy->handle = handle;
 		copy->info = info;
-		copy->cardinality = cardinality;
-		copy->cardinality_is_exact = cardinality_is_exact;
-		copy->cardinality_set = cardinality_set;
 		return std::move(copy);
 	}
 
@@ -73,27 +72,41 @@ public:
 	}
 };
 
+//! The bind data of a bound COPY FROM statement: what the data source it scans with needs, and the estimate its bind
+//! callback may set via copy_from_bind_set_cardinality. It shares ownership of the function info, which the later hooks
+//! only reach through the bind data.
+class CV2CopyFromData final : public CV2DataSourceBindData {
+public:
+	shared_ptr<CopyFunctionInfo> info;
+
+	idx_t cardinality = 0;
+	bool cardinality_is_exact = false;
+	bool cardinality_set = false;
+
+	auto Copy() const -> unique_ptr<FunctionData> override {
+		auto copy = make_uniq<CV2CopyFromData>();
+		CopyTo(*copy);
+		copy->info = info;
+		copy->cardinality = cardinality;
+		copy->cardinality_is_exact = cardinality_is_exact;
+		copy->cardinality_set = cardinality_set;
+		return std::move(copy);
+	}
+};
+
 class CV2CopyToGlobalState final : public GlobalFunctionData {
 public:
 	CV2UserData handle;
+	//! Where the statistics of the file are reported, when the statement asks for them
+	optional_ptr<CopyFunctionFileStatistics> written_statistics;
+	//! Serializes the flushes of callers that sink into the file directly (see CV2CopyToSink)
+	mutex flush_lock;
 };
+
+//! The local state of callers that sink into a file directly rather than through the batch interface
+class CV2CopyToLocalState final : public LocalFunctionData {};
 
 class CV2CopyToBatchData final : public PreparedBatchData {
-public:
-	CV2UserData handle;
-};
-
-class CV2CopyFromGlobalState final : public GlobalTableFunctionState {
-public:
-	auto MaxThreads() const -> idx_t override {
-		return max_threads;
-	}
-
-	CV2UserData handle;
-	idx_t max_threads = 1;
-};
-
-class CV2CopyFromLocalState final : public LocalTableFunctionState {
 public:
 	CV2UserData handle;
 };
@@ -127,7 +140,7 @@ public:
 	const vector<LogicalType> *in_types = nullptr;
 	CV2CopyOptionList in_options;
 
-	duckdb_v2_opaque out_bind_data = {};
+	shared_ptr<CV2UserData> out_bind_data;
 };
 
 static auto Convert(duckdb_v2_copy_to_bind_info_handle info) -> CV2CopyToBindInfo * {
@@ -142,7 +155,7 @@ public:
 	void *in_user_data = nullptr;
 	void *in_bind_data = nullptr;
 
-	idx_t out_target = 0;
+	optional_idx out_target;
 };
 
 static auto Convert(duckdb_v2_copy_to_batch_size_info_handle info) -> CV2CopyToBatchSizeInfo * {
@@ -215,6 +228,23 @@ static auto Convert(CV2CopyToFinalizeInfo *info) -> duckdb_v2_copy_to_finalize_i
 	return reinterpret_cast<duckdb_v2_copy_to_finalize_info_handle>(info);
 }
 
+class CV2CopyToStatisticsInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_init_data = nullptr;
+
+	idx_t out_row_count = 0;
+	idx_t out_file_size_bytes = 0;
+};
+
+static auto Convert(duckdb_v2_copy_to_statistics_info_handle info) -> CV2CopyToStatisticsInfo * {
+	return reinterpret_cast<CV2CopyToStatisticsInfo *>(info);
+}
+static auto Convert(CV2CopyToStatisticsInfo *info) -> duckdb_v2_copy_to_statistics_info_handle {
+	return reinterpret_cast<duckdb_v2_copy_to_statistics_info_handle>(info);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // COPY FROM callback info
 //----------------------------------------------------------------------------------------------------------------------
@@ -227,7 +257,7 @@ public:
 	const vector<LogicalType> *in_types = nullptr;
 	CV2CopyOptionList in_options;
 
-	duckdb_v2_opaque out_bind_data = {};
+	shared_ptr<CV2UserData> out_bind_data;
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
@@ -238,71 +268,6 @@ static auto Convert(duckdb_v2_copy_from_bind_info_handle info) -> CV2CopyFromBin
 }
 static auto Convert(CV2CopyFromBindInfo *info) -> duckdb_v2_copy_from_bind_info_handle {
 	return reinterpret_cast<duckdb_v2_copy_from_bind_info_handle>(info);
-}
-
-class CV2CopyFromInitGlobalInfo {
-public:
-	void *in_user_data = nullptr;
-	void *in_bind_data = nullptr;
-
-	duckdb_v2_opaque out_global_state = {};
-	idx_t out_max_threads = 1;
-};
-
-static auto Convert(duckdb_v2_copy_from_init_global_info_handle info) -> CV2CopyFromInitGlobalInfo * {
-	return reinterpret_cast<CV2CopyFromInitGlobalInfo *>(info);
-}
-static auto Convert(CV2CopyFromInitGlobalInfo *info) -> duckdb_v2_copy_from_init_global_info_handle {
-	return reinterpret_cast<duckdb_v2_copy_from_init_global_info_handle>(info);
-}
-
-class CV2CopyFromInitLocalInfo {
-public:
-	void *in_user_data = nullptr;
-	void *in_bind_data = nullptr;
-	void *in_global_state = nullptr;
-
-	duckdb_v2_opaque out_local_state = {};
-};
-
-static auto Convert(duckdb_v2_copy_from_init_local_info_handle info) -> CV2CopyFromInitLocalInfo * {
-	return reinterpret_cast<CV2CopyFromInitLocalInfo *>(info);
-}
-static auto Convert(CV2CopyFromInitLocalInfo *info) -> duckdb_v2_copy_from_init_local_info_handle {
-	return reinterpret_cast<duckdb_v2_copy_from_init_local_info_handle>(info);
-}
-
-class CV2CopyFromExecInfo {
-public:
-	void *in_user_data = nullptr;
-	void *in_bind_data = nullptr;
-	void *in_global_state = nullptr;
-	void *in_local_state = nullptr;
-
-	DataChunk *output = nullptr;
-};
-
-static auto Convert(duckdb_v2_copy_from_exec_info_handle info) -> CV2CopyFromExecInfo * {
-	return reinterpret_cast<CV2CopyFromExecInfo *>(info);
-}
-static auto Convert(CV2CopyFromExecInfo *info) -> duckdb_v2_copy_from_exec_info_handle {
-	return reinterpret_cast<duckdb_v2_copy_from_exec_info_handle>(info);
-}
-
-class CV2CopyFromProgressInfo {
-public:
-	void *in_user_data = nullptr;
-	void *in_bind_data = nullptr;
-	void *in_global_state = nullptr;
-
-	double out_progress = 0.0;
-};
-
-static auto Convert(duckdb_v2_copy_from_progress_info_handle info) -> CV2CopyFromProgressInfo * {
-	return reinterpret_cast<CV2CopyFromProgressInfo *>(info);
-}
-static auto Convert(CV2CopyFromProgressInfo *info) -> duckdb_v2_copy_from_progress_info_handle {
-	return reinterpret_cast<duckdb_v2_copy_from_progress_info_handle>(info);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -322,14 +287,11 @@ static auto GetUserBindData(const FunctionData &bind_data) -> void * {
 	return handle ? handle->GetData() : nullptr;
 }
 
-//! Takes ownership of whatever bind data the callback set, so it is destroyed even when the callback failed.
-static auto MakeBindData(const shared_ptr<CopyFunctionInfo> &info, const duckdb_v2_opaque &out_bind_data)
+static auto MakeBindData(const shared_ptr<CopyFunctionInfo> &info, shared_ptr<CV2UserData> handle)
     -> unique_ptr<CV2CopyFunctionData> {
 	auto result = make_uniq<CV2CopyFunctionData>();
 	result->info = info;
-	if (out_bind_data.ptr) {
-		result->handle = make_shared_ptr<CV2UserData>(out_bind_data.ptr, out_bind_data.destroy, out_bind_data.equals);
-	}
+	result->handle = std::move(handle);
 	return result;
 }
 
@@ -339,6 +301,11 @@ static auto MakeBindData(const shared_ptr<CopyFunctionInfo> &info, const duckdb_
 
 static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, const vector<Identifier> &names,
                           const vector<LogicalType> &sql_types) -> unique_ptr<FunctionData> {
+	if (!input.function_info) {
+		// the bind reaches the callbacks through the function info, which a caller that binds the copy function
+		// itself has to pass along
+		throw InvalidInputException("The COPY TO bind of a copy function was called without its function info");
+	}
 	const auto &info = input.function_info->Cast<CV2CopyFunctionInfo>();
 
 	CV2CopyToBindInfo args = {};
@@ -352,17 +319,18 @@ static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, 
 	CV2ErrorInfo err = {};
 	if (info.to_bind_cb) {
 		auto err_ptr = Convert(&err);
-		info.to_bind_cb(Convert(&args), Convert(&context), &err_ptr);
+		CV2CallbackContext callback_context(context);
+		info.to_bind_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 	}
 
-	auto result = MakeBindData(input.function_info, args.out_bind_data);
+	auto result = MakeBindData(input.function_info, std::move(args.out_bind_data));
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
 	return std::move(result);
 }
 
-static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) -> idx_t {
+static auto CV2CopyToBatchSize(ClientContext &context, const FunctionData &bind_data) -> optional_idx {
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToBatchSizeInfo args = {};
@@ -371,18 +339,19 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_batch_size_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_batch_size_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
-	if (args.out_target == 0) {
+	if (args.out_target.IsValid() && args.out_target == 0) {
 		throw InvalidInputException("The batch size callback must set a target greater than 0.");
 	}
 	return args.out_target;
 }
 
-static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path)
+static auto CV2CopyToInitGlobal(ClientContext &context, const FunctionData &bind_data, const string &file_path)
     -> unique_ptr<GlobalFunctionData> {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -395,7 +364,8 @@ static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data,
 	CV2ErrorInfo err = {};
 	if (info.to_init_cb) {
 		auto err_ptr = Convert(&err);
-		info.to_init_cb(Convert(&args), Convert(&context), &err_ptr);
+		CV2CallbackContext callback_context(context);
+		info.to_init_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 	}
 
 	auto result = make_uniq<CV2CopyToGlobalState>();
@@ -410,7 +380,7 @@ static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data,
 	return std::move(result);
 }
 
-static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToPrepareBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                                   unique_ptr<ColumnDataCollection> collection) -> unique_ptr<PreparedBatchData> {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -422,7 +392,8 @@ static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_dat
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_batch_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_batch_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	auto result = make_uniq<CV2CopyToBatchData>();
 	if (args.out_batch_data.ptr) {
@@ -436,7 +407,7 @@ static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_dat
 	return std::move(result);
 }
 
-static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToFlushBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                                 PreparedBatchData &batch) -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -448,33 +419,94 @@ static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data,
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_flush_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_flush_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
 }
 
-static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) -> void {
+static auto CV2CopyToReportStatistics(ClientContext &context, const FunctionData &bind_data,
+                                      CV2CopyToGlobalState &gstate) -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 
-	// Always wired, as the engine requires a finalize hook; the user's callback is optional.
-	if (!info.to_finalize_cb) {
-		return;
-	}
-
-	CV2CopyToFinalizeInfo args = {};
+	CV2CopyToStatisticsInfo args = {};
 	args.in_user_data = GetUserData(info);
 	args.in_bind_data = GetUserBindData(bind_data);
-	args.in_init_data = gstate.Cast<CV2CopyToGlobalState>().handle.GetData();
+	args.in_init_data = gstate.handle.GetData();
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_finalize_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_statistics_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
+	gstate.written_statistics->row_count = args.out_row_count;
+	gstate.written_statistics->file_size_bytes = args.out_file_size_bytes;
+}
+
+static auto CV2CopyToFinalize(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate_p)
+    -> void {
+	const auto &info = GetFunctionInfo(bind_data);
+	auto &gstate = gstate_p.Cast<CV2CopyToGlobalState>();
+
+	// Always wired, as the engine requires a finalize hook; the user's callback is optional.
+	if (info.to_finalize_cb) {
+		CV2CopyToFinalizeInfo args = {};
+		args.in_user_data = GetUserData(info);
+		args.in_bind_data = GetUserBindData(bind_data);
+		args.in_init_data = gstate.handle.GetData();
+
+		CV2ErrorInfo err = {};
+		auto err_ptr = Convert(&err);
+		CV2CallbackContext callback_context(context);
+		info.to_finalize_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+		if (err.HasError()) {
+			err.ThrowAsException();
+		}
+	}
+	// the statistics describe the finished file, so they are reported once it is finalized
+	if (gstate.written_statistics) {
+		CV2CopyToReportStatistics(context, bind_data, gstate);
+	}
+}
+
+//! The engine asks where to report the statistics of a file right after creating it, before anything is written to it
+static auto CV2CopyToGetWrittenStatistics(ClientContext &context, const FunctionData &bind_data,
+                                          GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics) -> void {
+	gstate.Cast<CV2CopyToGlobalState>().written_statistics = &statistics;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO sink interface
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO itself drives the function through its batch interface. These hooks serve callers that write a file through
+// the copy function directly, sinking chunks into it one at a time - every chunk is written as a batch of its own.
+
+static auto CV2CopyToInitLocal(ExecutionContext &context, const FunctionData &bind_data)
+    -> unique_ptr<LocalFunctionData> {
+	return make_uniq<CV2CopyToLocalState>();
+}
+
+static auto CV2CopyToSink(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
+                          LocalFunctionData &lstate, DataChunk &input) -> void {
+	if (input.size() == 0) {
+		return;
+	}
+	auto batch = make_uniq<ColumnDataCollection>(context.client, input.GetTypes());
+	batch->Append(input);
+	auto prepared = CV2CopyToPrepareBatch(context.client, bind_data, gstate, std::move(batch));
+	// batches are never flushed concurrently for the same file
+	lock_guard<mutex> guard(gstate.Cast<CV2CopyToGlobalState>().flush_lock);
+	CV2CopyToFlushBatch(context.client, bind_data, gstate, *prepared);
+}
+
+static auto CV2CopyToCombine(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
+                             LocalFunctionData &lstate) -> void {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -496,9 +528,15 @@ static auto CV2CopyFromBind(ClientContext &context, CopyFromFunctionBindInput &i
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_bind_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.from_bind_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
-	auto result = MakeBindData(function_info, args.out_bind_data);
+	auto result = make_uniq<CV2CopyFromData>();
+	result->info = function_info;
+	result->handle = std::move(args.out_bind_data);
+	result->source = &info.from_source;
+	result->scan = &info.from_scan;
+	result->column_types = expected_types;
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;
@@ -508,107 +546,9 @@ static auto CV2CopyFromBind(ClientContext &context, CopyFromFunctionBindInput &i
 	return std::move(result);
 }
 
-static auto CV2CopyFromInitGlobal(ClientContext &context, TableFunctionInitInput &input)
-    -> unique_ptr<GlobalTableFunctionState> {
-	const auto &bind_data = *input.bind_data;
-	const auto &info = GetFunctionInfo(bind_data);
-
-	// Always produced, even without a callback: it carries the thread count the read runs with.
-	auto result = make_uniq<CV2CopyFromGlobalState>();
-	if (!info.from_init_global_cb) {
-		return std::move(result);
-	}
-
-	CV2CopyFromInitGlobalInfo args = {};
-	args.in_user_data = GetUserData(info);
-	args.in_bind_data = GetUserBindData(bind_data);
-
-	CV2ErrorInfo err = {};
-	auto err_ptr = Convert(&err);
-	info.from_init_global_cb(Convert(&args), Convert(&context), &err_ptr);
-
-	if (args.out_global_state.ptr) {
-		result->handle =
-		    CV2UserData(args.out_global_state.ptr, args.out_global_state.destroy, args.out_global_state.equals);
-	}
-	result->max_threads = args.out_max_threads;
-
-	// Throw after taking ownership of the state, so that it is destroyed even if we error.
-	if (err.HasError()) {
-		err.ThrowAsException();
-	}
-
-	return std::move(result);
-}
-
-static auto CV2CopyFromInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
-                                 GlobalTableFunctionState *global_state) -> unique_ptr<LocalTableFunctionState> {
-	const auto &bind_data = *input.bind_data;
-	const auto &info = GetFunctionInfo(bind_data);
-
-	if (!info.from_init_local_cb) {
-		return nullptr;
-	}
-
-	CV2CopyFromInitLocalInfo args = {};
-	args.in_user_data = GetUserData(info);
-	args.in_bind_data = GetUserBindData(bind_data);
-	if (global_state) {
-		args.in_global_state = global_state->Cast<CV2CopyFromGlobalState>().handle.GetData();
-	}
-
-	CV2ErrorInfo err = {};
-	auto err_ptr = Convert(&err);
-	info.from_init_local_cb(Convert(&args), Convert(&context.client), &err_ptr);
-
-	unique_ptr<LocalTableFunctionState> result = nullptr;
-	if (args.out_local_state.ptr) {
-		auto set_result = make_uniq<CV2CopyFromLocalState>();
-		set_result->handle =
-		    CV2UserData(args.out_local_state.ptr, args.out_local_state.destroy, args.out_local_state.equals);
-		result = std::move(set_result);
-	}
-
-	// Throw after taking ownership of the state, so that it is destroyed even if we error.
-	if (err.HasError()) {
-		err.ThrowAsException();
-	}
-
-	return result;
-}
-
-static auto CV2CopyFromExec(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
-	const auto &bind_data = *input.bind_data;
-	const auto &info = GetFunctionInfo(bind_data);
-
-	CV2CopyFromExecInfo args = {};
-	args.in_user_data = GetUserData(info);
-	args.in_bind_data = GetUserBindData(bind_data);
-	if (input.global_state) {
-		args.in_global_state = input.global_state->Cast<CV2CopyFromGlobalState>().handle.GetData();
-	}
-	if (input.local_state) {
-		args.in_local_state = input.local_state->Cast<CV2CopyFromLocalState>().handle.GetData();
-	}
-	args.output = &output;
-
-	CV2ErrorInfo err = {};
-	auto err_ptr = Convert(&err);
-	info.from_exec_cb(Convert(&args), Convert(&context), &err_ptr);
-
-	if (err.HasError()) {
-		err.ThrowAsException();
-	}
-
-	// The vector write API sizes per vector, while the engine reads the chunk's cardinality. Callers typically size
-	// only the first vector and write the rest through direct buffer writes, so take the first vector's size as the
-	// batch's row count and propagate it to the others. The target table always has at least one column.
-	output.SetChildCardinality(output.data[0].size());
-}
-
 static auto CV2CopyFromCardinality(ClientContext &context, const FunctionData *bind_data)
     -> unique_ptr<NodeStatistics> {
-	const auto &data = bind_data->Cast<CV2CopyFunctionData>();
+	const auto &data = bind_data->Cast<CV2CopyFromData>();
 	if (!data.cardinality_set) {
 		// No estimate at all: the optimizer falls back on its own defaults.
 		return nullptr;
@@ -620,37 +560,18 @@ static auto CV2CopyFromCardinality(ClientContext &context, const FunctionData *b
 	return make_uniq<NodeStatistics>(data.cardinality);
 }
 
-static auto CV2CopyFromProgress(ClientContext &context, const FunctionData *bind_data,
-                                const GlobalTableFunctionState *global_state) -> double {
-	const auto &info = GetFunctionInfo(*bind_data);
-
-	CV2CopyFromProgressInfo args = {};
-	args.in_user_data = GetUserData(info);
-	args.in_bind_data = GetUserBindData(*bind_data);
-	if (global_state) {
-		// The callback runs concurrently with the read, so the state it reads is the shared one, unsynchronized.
-		args.in_global_state = global_state->Cast<CV2CopyFromGlobalState>().handle.GetData();
-	}
-
-	CV2ErrorInfo err = {};
-	auto err_ptr = Convert(&err);
-	info.from_progress_cb(Convert(&args), Convert(&context), &err_ptr);
-
-	if (err.HasError()) {
-		err.ThrowAsException();
-	}
-
-	// The API contract is a 0.0-1.0 fraction, the engine reads a 0-100 percentage.
-	return MinValue<double>(MaxValue<double>(args.out_progress, 0.0), 1.0) * 100.0;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 // Function handle
 //----------------------------------------------------------------------------------------------------------------------
 
 class CV2CopyFunction {
 public:
-	void Register() {
+	explicit CV2CopyFunction(DatabaseInstance &db) : db(db) {
+	}
+
+	//! Validates the configuration and builds the copy function to register on `target`.
+	CopyFunction Build(DatabaseInstance &target) {
+		CheckRegistrationTarget(db, target, "copy function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -672,9 +593,16 @@ public:
 			if (!info.from_bind_cb) {
 				throw InvalidInputException("Bind callback must be set for the COPY FROM side of the function.");
 			}
-			if (!info.from_exec_cb) {
-				throw InvalidInputException("Exec callback must be set for the COPY FROM side of the function.");
+			if (!info.from_source_set) {
+				throw InvalidInputException("A data source must be set for the COPY FROM side of the function.");
 			}
+			info.from_source.Verify();
+			// Only once nothing can refuse the registration: a refused one leaves the configuration as it was.
+			// The data source gets the name for its error messages, and the user data of the function unless it has
+			// some.
+			info.from_source.name = name;
+			info.from_source.InheritUserData(info.user_data);
+			info.from_scan.user_data = info.user_data;
 		}
 
 		auto function_info = make_shared_ptr<CV2CopyFunctionInfo>(std::move(info));
@@ -686,67 +614,38 @@ public:
 			function.prepare_batch = CV2CopyToPrepareBatch;
 			function.flush_batch = CV2CopyToFlushBatch;
 			function.copy_to_finalize = CV2CopyToFinalize;
+			function.copy_to_initialize_local = CV2CopyToInitLocal;
+			function.copy_to_sink = CV2CopyToSink;
+			function.copy_to_combine = CV2CopyToCombine;
 			if (function_info->to_batch_size_cb) {
 				function.desired_batch_size = CV2CopyToBatchSize;
+			}
+			if (function_info->to_statistics_cb) {
+				function.copy_to_get_written_statistics = CV2CopyToGetWrittenStatistics;
 			}
 		}
 		if (has_copy_from) {
 			// The engine reads through a table function whose own bind is skipped in favour of copy_from_bind.
-			TableFunction reader(name, {}, CV2CopyFromExec, nullptr, CV2CopyFromInitGlobal, CV2CopyFromInitLocal);
+			TableFunction reader(name, {}, CV2DataSourceExec, nullptr, CV2DataSourceInitGlobal, CV2DataSourceInitLocal);
+			function_info->from_source.ConfigureScan(reader);
 			// Always wired: it serves the static estimate a bind callback may set, which is not known at registration.
 			reader.cardinality = CV2CopyFromCardinality;
-			if (function_info->from_progress_cb) {
-				reader.table_scan_progress = CV2CopyFromProgress;
-			}
 			reader.function_info = make_shared_ptr<CV2CopyFromTableInfo>(function_info);
 			function.copy_from_bind = CV2CopyFromBind;
 			function.copy_from_function = std::move(reader);
 		}
 		function.function_info = std::move(function_info);
+		function.extension = extension;
 
-		// Call the implementation to register
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2CopyFunction() = default;
-	virtual void RegisterToCatalog(CopyFunction function) = 0;
-
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	CV2CopyFunctionInfo info;
 	Identifier name;
-};
-
-class CV2ConnectionCopyFunction : public CV2CopyFunction {
-public:
-	explicit CV2ConnectionCopyFunction(Connection &connection) : connection(connection) {
-	}
-
-	void RegisterToCatalog(CopyFunction function) override {
-		auto &context = *connection.context;
-
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateCopyFunctionInfo cf_info(std::move(function));
-			cf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateCopyFunction(context, cf_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionCopyFunction : public CV2CopyFunction {
-public:
-	explicit CV2ExtensionCopyFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-	void RegisterToCatalog(CopyFunction function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
+	string extension;
 };
 
 static auto Convert(duckdb_v2_copy_function_handle func) -> CV2CopyFunction * {
@@ -763,16 +662,16 @@ static auto GetColumnType(INFO &args, idx_t index, const char *function) -> duck
 	if (index >= types.size()) {
 		throw InvalidInputException("Index out of bounds in %s", function);
 	}
-	return Convert(new LogicalType(types[index]));
+	return Convert(types[index]);
 }
 
 template <class INFO>
-static auto GetColumnName(INFO &args, idx_t index, const char *function) -> duckdb_v2_identifier_t {
+static auto GetColumnName(INFO &args, idx_t index, const char *function) -> const auto & {
 	const auto &names = *args.in_names;
 	if (index >= names.size()) {
 		throw InvalidInputException("Index out of bounds in %s", function);
 	}
-	return Convert(names[index]);
+	return names[index];
 }
 
 template <class INFO>
@@ -809,38 +708,39 @@ static auto GetOptionValue(INFO &args, idx_t index, const char *function) -> duc
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                               duckdb_v2_copy_function_handle *function,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
+DUCKDB_V2_ERROR duckdb_v2_copy_function_create(duckdb_v2_factory_handle factory,
+                                               duckdb_v2_copy_function_handle *function,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(function);
 	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto result = duckdb::make_uniq<CV2ConnectionCopyFunction>(conn);
+		auto result = duckdb::make_uniq<CV2CopyFunction>(Convert(factory)->GetDatabase());
 		*function = Convert(result.release());
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                              duckdb_v2_copy_function_handle *function,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
+DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function, const char *name,
+                                                 idx_t name_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
-	*function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto result = duckdb::make_uniq<CV2ExtensionCopyFunction>(loader);
-		*function = Convert(result.release());
-	});
+	DUCKDB_CHECK_STR_ARG(name, name_length);
+	return WithErrorHandler(
+	    err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name, name_length)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function, duckdb_v2_str *name,
-                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_function_set_file_extension(duckdb_v2_copy_function_handle function,
+                                                           const char *extension, idx_t extension_length,
+                                                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
-	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	DUCKDB_CHECK_STR_ARG(extension, extension_length);
+	return WithErrorHandler(err, [&]() {
+		duckdb::string value(Convert(extension, extension_length));
+		if (!value.empty() && value[0] == '.') {
+			throw duckdb::InvalidInputException("The file extension of a copy function is set without its leading dot, "
+			                                    "e.g. \"parquet\" rather than \".parquet\".");
+		}
+		Convert(function)->extension = std::move(value);
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_function_set_user_data(duckdb_v2_copy_function_handle function, duckdb_v2_opaque *data,
@@ -914,14 +814,18 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_set_bind_data(duckdb_v2_copy_to_bind_info
                                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
+	return WithErrorHandler(err, [&]() {
+		Convert(info)->out_bind_data =
+		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;
+	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_file_path(duckdb_v2_copy_to_bind_info_handle info, duckdb_v2_str *path,
-                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_file_path(duckdb_v2_copy_to_bind_info_handle info, const char **path,
+                                                     idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_count(duckdb_v2_copy_to_bind_info_handle info, idx_t *count,
@@ -942,11 +846,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_type(duckdb_v2_copy_to_bind_in
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_name(duckdb_v2_copy_to_bind_info_handle info, idx_t index,
-                                                       duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err) {
+                                                       const char **name, idx_t *name_length,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(
-	    err, [&]() { *name = GetColumnName(*Convert(info), index, "duckdb_v2_copy_to_bind_get_column_name"); });
+	DUCKDB_CHECK_ARG(name_length);
+	return WithErrorHandler(err, [&]() {
+		SetStringOut(name, name_length, GetColumnName(*Convert(info), index, "duckdb_v2_copy_to_bind_get_column_name"));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_count(duckdb_v2_copy_to_bind_info_handle info, idx_t *count,
@@ -957,11 +864,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_count(duckdb_v2_copy_to_bind_i
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_name(duckdb_v2_copy_to_bind_info_handle info, idx_t index,
-                                                       duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err) {
+                                                       const char **name, idx_t *name_length,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(name_length);
 	return WithErrorHandler(err, [&]() {
-		*name = Convert(*GetOption(*Convert(info), index, "duckdb_v2_copy_to_bind_get_option_name").first);
+		SetStringOut(name, name_length,
+		             *GetOption(*Convert(info), index, "duckdb_v2_copy_to_bind_get_option_name").first);
 	});
 }
 
@@ -1017,11 +927,12 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_bind_data(duckdb_v2_copy_to_init_info
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_file_path(duckdb_v2_copy_to_init_info_handle info, duckdb_v2_str *path,
-                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_file_path(duckdb_v2_copy_to_init_info_handle info, const char **path,
+                                                     idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_init_set_init_data(duckdb_v2_copy_to_init_info_handle info, duckdb_v2_opaque *data,
@@ -1146,32 +1057,19 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_set_bind_callback(duckdb_v2_copy_function_ha
 	return WithErrorHandler(err, [&]() { Convert(function)->info.from_bind_cb = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_from_set_init_global_callback(duckdb_v2_copy_function_handle function,
-                                                             duckdb_v2_copy_from_init_global_callback_fn callback,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_from_set_data_source(duckdb_v2_copy_function_handle function,
+                                                    duckdb_v2_data_source_handle data_source,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->info.from_init_global_cb = callback; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_set_init_local_callback(duckdb_v2_copy_function_handle function,
-                                                            duckdb_v2_copy_from_init_local_callback_fn callback,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->info.from_init_local_cb = callback; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_set_exec_callback(duckdb_v2_copy_function_handle function,
-                                                      duckdb_v2_copy_from_exec_callback_fn callback,
-                                                      duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->info.from_exec_cb = callback; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_set_progress_callback(duckdb_v2_copy_function_handle function,
-                                                          duckdb_v2_copy_from_progress_callback_fn callback,
-                                                          duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->info.from_progress_cb = callback; });
+	DUCKDB_CHECK_ARG(data_source);
+	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
+		auto &source = *Convert(data_source);
+		CheckRegistrationTarget(source.db, self.db, "data source");
+		// The function keeps a copy: changing the data source afterwards does not change the function
+		self.info.from_source = source.info;
+		self.info.from_source_set = true;
+	});
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1189,14 +1087,18 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_set_bind_data(duckdb_v2_copy_from_bind_
                                                        duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
+	return WithErrorHandler(err, [&]() {
+		Convert(info)->out_bind_data =
+		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;
+	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_file_path(duckdb_v2_copy_from_bind_info_handle info, duckdb_v2_str *path,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_file_path(duckdb_v2_copy_from_bind_info_handle info, const char **path,
+                                                       idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_count(duckdb_v2_copy_from_bind_info_handle info, idx_t *count,
@@ -1217,12 +1119,15 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_type(duckdb_v2_copy_from_bin
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_name(duckdb_v2_copy_from_bind_info_handle info, idx_t index,
-                                                         duckdb_v2_identifier_t *name,
+                                                         const char **name, idx_t *name_length,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(
-	    err, [&]() { *name = GetColumnName(*Convert(info), index, "duckdb_v2_copy_from_bind_get_column_name"); });
+	DUCKDB_CHECK_ARG(name_length);
+	return WithErrorHandler(err, [&]() {
+		SetStringOut(name, name_length,
+		             GetColumnName(*Convert(info), index, "duckdb_v2_copy_from_bind_get_column_name"));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_count(duckdb_v2_copy_from_bind_info_handle info, idx_t *count,
@@ -1233,12 +1138,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_count(duckdb_v2_copy_from_bi
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_name(duckdb_v2_copy_from_bind_info_handle info, idx_t index,
-                                                         duckdb_v2_identifier_t *name,
+                                                         const char **name, idx_t *name_length,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(name_length);
 	return WithErrorHandler(err, [&]() {
-		*name = Convert(*GetOption(*Convert(info), index, "duckdb_v2_copy_from_bind_get_option_name").first);
+		SetStringOut(name, name_length,
+		             *GetOption(*Convert(info), index, "duckdb_v2_copy_from_bind_get_option_name").first);
 	});
 }
 
@@ -1264,154 +1171,34 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_set_cardinality(duckdb_v2_copy_from_bin
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// COPY FROM init global
-//----------------------------------------------------------------------------------------------------------------------
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_global_get_user_data(duckdb_v2_copy_from_init_global_info_handle info,
-                                                              void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_global_get_bind_data(duckdb_v2_copy_from_init_global_info_handle info,
-                                                              void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_global_set_global_state(duckdb_v2_copy_from_init_global_info_handle info,
-                                                                 duckdb_v2_opaque *data,
-                                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_global_state = *data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_global_set_max_threads(duckdb_v2_copy_from_init_global_info_handle info,
-                                                                idx_t max_threads, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	return WithErrorHandler(err, [&]() {
-		if (max_threads == 0) {
-			throw duckdb::InvalidInputException("The maximum number of threads must be at least 1");
-		}
-		Convert(info)->out_max_threads = max_threads;
-	});
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// COPY FROM init local
-//----------------------------------------------------------------------------------------------------------------------
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_local_get_user_data(duckdb_v2_copy_from_init_local_info_handle info,
-                                                             void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_local_get_bind_data(duckdb_v2_copy_from_init_local_info_handle info,
-                                                             void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_local_get_global_state(duckdb_v2_copy_from_init_local_info_handle info,
-                                                                void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_init_local_set_local_state(duckdb_v2_copy_from_init_local_info_handle info,
-                                                               duckdb_v2_opaque *data,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_local_state = *data; });
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// COPY FROM exec
-//----------------------------------------------------------------------------------------------------------------------
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_exec_get_user_data(duckdb_v2_copy_from_exec_info_handle info, void **data,
-                                                       duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_exec_get_bind_data(duckdb_v2_copy_from_exec_info_handle info, void **data,
-                                                       duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_exec_get_global_state(duckdb_v2_copy_from_exec_info_handle info, void **data,
-                                                          duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_exec_get_local_state(duckdb_v2_copy_from_exec_info_handle info, void **data,
-                                                         duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_exec_get_output_chunk(duckdb_v2_copy_from_exec_info_handle info,
-                                                          duckdb_v2_data_chunk_handle *chunk,
-                                                          duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(chunk);
-	return WithErrorHandler(err, [&]() { *chunk = Convert(Convert(info)->output); });
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// COPY FROM progress
-//----------------------------------------------------------------------------------------------------------------------
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_get_user_data(duckdb_v2_copy_from_progress_info_handle info, void **data,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_get_bind_data(duckdb_v2_copy_from_progress_info_handle info, void **data,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_get_global_state(duckdb_v2_copy_from_progress_info_handle info,
-                                                              void **data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_set_progress(duckdb_v2_copy_from_progress_info_handle info,
-                                                          double progress, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_progress = progress; });
-}
-
-//----------------------------------------------------------------------------------------------------------------------
 // Register / destroy
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_register(duckdb_v2_copy_function_handle function,
-                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_register_copy_function(duckdb_v2_connection_handle conn,
+                                                            duckdb_v2_copy_function_handle function,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto info = duckdb::CreateCopyFunctionInfo(Convert(function)->Build(*context.db));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			catalog.CreateCopyFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_copy_function(duckdb_v2_extension_handle extension,
+                                                           duckdb_v2_copy_function_handle function,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &loader = GetExtensionLoader(extension);
+		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_function_destroy(duckdb_v2_copy_function_handle *function) {
@@ -1424,4 +1211,48 @@ DUCKDB_V2_ERROR duckdb_v2_copy_function_destroy(duckdb_v2_copy_function_handle *
 			*function = nullptr;
 		}
 	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO Statistics
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_set_statistics_callback(duckdb_v2_copy_function_handle function,
+                                                          duckdb_v2_copy_to_statistics_callback_fn callback,
+                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.to_statistics_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_user_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_bind_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_init_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_init_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_row_count(duckdb_v2_copy_to_statistics_info_handle info,
+                                                           idx_t row_count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_row_count = row_count; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_file_size(duckdb_v2_copy_to_statistics_info_handle info,
+                                                           idx_t file_size_bytes, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_file_size_bytes = file_size_bytes; });
 }

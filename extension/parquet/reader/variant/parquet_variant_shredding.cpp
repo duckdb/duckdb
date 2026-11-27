@@ -1,4 +1,4 @@
-#include "reader/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 #include "reader/variant_column_reader.hpp"
 
 #include "duckdb/common/types/variant/variant_builder.hpp"
@@ -281,7 +281,7 @@ bool TypedValid(const ShreddedGroupView &view, idx_t index) {
 
 //! A root that resolves to a (variant) NULL / missing is a genuine SQL NULL row (matches the unshredded path)
 bool IsRowNull(const ParquetVariantNode &root) {
-	return root.IsNull() || root.GetTypeId() == VariantLogicalType::VARIANT_NULL;
+	return root.IsNull() || root.GetTypeId() == LogicalTypeId::SQLNULL;
 }
 
 //! Set the shredded struct validity for the SQL NULL rows (used when there is no leftover to build, so the

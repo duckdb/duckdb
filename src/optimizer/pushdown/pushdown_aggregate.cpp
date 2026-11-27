@@ -9,15 +9,16 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static bool IsVolatile(LogicalAggregate &aggr, const Expression &expr) {
-	bool is_volatile = false;
+static bool CanInlineGroupBindings(LogicalAggregate &aggr, const Expression &expr) {
+	bool can_inline = true;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		D_ASSERT(colref.Depth() == 0);
-		if (aggr.GetExpression(colref.Binding()).IsVolatile()) {
-			is_volatile = true;
+		auto &group_expr = aggr.GetExpression(colref.Binding());
+		if (group_expr.IsVolatile() || group_expr.CanThrow()) {
+			can_inline = false;
 		}
 	});
-	return is_volatile;
+	return can_inline;
 }
 
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &aggr, unique_ptr<Expression> root_expr) {
@@ -41,7 +42,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 
 	// pushdown into AGGREGATE and GROUP BY
 	// we cannot push expressions that refer to the aggregate
-	FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
+	FilterPushdown child_pushdown(optimizer, projection_mode);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		if (f.bindings.find(aggr.aggregate_index) != f.bindings.end()) {
@@ -82,7 +83,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		if (!can_pushdown_filter) {
 			continue;
 		}
-		if (IsVolatile(aggr, *f.filter)) {
+		if (f.filter->IsVolatile() || !CanInlineGroupBindings(aggr, *f.filter)) {
+			// Keep volatile evaluation counts and the rows seen by throwing group expressions unchanged.
 			continue;
 		}
 		// no aggregate! we can push this down
@@ -100,7 +102,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	child_pushdown.GenerateFilters();
 
 	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

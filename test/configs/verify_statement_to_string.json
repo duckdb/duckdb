@@ -4,15 +4,10 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
-      "reason": "The trampoline transformer skeleton only supports a small use.gram slice; reparsing stringified statements requires SetStatement support",
-      "paths": [
-        "test/sql/peg_parser/transformer/use_statement_trampoline.test"
-      ]
-    },
-    {
       "reason": "Different error message",
       "paths": [
         "test/sql/error/lineitem_errors.test",
+        "test/sql/binder/empty_column_alias.test",
         "test/sql/subquery/scalar/array_order_subquery.test",
         "test/fuzzer/duckfuzz/list_try_cast.test",
         "test/fuzzer/duckfuzz/vector_size_out_of_range.test"
@@ -40,6 +35,12 @@
       "reason": "RESPECT NULLS in Window functions is not stringified as it's the default",
       "paths": [
         "test/sql/window/test_ignore_nulls.test"
+      ]
+    },
+    {
+      "reason": "Error carets point into the printed statement, which wraps a join in parentheses the typed query lacks",
+      "paths": [
+        "test/sql/error/error_location_copied_query.test"
       ]
     }
   ]

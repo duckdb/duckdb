@@ -21,11 +21,14 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TOP_N;
 
 public:
-	PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit,
-	             idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
+	PhysicalTopN(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	             vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+	             shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
 	~PhysicalTopN() override;
 
 	vector<BoundOrderByNode> orders;
+	//! NOT DISTINCT FROM comparison of the boundary value for every order column
+	vector<unique_ptr<Expression>> not_distinct_from;
 	idx_t limit;
 	idx_t offset;
 	//! Dynamic table filter (if any)
@@ -36,6 +39,7 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

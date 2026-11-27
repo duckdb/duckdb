@@ -422,6 +422,14 @@ inline DynamicListWriter<T> VectorWriter<VectorListType<T>>::WriteDynamicList() 
 	return DynamicListWriter<T>(*this, row_idx, old_offset);
 }
 
+//! The VARIANT specializations are defined in duckdb/common/types/variant_writer.hpp
+template <>
+struct VectorWriter<VectorVariantType>;
+template <>
+struct VectorWriter<VectorListType<VectorVariantType>>;
+template <>
+class DynamicListWriter<VectorVariantType>;
+
 //! Specialization of VectorWriter for list_entry_t. Writes per-row list entries
 //! to a list vector without a templated child type. Supports the primitive-style
 //! WriteValue(list_entry_t) / WriteNull() API for callers that compute list
@@ -500,7 +508,7 @@ public:
 	}
 	DynamicListAppender(const DynamicListAppender &) = delete;
 	DynamicListAppender(DynamicListAppender &&) = delete;
-	~DynamicListAppender() {
+	~DynamicListAppender() { // NOLINT(bugprone-exception-escape): writer invariants make these setters non-throwing.
 		parent.list_data[row_idx] = {base_offset, current_length};
 		parent.child_offset = base_offset + current_length;
 		VectorWriterSetListSize(parent.list_vec, base_offset + current_length);

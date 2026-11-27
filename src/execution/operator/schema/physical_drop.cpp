@@ -5,8 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
@@ -38,13 +38,15 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &client_data = ClientData::Get(context.client);
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
 		auto &current_catalog = default_entry.GetCatalog();
-		auto &current_schema = default_entry.GetSchema();
-		D_ASSERT(info->GetQualifiedName().Name() != DEFAULT_SCHEMA);
+		auto current_schema = default_entry.GetSchemaPath();
+		auto &dropped_schema = info->GetQualifiedName().Path();
+		D_ASSERT(dropped_schema.size() > 2 || info->GetQualifiedName().Name() != DEFAULT_SCHEMA);
 
 		auto resolved_current_catalog =
 		    IsInvalidCatalog(current_catalog) ? DatabaseManager::GetDefaultDatabase(context.client) : current_catalog;
-		if (catalog.GetName() == resolved_current_catalog && current_schema == info->GetQualifiedName().Name()) {
-			// Reset the schema to default
+		if (catalog.GetName() == resolved_current_catalog && dropped_schema.size() - 1 <= current_schema.size() &&
+		    std::equal(dropped_schema.begin() + 1, dropped_schema.end(), current_schema.begin())) {
+			// Reset the default when dropping its schema or an ancestor.
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
 		break;
@@ -69,9 +71,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, base_table_ref.GetQualifiedName());
-		auto &duck_table = table_entry.Cast<DuckTableEntry>();
-		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
+		auto transaction = table_entry.ParentCatalog().GetCatalogTransaction(context.client);
+		if (!table_entry.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 				throw CatalogException("Trigger with name %s does not exist on table %s",
 				                       info->GetQualifiedName().Name(), base_table_ref.Table());

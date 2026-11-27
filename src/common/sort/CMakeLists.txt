@@ -5,10 +5,13 @@ add_library_unity(
   hashed_sort.cpp
   natural_sort.cpp
   partition_key_tracker.cpp
+  partitioned_sort.cpp
   sort.cpp
   sort_strategy.cpp
   sorted_run.cpp
-  sorted_run_merger.cpp)
+  sorted_run_merger.cpp
+  topn_heap.cpp
+  topn_sort.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_sort>

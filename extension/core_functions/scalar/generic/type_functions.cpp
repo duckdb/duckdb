@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -28,7 +29,8 @@ static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressio
 }
 
 ScalarFunction TypeOfFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
+	auto fun = ScalarFunction({}, LogicalType::VARCHAR, TypeOfFunction);
+	fun.GetSignature().AddParameter("expression", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindTypeOfFunctionExpression);
 	return fun;
@@ -65,7 +67,8 @@ static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressi
 }
 
 ScalarFunction GetTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), GetTypeFunction, BindGetTypeFunction);
+	auto fun = ScalarFunction({}, LogicalType::TYPE(), GetTypeFunction, BindGetTypeFunction);
+	fun.GetSignature().AddParameter("expression", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindGetTypeFunctionExpression);
 	return fun;
@@ -102,29 +105,37 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	vector<unique_ptr<ParsedExpression>> type_args;
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto &arg = args[i];
-		auto result = make_uniq<ConstantExpression>(arg.second);
+		auto result = ConstantExpression::FromValue(arg.second);
 		result->SetAlias(Identifier(arg.first));
 
 		type_args.push_back(std::move(result));
 	}
 
 	auto type_name = args.front().second.GetValue<string>();
-	auto qualified_name = QualifiedName::Parse(type_name);
+	QualifiedName qualified_name;
+	string error;
+	if (!QualifiedName::TryParse(type_name, qualified_name, error)) {
+		throw ParserException(error);
+	}
 
 	auto unbound_type =
 	    LogicalType::UNBOUND(make_uniq<TypeExpression>(std::move(qualified_name), std::move(type_args)));
 
-	// Bind the unbound type
+	// Bind the unbound type within the decimal width of the expression
 	auto binder = Binder::CreateBinder(input.context);
+	const auto decimal_width_limit = input.GetDecimalWidthLimit();
+	binder->SetDecimalWidthLimit(&decimal_width_limit);
 	binder->BindLogicalType(unbound_type);
 	return make_uniq<BoundConstantExpression>(Value::TYPE(unbound_type));
 }
 
 ScalarFunction MakeTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
+	auto fun = ScalarFunction({}, LogicalType::TYPE(), MakeTypeFunction);
+	fun.GetSignature().AddParameter("name", LogicalType::VARCHAR);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetProperties().SetRequiresExpressionNames(true);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY).AddKwargs("kwargs", LogicalType::ANY);
 	return fun;
 }
 

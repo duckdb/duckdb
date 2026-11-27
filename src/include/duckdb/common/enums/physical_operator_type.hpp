@@ -30,6 +30,7 @@ enum class PhysicalOperatorType : uint8_t {
 	PARTITIONED_AGGREGATE,
 	LIMITED_DISTINCT,
 	FILTER,
+	TOP_KEY_FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
 	BATCH_COPY_TO_FILE,
@@ -108,8 +109,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EXPLAIN,
 	EXPLAIN_ANALYZE,
 	EMPTY_RESULT,
-	EXECUTE,
-	PREPARE,
+	// 70 was EXECUTE - keep the values of the operators after it
+	PREPARE = 71,
 	VACUUM,
 	EXPORT,
 	SET,

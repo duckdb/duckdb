@@ -1,0 +1,232 @@
+# name: test/sql/aggregate/external/perfect_hash_growing_state.test_slow
+# description: Aggregation of growing lists under a small memory limit
+# group: [external]
+
+require vector_size 2048
+
+statement ok
+SET threads = 1
+
+statement ok
+SET memory_limit = '8MB'
+
+query III
+SELECT count(*), count(xs), count(*) FILTER (WHERE g = 1 AND xs = [repeat('x', 512) || '1']) FROM (
+    SELECT (i % 10)::UTINYINT AS g, list(repeat('x', 512) || i::VARCHAR) FILTER (WHERE i % 50000 = 1) AS xs
+    FROM range(6000) t(i) GROUP BY g
+)
+----
+10	1	1
+
+statement ok
+SET memory_limit = '12MB'
+
+query II
+SELECT count(*), count(*) FILTER (WHERE v = repeat('x', 512) || lpad(g::VARCHAR, 4, '0')) FROM (
+    SELECT (i % 10)::UTINYINT AS g, min(repeat('x', 512) || lpad(i::VARCHAR, 4, '0')) AS v
+    FROM range(6000) t(i) GROUP BY g
+)
+----
+10	10
+
+foreach budget 24 32
+
+statement ok
+SET memory_limit = '{budget}MB'
+
+query III
+SELECT sum(len(xs)), count(v), sum(length(v)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           min(CASE WHEN i < 100 THEN repeat('x', 16384) || i::VARCHAR END) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	100	1638590
+
+endloop
+
+statement ok
+SET memory_limit = '22MB'
+
+query I
+SELECT sum(len(xs)) FROM (
+    SELECT (i % 57)::UTINYINT AS g, list(hash(i)) AS xs
+    FROM range(524288) t(i) GROUP BY g
+)
+----
+524288
+
+statement ok
+SET memory_limit = '16MB'
+
+statement ok
+CREATE TABLE grouped_output AS
+SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs FROM range(524288) t(i) GROUP BY g
+
+statement ok
+RESET memory_limit
+
+query II
+SELECT count(*), sum(len(xs)) FROM grouped_output
+----
+100	524288
+
+statement ok
+DROP TABLE grouped_output
+
+statement ok
+SET memory_limit = '256MB'
+
+foreach width 128 1024
+
+query II
+SELECT sum(len(xs)), sum(length(v)) FROM (
+    SELECT (i % 32)::UTINYINT AS g, list(i) FILTER (WHERE i = 0) AS xs,
+           last(CASE WHEN (i // 2048) % 2 = 0 THEN repeat('x', {width}) ELSE 'x' END ORDER BY i) AS v
+    FROM range(1073741824 // {width}) t(i) GROUP BY g
+)
+----
+1	32
+
+endloop
+
+statement ok
+SET memory_limit = '32MB'
+
+foreach start_row 0 524288
+
+query II
+SELECT sum(len(xs)), sum(length(v)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           min(CASE WHEN i BETWEEN {start_row} AND {start_row} + 99 THEN repeat('x', 16385) || (i % 100)::VARCHAR END) AS v
+    FROM range(524388) t(i) GROUP BY g
+)
+----
+524388	1638690
+
+endloop
+
+statement ok
+SET memory_limit = '48MB'
+
+query I
+SELECT sum(len(xs)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(i::VARCHAR) AS xs FROM range(1500000) t(i) GROUP BY g
+)
+----
+1500000
+
+foreach budget 64 80
+
+statement ok
+SET memory_limit = '{budget}MB'
+
+query III
+SELECT sum(len(xs)), max(len(xs)) FILTER (WHERE g = 0), sum(list_sum(xs)) FROM (
+    SELECT (CASE WHEN i % 3 = 0 THEN 0 ELSE i % 100 END)::UTINYINT AS g, list(i) AS xs
+    FROM range(1500000) t(i) GROUP BY g
+)
+----
+1500000	510000	1124999250000
+
+endloop
+
+statement ok
+SET memory_limit = '32MB'
+
+statement ok
+CREATE TABLE crossover AS
+SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs FROM range(1500000) t(i) GROUP BY g
+
+statement ok
+RESET memory_limit
+
+query II
+SELECT count(*), sum(len(xs)) FROM crossover
+----
+100	1500000
+
+statement ok
+DROP TABLE crossover
+
+# An earlier UNION branch can already have contributed states when the filtered LIST spills.
+statement ok
+SET memory_limit = '96MB'
+
+statement ok
+CREATE TABLE merged AS
+SELECT g, list(hash(i)) FILTER (WHERE i % 13 <> 0) AS xs, count(*) AS n
+FROM (SELECT i, (i % 100)::UTINYINT AS g FROM range(16384) t(i)
+      UNION ALL
+      SELECT i, (i % 100)::UTINYINT AS g FROM range(16384, 1500000) t(i))
+GROUP BY g
+
+statement ok
+RESET memory_limit
+
+query II
+SELECT count(*), count(*) FILTER (WHERE n <> 15000 OR list_sort(xs) IS DISTINCT FROM
+    list_sort(list_transform(list_filter(range(g::BIGINT, 1500000, 100), lambda j: j % 13 <> 0), lambda j: hash(j))))
+FROM merged
+----
+100	0
+
+statement ok
+DROP TABLE merged
+
+statement ok
+SET threads = 4
+
+foreach groups 1000 100
+
+statement ok
+SET memory_limit = '64MB'
+
+statement ok
+CREATE TABLE grouped AS
+SELECT g, list(hash(i)) AS xs
+FROM range(4000000) t(i), (SELECT i % {groups} AS g)
+GROUP BY g
+
+statement ok
+RESET memory_limit
+
+query II
+SELECT count(*) = {groups},
+       bool_and(list_sort(xs) IS NOT DISTINCT FROM
+                list_sort(list_transform(range(4000000 // {groups}), lambda j: hash(j * {groups} + g))))
+FROM grouped
+----
+true	true
+
+statement ok
+DROP TABLE grouped
+
+endloop
+
+# Compare a parallel table scan with a filtered list, repeated values and a NULL group.
+statement ok
+CREATE TABLE input AS
+SELECT CASE WHEN i % 17 <> 0 THEN (i % 100)::UTINYINT END AS g,
+       CASE WHEN i % 11 <> 0 THEN i % 127 END AS v, i % 3 <> 0 AS keep
+FROM range(1000000) t(i)
+
+statement ok
+SET memory_limit = '64MB'
+
+statement ok
+CREATE TABLE actual AS
+SELECT g, list(v) FILTER (WHERE keep) AS xs, count(*) AS n FROM input GROUP BY g
+
+statement ok
+RESET memory_limit
+
+statement ok
+SET perfect_ht_threshold = 0
+
+query I
+WITH expected AS (SELECT g, list(v) FILTER (WHERE keep) AS xs, count(*) AS n FROM input GROUP BY g)
+SELECT count(*) FROM actual a FULL JOIN expected e ON a.g IS NOT DISTINCT FROM e.g
+WHERE a.n IS DISTINCT FROM e.n OR list_sort(a.xs) IS DISTINCT FROM list_sort(e.xs)
+----
+0

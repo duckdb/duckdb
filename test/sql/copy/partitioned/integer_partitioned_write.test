@@ -1,0 +1,57 @@
+# name: test/sql/copy/partitioned/integer_partitioned_write.test
+# description: Direct integer partition writes preserve values, and sorted multi-key writes preserve ordering
+# group: [partitioned]
+
+require parquet
+
+statement ok
+SET threads=2;
+
+statement ok
+CREATE TABLE t AS SELECT CASE WHEN i % 4 = 0 THEN NULL ELSE i % 4 - 2 END AS p, i % 2 AS q, i AS v FROM range(6000) tbl(i);
+
+foreach type INTEGER BIGINT
+
+statement ok
+COPY (SELECT p::{type} AS p, q, v FROM t) TO '{TEST_DIR}/integer_part_{type}' (FORMAT PARQUET, PARTITION_BY (p));
+
+query I
+SELECT count(*) FROM (
+    (SELECT p, q, v FROM read_parquet('{TEST_DIR}/integer_part_{type}/**/*.parquet') EXCEPT ALL TABLE t)
+    UNION ALL
+    (TABLE t EXCEPT ALL SELECT p, q, v FROM read_parquet('{TEST_DIR}/integer_part_{type}/**/*.parquet'))
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT filename, count(DISTINCT v % 4) AS keys
+    FROM read_parquet('{TEST_DIR}/integer_part_{type}/**/*.parquet', filename=true)
+    GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
+endloop
+
+statement ok
+COPY t TO '{TEST_DIR}/integer_part_ordered' (FORMAT PARQUET, PARTITION_BY (p, q), ORDER_BY (v DESC));
+
+query I
+SELECT count(*) FROM (
+    (SELECT p, q, v FROM read_parquet('{TEST_DIR}/integer_part_ordered/**/*.parquet') EXCEPT ALL TABLE t)
+    UNION ALL
+    (TABLE t EXCEPT ALL SELECT p, q, v FROM read_parquet('{TEST_DIR}/integer_part_ordered/**/*.parquet'))
+);
+----
+0
+
+query I
+WITH per_file AS (
+    SELECT filename, v, lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+    FROM read_parquet('{TEST_DIR}/integer_part_ordered/**/*.parquet', filename=true, file_row_number=true)
+)
+SELECT count(*) FROM per_file WHERE prev_v IS NOT NULL AND prev_v < v;
+----
+0

@@ -4,6 +4,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/context.hpp"
 #include "include/icu-datefunc.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -55,12 +56,12 @@ struct ICUListRange : public ICUDateFunc {
 			increment_value = ListIncrementValue(row_idx);
 		}
 
-		uint64_t ListLength(idx_t row_idx, TZCalendar &calendar) {
+		uint64_t ListLength(Context &context, idx_t row_idx, TZCalendar &calendar) {
 			timestamp_tz_t start_value;
 			timestamp_tz_t end_value;
 			interval_t increment_value;
 			GetListValues(row_idx, start_value, end_value, increment_value);
-			return ListLength(start_value, end_value, increment_value, INCLUSIVE_BOUND, calendar);
+			return ListLength(context, start_value, end_value, increment_value, INCLUSIVE_BOUND, calendar);
 		}
 
 		void Increment(timestamp_tz_t &input, interval_t increment, TZCalendar &calendar) {
@@ -73,8 +74,8 @@ struct ICUListRange : public ICUDateFunc {
 		VectorIterator<timestamp_tz_t> end_value_data;
 		VectorIterator<interval_t> increment_value_data;
 
-		uint64_t ListLength(timestamp_tz_t start_value, timestamp_tz_t end_value, interval_t increment_value,
-		                    bool inclusive_bound, TZCalendar &calendar) {
+		uint64_t ListLength(Context &context, timestamp_tz_t start_value, timestamp_tz_t end_value,
+		                    interval_t increment_value, bool inclusive_bound, TZCalendar &calendar) {
 			bool is_positive = increment_value.months > 0 || increment_value.days > 0 || increment_value.micros > 0;
 			bool is_negative = increment_value.months < 0 || increment_value.days < 0 || increment_value.micros < 0;
 			if (!is_negative && !is_positive) {
@@ -105,6 +106,10 @@ struct ICUListRange : public ICUDateFunc {
 					if (total_values > NumericLimits<uint32_t>::Maximum()) {
 						throw InvalidInputException("Lists larger than 2^32 elements are not supported");
 					}
+					// counting the elements can take billions of steps
+					if (UnsafeNumericCast<idx_t>(total_values) % STANDARD_VECTOR_SIZE == 0) {
+						context.FastInterruptCheck();
+					}
 				}
 			} else {
 				// positive interval, start_value is going up
@@ -113,6 +118,10 @@ struct ICUListRange : public ICUDateFunc {
 					total_values++;
 					if (total_values > NumericLimits<uint32_t>::Maximum()) {
 						throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+					}
+					// counting the elements can take billions of steps
+					if (UnsafeNumericCast<idx_t>(total_values) % STANDARD_VECTOR_SIZE == 0) {
+						context.FastInterruptCheck();
 					}
 				}
 			}
@@ -129,6 +138,7 @@ struct ICUListRange : public ICUDateFunc {
 		auto &bind_info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*bind_info.calendar, bind_info.cal_setting);
 
+		auto &context = state.GetContext();
 		RangeInfoStruct<INCLUSIVE_BOUND> info(args);
 		idx_t args_size = args.size();
 		auto list_writer = FlatVector::Writer<VectorListType<timestamp_tz_t>>(result, args_size);
@@ -137,7 +147,7 @@ struct ICUListRange : public ICUDateFunc {
 				list_writer.WriteNull();
 				continue;
 			}
-			const auto length = info.ListLength(i, calendar);
+			const auto length = info.ListLength(context, i, calendar);
 			auto list = list_writer.WriteDynamicList();
 
 			timestamp_tz_t range_value = info.StartListValue(i);
@@ -147,28 +157,40 @@ struct ICUListRange : public ICUDateFunc {
 					info.Increment(range_value, increment, calendar);
 				}
 				list.WriteElement().WriteValue(range_value);
+				if ((range_idx + 1) % STANDARD_VECTOR_SIZE == 0) {
+					context.FastInterruptCheck();
+				}
 			}
 		}
-		result.Verify(args.size());
+		result.Verify();
 	}
 
 	static void AddICUListRangeFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet range("range");
-		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
-		                                 Bind));
+		ScalarFunction range_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>, Bind);
+		range_fun.GetSignature()
+		    .AddParameter("start", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("stop", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("step", LogicalType::INTERVAL);
+		range.AddFunction(range_fun);
 		// throws for infinite or mixed-sign intervals
 		range.SetFallible();
+		range.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
-		generate_series.AddFunction(
-		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
+		ScalarFunction generate_series_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>,
+		                                   Bind);
+		generate_series_fun.GetSignature()
+		    .AddParameter("start", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("stop", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("step", LogicalType::INTERVAL);
+		generate_series.AddFunction(generate_series_fun);
 
 		// throws for infinite or mixed-sign intervals
 		generate_series.SetFallible();
+		generate_series.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(generate_series);
 	}
 };

@@ -261,7 +261,7 @@ unique_ptr<Expression> LegacyBoundBetweenExpression::Deserialize(Deserializer &d
 	auto upper = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "upper");
 	auto lower_inclusive = deserializer.ReadPropertyWithDefault<bool>(203, "lower_inclusive");
 	auto upper_inclusive = deserializer.ReadPropertyWithDefault<bool>(204, "upper_inclusive");
-	auto result = LegacyBoundBetweenExpression::DeserializeLegacyExpression(std::move(input), std::move(lower), std::move(upper), lower_inclusive, upper_inclusive);
+	auto result = LegacyBoundBetweenExpression::DeserializeLegacyExpression(deserializer.Get<ClientContext &>(), std::move(input), std::move(lower), std::move(upper), lower_inclusive, upper_inclusive);
 	return result;
 }
 

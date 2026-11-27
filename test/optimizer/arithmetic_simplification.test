@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE test(X INTEGER);
 
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
+SET explain_output = 'OPTIMIZED_ONLY';
 
 # verify that nop arithmetic is flattened
 query I nosort xnorm
@@ -43,9 +43,9 @@ SELECT X//0 FROM (VALUES (1)) t(X)
 ----
 <REGEX>:.*Division by zero.*
 
-# with null_on_division_by_zero, division by zero results in a NULL
+# with error_on_division_by_zero disabled, division by zero results in a NULL
 statement ok
-SET null_on_division_by_zero=true;
+SET error_on_division_by_zero=false;
 
 query I nosort xnull
 EXPLAIN SELECT NULL::INTEGER FROM test

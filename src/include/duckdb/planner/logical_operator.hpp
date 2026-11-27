@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/main/profiler/profiler_print_format.hpp"
@@ -24,6 +23,12 @@
 namespace duckdb {
 
 class LogicalPlanVerifier;
+struct LogicalPlanSQLExportRelation;
+struct LogicalPlanVerificationPath;
+template <class T>
+class LogicalPlanVerificationResult;
+class LogicalPlanSQLExportContext;
+using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
@@ -48,6 +53,8 @@ public:
 	bool has_estimated_cardinality;
 
 public:
+	virtual LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                         const LogicalPlanVerificationPath &path);
 	virtual vector<ColumnBinding> GetColumnBindings();
 	virtual TableIndex GetRootIndex();
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
@@ -64,6 +71,8 @@ public:
 	//! Returns true if this operator or any of its descendants has side effects
 	//! Used to prevent inlining or elimination of side-effecting CTEs.
 	bool HasSideEffects() const;
+	//! Returns true if a CTE body contains a data-modifying operator.
+	bool CTEContainsDML() const;
 	//! Returns true if this operator or any of its descendants contains a volatile expression
 	bool HasVolatileExpressions() const;
 
@@ -109,7 +118,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+			InternalException::Throw("Failed to cast logical operator to type - logical operator type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -117,7 +126,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+			InternalException::Throw("Failed to cast logical operator to type - logical operator type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}

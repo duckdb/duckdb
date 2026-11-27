@@ -3,16 +3,15 @@ add_library_unity(
   OBJECT
   bind_basetableref.cpp
   bind_bound_table_ref.cpp
-  bind_delimgetref.cpp
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
   bind_column_data_ref.cpp
   bind_joinref.cpp
+  bind_match_recognize_ref.cpp
   bind_pivot.cpp
   bind_showref.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
-  bind_named_parameters.cpp
   plan_joinref.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_tableref>

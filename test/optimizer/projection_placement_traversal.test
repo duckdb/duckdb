@@ -1,0 +1,104 @@
+# name: test/optimizer/projection_placement_traversal.test
+# description: Preserve bindings and newly enabled lifts while continuing projection placement
+# group: [optimizer]
+
+statement ok
+SET disabled_optimizers='projection_pullup,common_subplan,compressed_materialization,join_elimination,join_to_semi_join';
+
+statement ok
+CREATE TABLE d AS SELECT i::INTEGER AS i, lpad(i::VARCHAR, 100, 'x') AS v FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE s AS SELECT (i*10)::INTEGER AS i FROM range(100) t(i);
+
+statement ok
+CREATE TABLE flags AS SELECT * FROM (VALUES (false), (true)) t(flag);
+
+statement ok
+CREATE TABLE lookup AS SELECT repeat(lpad(i::VARCHAR,100,'x'),4) AS b FROM range(1000) t(i);
+
+# separate sources outer
+query IIII
+SELECT sum(length(l.a)) AS a, sum(length(r.b)) AS b, count(r.b) AS matches, sum(l.i) AS keys
+FROM (SELECT x.i, x.a FROM (SELECT i, repeat(v,2) AS a FROM d) x JOIN s USING(i)) l
+LEFT JOIN (SELECT x.i, x.b FROM (SELECT i, repeat(v,3) AS b FROM d) x JOIN s USING(i) WHERE x.i >= 500) r
+ON l.i=r.i;
+----
+20000	15000	50	49500
+
+# mixed destinations
+query III
+SELECT sum(length(x.a)) AS a, sum(x.flag::INTEGER) AS flags, sum(length(x.c)) AS c
+FROM (SELECT i, repeat(v,2) AS a, i > 490 AS flag, repeat(v,3) AS c FROM d) x
+JOIN s USING(i) JOIN flags f ON x.flag=f.flag;
+----
+20000	50	30000
+
+# nested aliases
+query IIII
+SELECT sum(length(z.a)) AS a, sum(length(z.c)) AS c, sum(length(z.a_again)) AS repeated, sum(z.i) AS keys
+FROM (SELECT i, c, a AS a_again, a FROM
+  (SELECT x.i, x.a, x.c FROM (SELECT i, repeat(v,2) AS a, repeat(v,3) AS c FROM d) x JOIN s USING(i)) y
+  WHERE i % 20 = 0) z
+JOIN (SELECT (i*20)::INTEGER i FROM range(50) t(i)) s2 USING(i);
+----
+10000	15000	10000	24500
+
+# shared destination
+query III
+SELECT sum(length(l.a)) AS a, sum(length(r.b)) AS b, sum(l.i) AS keys
+FROM (SELECT i, repeat(v,2) AS a FROM d) l
+JOIN (SELECT i, repeat(v,3) AS b FROM d) r ON l.i=r.i
+JOIN s ON l.i=s.i;
+----
+20000	30000	49500
+
+# correlated consumer
+query II
+SELECT sum(length(x.a)) AS a, sum(q.n) AS n
+FROM (SELECT z.i, z.a FROM (SELECT i, repeat(v,2) AS a FROM d) z JOIN s USING(i)) x
+LEFT JOIN LATERAL (SELECT count(*) AS n FROM s s2 WHERE s2.i <= x.i) q ON true;
+----
+20000	5050
+
+# newly exposed producer
+query II
+SELECT sum(length(x.b)) AS b, sum(x.i) AS keys
+FROM (SELECT i, repeat(a, 3) AS b FROM (SELECT i, repeat(v, 2) AS a FROM d) y) x
+JOIN s USING(i);
+----
+60000	49500
+
+# mapped outputs
+query II
+SELECT sum(length(l.a)) AS a, sum(length(r.b)) AS b
+FROM (SELECT i, repeat(v,2) AS a FROM d) l
+JOIN (SELECT i, repeat(v,3) AS b FROM d) r ON l.i=r.i
+JOIN s ON l.i=s.i;
+----
+20000	30000
+
+# different destinations
+query III
+SELECT sum(length(x.a)) AS a, sum(length(x.b)) AS b, sum(length(x.c)) AS c
+FROM (SELECT i, repeat(v,2) AS a, repeat(v,4) AS b, repeat(v,3) AS c FROM d) x
+JOIN s USING(i) JOIN lookup f ON x.b=f.b;
+----
+20000	40000	30000
+
+# Lifting b exposes a as a passthrough, allowing its producer to move above the join too.
+statement ok
+SET explain_output = 'OPTIMIZED_ONLY';
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+query II
+EXPLAIN SELECT sum(length(x.b)) AS b, sum(x.i) AS keys
+FROM (SELECT i, repeat(a, 3) AS b FROM (SELECT i, repeat(v, 2) AS a FROM d) y) x
+JOIN s USING(i);
+----
+logical_opt	<REGEX>:.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]a[ ,│].*JOIN.*
+
+statement ok
+RESET disabled_optimizers;

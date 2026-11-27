@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
@@ -15,12 +16,14 @@
 #include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
+struct CompiledGrammar;
 class Catalog;
 class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
 class StorageExtension;
 class DatabaseManager;
+class ResourceDeleter;
 
 struct AttachInfo;
 struct StoredDatabasePath;
@@ -65,7 +68,12 @@ struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
 	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
+	AttachOptions(Context &context, const unordered_map<string, Value> &options, const AccessMode default_access_mode);
+
+	//! The setting an attach option controls, lower-cased. All four spellings of the access mode
+	//! (readonly, read_only, readwrite, read_write) share one setting, so two of them in the same
+	//! statement are a collision rather than two independent options.
+	static string OptionSetting(const string &name);
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
@@ -90,6 +98,17 @@ struct AttachOptions {
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): on detach, `<deleter_function>(<deleter_payload>)`
+	//! runs to tear down the external resource the attachment owns.
+	string deleter_function;
+	Value deleter_payload;
+	//! Type and name of the owned resource, for teardown logging only. The name is the database alias,
+	//! or empty where there is none (CONNECT).
+	string deleter_resource_type;
+	string deleter_resource_name;
+	//! Registered resource this attachment BORROWS (from `ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`): it binds
+	//! no deleter and does not block DESTROY, it only lets DESTROY report what it invalidated. Empty if none.
+	string borrowed_resource_name;
 	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
 };
@@ -125,7 +144,17 @@ public:
 	ValidChecker &GetValidChecker() {
 		return validity;
 	}
-	void Invalidate(const string &reason);
+	//! Whether an unrecoverable error in this database can be scoped to it, i.e. it can be detached to recover
+	bool SupportsScopedInvalidation() const;
+	//! Invalidate this database after an unrecoverable error: it rejects all use until it is detached.
+	//! Escalates to the database instance if the invalidation cannot be scoped to this database.
+	//! A database that is already invalidated keeps its original error.
+	void Invalidate(const string &cause, const string &error);
+	//! Invalidate this database for a fatal error it raised, marking the error as handled by this database.
+	//! Errors that are not fatal, or cannot be scoped to this database, are returned unchanged.
+	ErrorData ScopeFatalError(ErrorData error);
+	//! The error rejecting the given operation if this database or its instance has been invalidated
+	ErrorData InvalidationError(const string &operation);
 
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
@@ -137,6 +166,9 @@ public:
 	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
+	//! Move the deleter binding out, if any. Call once the attachment is out of the databases map and
+	//! held exclusively, and run the deleter only with no lock held -- it executes SQL.
+	unique_ptr<ResourceDeleter> ExtractDeleter();
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -154,11 +186,22 @@ public:
 	bool IsEphemeral() const {
 		return ephemeral;
 	}
+	//! The registered external resource this attachment borrows, or empty if it borrows none.
+	const string &GetBorrowedResourceName() const {
+		return borrowed_resource_name;
+	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
+	}
+	//! The grammar used for statements issued while a client is CONNECT-ed to this database. Defaults to the
+	//! passthrough grammar, which interprets only DISCONNECT and forwards everything else verbatim; a backend that
+	//! speaks DuckDB SQL can override it with the grammar it wants those statements parsed by.
+	DUCKDB_API shared_ptr<CompiledGrammar> GetConnectedGrammar(const ClientContext &context);
+	void SetConnectedGrammar(shared_ptr<CompiledGrammar> grammar) {
+		connected_grammar = std::move(grammar);
 	}
 	string StoredPath() const;
 	//! The verbatim ATTACH path before extension-prefix stripping. Unset if not from an ATTACH statement.
@@ -170,6 +213,13 @@ public:
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
+	//! A database marked as detached closes with the action recorded by MarkDetached instead.
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database,
+	                                       DatabaseCloseAction close_action);
+	//! The close action a detach issued by this context uses.
+	static DatabaseCloseAction GetDetachCloseAction(ClientContext &context);
+	//! Mark as detached: whoever releases the last reference closes the database with close_action.
+	void MarkDetached(DatabaseCloseAction close_action);
 	//! Obtain a reference unless closing the database has already started.
 	static shared_ptr<AttachedDatabase> TryGetReference(const weak_ptr<AttachedDatabase> &attached_database);
 
@@ -189,10 +239,21 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	bool is_closing = false;
+	bool is_detached = false;
+	DatabaseCloseAction detach_close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 	optional<string> original_path;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): moved out via ExtractDeleter on detach.
+	string deleter_function;
+	Value deleter_payload;
+	string deleter_resource_type;
+	string deleter_resource_name;
+	//! Registered resource this attachment borrows without owning; see AttachOptions.
+	string borrowed_resource_name;
+	//! Overrides the default passthrough grammar used while CONNECT-ed; see GetConnectedGrammar.
+	shared_ptr<CompiledGrammar> connected_grammar;
 
 private:
 	//! Clean any (shared) resources held by the database.

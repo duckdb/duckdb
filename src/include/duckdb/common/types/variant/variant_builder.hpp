@@ -35,6 +35,14 @@
 
 namespace duckdb {
 
+//! Grants the variant builder access to the storage-level type of a VariantNode / ParquetVariantNode
+struct VariantNodeStorageAccess {
+	template <class NODE>
+	static VariantLogicalType GetStorageType(const NODE &node) {
+		return node.GetVariantType();
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Building a VARIANT in a single pass
 //===--------------------------------------------------------------------===//
@@ -65,15 +73,19 @@ inline void VariantBuilderAppendBytes(string &blob, const_data_ptr_t data, idx_t
 	blob.append(const_char_ptr_cast(data), size);
 }
 
-inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const string_t &key) {
+inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, ArenaAllocator &keys_arena,
+                                               const string_t &key) {
 	auto unsorted_idx = dictionary.size();
 	//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
-	return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
+	return dictionary.emplace(std::make_pair(key, unsorted_idx), keys_arena).first->second;
 }
 
 //! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
 inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
-	if (width > DecimalWidth<int64_t>::max) {
+	if (width > DecimalWidth<hugeint_t>::max) {
+		// decimals wider than 38 digits are BIGNUM blobs
+		return PhysicalType::VARCHAR;
+	} else if (width > DecimalWidth<int64_t>::max) {
 		return PhysicalType::INT128;
 	} else if (width > DecimalWidth<int32_t>::max) {
 		return PhysicalType::INT64;
@@ -85,7 +97,8 @@ inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
 
 //! Accumulates the canonical representation of a single chunk while traversing the source once.
 struct VariantBuilder {
-	explicit VariantBuilder(OrderedOwningStringMap<uint32_t> &dictionary) : dictionary(dictionary) {
+	VariantBuilder(OrderedOwningStringMap<uint32_t> &dictionary, ArenaAllocator &keys_arena)
+	    : dictionary(dictionary), keys_arena(keys_arena) {
 	}
 
 	//! values: (type_id, byte_offset) in pre-order
@@ -100,6 +113,10 @@ struct VariantBuilder {
 	string blob;
 	//! maps a key string to its (unsorted) dictionary index, owned by the result's keys vector
 	OrderedOwningStringMap<uint32_t> &dictionary;
+	//! the result's keys arena, the dictionary's keys are allocated in
+	ArenaAllocator &keys_arena;
+
+	static constexpr idx_t INIT_NESTING_DEPTH = 8;
 
 	//! the offsets at which the current row's entries begin
 	idx_t row_values = 0;
@@ -126,14 +143,18 @@ struct VariantBuilder {
 	//! Emit a VARIANT_NULL value
 	void EmitNull() {
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL));
-		byte_offsets.push_back(NumericCast<uint32_t>(blob.size()));
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		byte_offsets.push_back(static_cast<uint32_t>(blob.size()));
 	}
 
 	//! Emit an OBJECT value with 'n' children (assumed to be in lexicographic key order). 'key_fn(i)'
 	//! returns the (string_t) key of child i; 'emit_fn(i)' must emit exactly one value for child i.
 	template <class KEY_FN, class EMIT_FN>
 	void EmitObject(idx_t n, KEY_FN &&key_fn, EMIT_FN &&emit_fn) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::OBJECT));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
@@ -147,7 +168,7 @@ struct VariantBuilder {
 		for (idx_t i = 0; i < n; i++) {
 			child_value_ids[block + i] = LocalValue();
 			child_key_ids[block + i] = LocalKey();
-			key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, key_fn(i)));
+			key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key_fn(i)));
 			emit_fn(i);
 		}
 	}
@@ -155,7 +176,9 @@ struct VariantBuilder {
 	//! Emit an ARRAY value with 'n' elements. 'emit_fn(i)' must emit exactly one value for element i.
 	template <class EMIT_FN>
 	void EmitArray(idx_t n, EMIT_FN &&emit_fn) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
@@ -283,8 +306,8 @@ struct VariantBuilder {
 		case LogicalTypeId::DECIMAL: {
 			variant_type = VariantLogicalType::DECIMAL;
 			auto &type = primitive.type();
-			uint8_t width;
-			uint8_t scale;
+			uint32_t width;
+			uint32_t scale;
 			type.GetDecimalProperties(width, scale);
 			VariantBuilderAppendVarint(blob, width);
 			VariantBuilderAppendVarint(blob, scale);
@@ -301,6 +324,13 @@ struct VariantBuilder {
 			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, primitive.GetValueUnsafe<hugeint_t>());
 				break;
+			case PhysicalType::VARCHAR: {
+				// the BIGNUM blob of a decimal wider than 38 digits
+				auto bignum = primitive.GetValueUnsafe<string_t>();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			default:
 				throw InternalException("Unexpected physical type for Decimal value: %s",
 				                        EnumUtil::ToString(type.InternalType()));
@@ -311,6 +341,7 @@ struct VariantBuilder {
 		case LogicalTypeId::BIGNUM:
 		case LogicalTypeId::BIT:
 		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::GEOGRAPHY:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
 				variant_type = VariantLogicalType::BLOB;
@@ -320,6 +351,8 @@ struct VariantBuilder {
 				variant_type = VariantLogicalType::BITSTRING;
 			} else if (type_id == LogicalTypeId::GEOMETRY) {
 				variant_type = VariantLogicalType::GEOMETRY;
+			} else if (type_id == LogicalTypeId::GEOGRAPHY) {
+				variant_type = VariantLogicalType::GEOGRAPHY;
 			} else {
 				variant_type = VariantLogicalType::VARCHAR;
 			}
@@ -336,12 +369,20 @@ struct VariantBuilder {
 		byte_offsets.push_back(byte_offset);
 	}
 
+	//! Emit a primitive value sourced from a VariantNode-like cursor, using the storage type of the cursor
+	template <class NODE>
+	void EmitPrimitiveNode(const NODE &it) {
+		EmitPrimitiveNode(it, VariantNodeStorageAccess::GetStorageType(it));
+	}
+
 	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by
 	//! value via 'it.GetData<T>()' (chosen by 'type_id'); strings via 'it.GetString()'; decimals via
 	//! 'it.GetDecimalProperties()' followed by 'it.GetData<T>()' at the physical type implied by the width.
 	template <class NODE>
 	void EmitPrimitiveNode(const NODE &it, VariantLogicalType type_id) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(type_id));
 		byte_offsets.push_back(byte_offset);
 		switch (type_id) {
@@ -435,9 +476,15 @@ struct VariantBuilder {
 			case PhysicalType::INT64:
 				VariantBuilderAppendFixed(blob, it.template GetData<int64_t>());
 				break;
-			default:
+			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
 				break;
+			default: {
+				auto bignum = it.GetWideDecimal();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			}
 			break;
 		}
@@ -445,7 +492,8 @@ struct VariantBuilder {
 		case VariantLogicalType::BLOB:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::BITSTRING:
-		case VariantLogicalType::GEOMETRY: {
+		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY: {
 			auto str = it.GetString();
 			VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(str.GetSize()));
 			VariantBuilderAppendBytes(blob, const_data_ptr_cast(str.GetData()), str.GetSize());
@@ -455,15 +503,42 @@ struct VariantBuilder {
 			throw InternalException("EmitPrimitiveNode: unhandled VariantLogicalType (%d)", static_cast<int>(type_id));
 		}
 	}
+
+	optional_idx BeginContainer(VariantLogicalType type_id, idx_t n) {
+		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		type_ids.push_back(static_cast<uint8_t>(type_id));
+		byte_offsets.push_back(byte_offset);
+		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
+		if (!n) {
+			return optional_idx();
+		}
+		VariantBuilderAppendVarint(blob, LocalChild());
+		auto block = child_value_ids.size();
+		child_value_ids.resize(block + n);
+		child_key_ids.resize(block + n);
+		return optional_idx(block);
+	}
+
+	void AssignObjectChild(idx_t block, idx_t i, string_t key) {
+		child_value_ids[block + i] = LocalValue();
+		child_key_ids[block + i] = LocalKey();
+		key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key));
+	}
+
+	void AssignArrayChild(idx_t block, idx_t i) {
+		child_value_ids[block + i] = LocalValue();
+		child_key_ids[block + i] = VARIANT_INVALID_KEY;
+	}
 };
 
 //===--------------------------------------------------------------------===//
 // Emit (source: a VariantNode-like cursor)
 //===--------------------------------------------------------------------===//
-//! Collect the (non-missing) object children of a node in lexicographic key order
+//! Collect the (non-missing) object children of a node - the key order of an object is not significant, so the
+//! children are emitted in the order they are stored
 template <class NODE>
 auto CollectObjectChildren(const NODE &it) {
-	auto object = it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC);
+	auto object = it.GetObjectChildren(VariantIterationOrder::INTERNAL);
 	using EntryT = std::decay_t<decltype(*object.begin())>;
 	vector<EntryT> children;
 	for (auto &entry : object) {
@@ -474,29 +549,101 @@ auto CollectObjectChildren(const NODE &it) {
 
 //! Traverse a VariantNode-like cursor 'it' (any type exposing the node concept) into the builder.
 template <class NODE>
-void EmitIterator(const NODE &it, VariantBuilder &builder) {
-	if (it.IsNull() || it.IsMissing()) {
-		builder.EmitNull();
-		return;
-	}
+void EmitIterator(const NODE &root, VariantBuilder &builder) {
+	using EntryT = typename decltype(CollectObjectChildren(root))::value_type;
+	using ArrayIterT = decltype(std::declval<NODE>().GetArrayChildren());
 
-	auto type_id = it.GetTypeId();
-	switch (type_id) {
-	case VariantLogicalType::OBJECT: {
-		auto children = CollectObjectChildren(it);
-		builder.EmitObject(
-		    children.size(), [&](idx_t i) { return children[i].key; },
-		    [&](idx_t i) { EmitIterator(children[i].value, builder); });
-		break;
-	}
-	case VariantLogicalType::ARRAY: {
-		auto array = it.GetArrayChildren();
-		builder.EmitArray(array.size(), [&](idx_t i) { EmitIterator(array[i], builder); });
-		break;
-	}
-	default:
-		builder.EmitPrimitiveNode(it, type_id);
-		break;
+	struct Frame {
+		bool is_object = false;
+		idx_t index = 0;
+		idx_t block = 0;
+		vector<EntryT> object_children;
+		optional<ArrayIterT> array_children;
+	};
+
+	vector<Frame> stack;
+	stack.reserve(VariantBuilder::INIT_NESTING_DEPTH);
+
+	auto ProcessNode = [&](const NODE &node) {
+		if (node.IsNull() || node.IsMissing()) {
+			builder.EmitNull();
+			return;
+		}
+		auto type_id = VariantNodeStorageAccess::GetStorageType(node);
+		switch (type_id) {
+		case VariantLogicalType::OBJECT: {
+			auto children = CollectObjectChildren(node);
+			auto n = children.size();
+			if (stack.size() >= stack.capacity()) {
+				stack.reserve(NextPowerOfTwo(stack.size() + 1));
+			}
+			auto block = builder.BeginContainer(VariantLogicalType::OBJECT, n);
+			if (block.IsValid()) {
+				Frame frame;
+				frame.is_object = true;
+				frame.block = block.GetIndex();
+				frame.object_children = std::move(children);
+				stack.push_back(std::move(frame));
+			}
+			break;
+		}
+		case VariantLogicalType::ARRAY: {
+			auto array_iter = node.GetArrayChildren();
+			auto n = array_iter.size();
+			if (stack.size() >= stack.capacity()) {
+				stack.reserve(NextPowerOfTwo(stack.size() + 1));
+			}
+			auto block = builder.BeginContainer(VariantLogicalType::ARRAY, n);
+			if (block.IsValid()) {
+				Frame frame;
+				frame.is_object = false;
+				frame.block = block.GetIndex();
+				frame.array_children.emplace(std::move(array_iter));
+				stack.push_back(std::move(frame));
+			}
+			break;
+		}
+		default:
+			builder.EmitPrimitiveNode(node, type_id);
+			break;
+		}
+	};
+
+	ProcessNode(root);
+
+	while (!stack.empty()) {
+		auto &frame = stack.back();
+
+		idx_t count;
+		if (frame.is_object) {
+			count = frame.object_children.size();
+		} else {
+			if (!frame.array_children) {
+				throw InternalException("Variant array frame has no children");
+			}
+			count = frame.array_children->size();
+		}
+
+		if (frame.index >= count) {
+			stack.pop_back();
+			continue;
+		}
+
+		const bool is_object = frame.is_object;
+		const idx_t block = frame.block;
+		const idx_t i = frame.index++;
+
+		if (is_object) {
+			auto &entry = frame.object_children[i];
+			builder.AssignObjectChild(block, i, entry.key);
+			ProcessNode(entry.value);
+		} else {
+			if (!frame.array_children) {
+				throw InternalException("Variant array frame has no children");
+			}
+			builder.AssignArrayChild(block, i);
+			ProcessNode((*frame.array_children)[i]);
+		}
 	}
 }
 
@@ -521,8 +668,8 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 
 	//! The dictionary is backed by the keys vector's string allocator so the finalized keys are owned
 	//! by the result (see FinalizeVariantKeys).
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
-	VariantBuilder builder(dictionary);
+	OrderedOwningStringMap<uint32_t> dictionary;
+	VariantBuilder builder(dictionary, StringVector::GetStringAllocator(keys_entry));
 
 	vector<list_entry_t> keys_entries(count);
 	vector<list_entry_t> children_entries(count);
@@ -531,6 +678,12 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 	for (idx_t row = 0; row < count; row++) {
 		builder.BeginRow();
 		bool is_null = source.Emit(row, builder);
+		size_t temp = builder.blob.size();
+		if (temp > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException(
+			    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+			    NumericLimits<uint32_t>::Maximum());
+		}
 		blob_writer.WriteValue(string_t(builder.blob.data(), NumericCast<uint32_t>(builder.blob.size())));
 		if (is_null) {
 			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null

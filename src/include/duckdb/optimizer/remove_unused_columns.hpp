@@ -24,6 +24,7 @@ class BoundColumnRefExpression;
 class ClientContext;
 class LogicalColumnDataGet;
 class LogicalRecursiveCTE;
+class LogicalSecureView;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -60,8 +61,8 @@ public:
 	void AddPath(const ColumnIndex &path);
 
 public:
-	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
-	vector<reference<BoundColumnRefExpression>> bindings;
+	//! The slots holding the BoundColumnRefExpressions in the operator that reference the same ColumnBinding
+	vector<reference<unique_ptr<Expression>>> bindings;
 	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
@@ -94,12 +95,12 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 protected:
-	//! Add a reference to the column in its entirety
-	void AddBinding(BoundColumnRefExpression &col);
+	//! Add a reference to the column in its entirety - col holds a BoundColumnRefExpression
+	void AddBinding(unique_ptr<Expression> &col);
 	//! Add a reference to a sub-section of the column
-	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
+	void AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
-	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+	void AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column,
 	                const vector<ReferencedExtractComponent> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
@@ -109,11 +110,11 @@ protected:
 	bool HandleExtractExpression(unique_ptr<Expression> *expression,
 	                             optional_ptr<unique_ptr<Expression>> cast_expression = nullptr);
 
-	bool HandleStructExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleStructExtract(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                         reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
-	bool HandleVariantExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleVariantExtract(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                          reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
-	bool HandleExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                            reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
 	BaseColumnPrunerMode GetMode() const;
@@ -151,12 +152,23 @@ private:
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
 	column_binding_map_t<vector<ColumnBinding>> projection_map_replacements;
+	struct PrunedViewColumn {
+		ColumnBinding binding;
+		//! Expression over the previous binding; nullptr for a rename.
+		unique_ptr<Expression> expression;
+	};
+	vector<reference<LogicalSecureView>> active_secure_views;
+	column_binding_map_t<vector<PrunedViewColumn>> secure_view_replacements;
 
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RecordSecureViewReplacement(ColumnBinding old_binding, ColumnBinding new_binding,
+	                                 unique_ptr<Expression> expression = nullptr);
+	void ApplySecureViewReplacements();
 	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
+	void VisitSecureView(LogicalSecureView &view);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
@@ -174,6 +186,15 @@ private:
 	        &callback);
 	unordered_map<TableIndex, MaterializedCTEInfo> &GetCTEMap();
 	optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> TryGetCTEMap();
+};
+
+class ColumnReferenceExtractor : public BaseColumnPruner {
+public:
+	static column_binding_map_t<ReferencedColumn> GetReferences(unique_ptr<Expression> *expression) {
+		ColumnReferenceExtractor extractor;
+		extractor.VisitExpression(expression);
+		return extractor.column_references;
+	}
 };
 
 class CTERefPruner : public LogicalOperatorVisitor {

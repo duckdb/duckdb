@@ -5,15 +5,34 @@
 
 using namespace duckdb;
 
+namespace {
+class InMemoryTestDirectory {
+public:
+	InMemoryTestDirectory() : original_directory(TestGetCurrentDirectory()) {
+		TestChangeDirectory(LocalTestDirectoryPath());
+	}
+
+	~InMemoryTestDirectory() {
+		TestChangeDirectory(original_directory);
+	}
+
+private:
+	string original_directory;
+};
+} // namespace
+
 static void test_in_memory_initialization(string dbdir) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	// Exercise the default ".tmp" path without sharing it with concurrent unittest processes.
+	// Restore the working directory after the database closes, including on assertion failure.
+	InMemoryTestDirectory test_directory;
+	auto &fs = TestLocalFileSystem();
 	duckdb::unique_ptr<DuckDB> db;
 	duckdb::unique_ptr<Connection> con;
 	string in_memory_tmp = ".tmp";
 
 	// make sure the temporary folder does not exist
 	DeleteDatabase(dbdir);
-	fs->RemoveDirectory(in_memory_tmp);
+	fs.RemoveDirectory(in_memory_tmp);
 
 	// cannot create an in-memory database using ":memory:" argument
 	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir));
@@ -26,10 +45,10 @@ static void test_in_memory_initialization(string dbdir) {
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT * FROM range(1000000)"));
 
 	// the temporary folder .tmp should be created in in-memory mode
-	REQUIRE(fs->DirectoryExists(in_memory_tmp));
+	REQUIRE(fs.DirectoryExists(in_memory_tmp));
 
 	// the database dir should not be created in in-memory mode
-	REQUIRE(!fs->DirectoryExists(dbdir));
+	REQUIRE(!fs.DirectoryExists(dbdir));
 
 	// clean up
 	con.reset();
@@ -37,7 +56,7 @@ static void test_in_memory_initialization(string dbdir) {
 
 	// make sure to clean up the database & temporary folder
 	DeleteDatabase(dbdir);
-	fs->RemoveDirectory(in_memory_tmp);
+	fs.RemoveDirectory(in_memory_tmp);
 }
 
 TEST_CASE("Test in-memory database initialization argument \":memory:\"", "[api][.]") {

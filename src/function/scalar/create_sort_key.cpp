@@ -12,11 +12,13 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/swar.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -37,6 +39,30 @@ struct SortKeyBindData : public FunctionData {
 	}
 };
 
+static void AccumulateSortKeyWidth(const LogicalType &type, bool &all_constant, idx_t &constant_size) {
+	const auto physical_type = type.InternalType();
+	if (!TypeIsConstantSize(physical_type)) {
+		all_constant = false;
+		return;
+	}
+	// we always add one byte for the validity
+	constant_size += GetTypeIdSize(physical_type) + 1;
+}
+
+static void VerifyDecodeSortKeyType(const LogicalType &sort_key_type, bool all_constant, idx_t constant_size) {
+	if (sort_key_type == LogicalType::BIGINT) {
+		if (!all_constant || constant_size > sizeof(int64_t)) {
+			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
+		}
+	} else if (sort_key_type == LogicalType::BLOB) {
+		if (all_constant && constant_size <= sizeof(int64_t)) {
+			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
+		}
+	} else {
+		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead", sort_key_type.ToString());
+	}
+}
+
 unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
@@ -55,13 +81,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	bool all_constant = true;
 	idx_t constant_size = 0;
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		auto physical_type = arguments[i]->GetReturnType().InternalType();
-		if (!TypeIsConstantSize(physical_type)) {
-			all_constant = false;
-		} else {
-			// we always add one byte for the validity
-			constant_size += GetTypeIdSize(physical_type) + 1;
-		}
+		AccumulateSortKeyWidth(arguments[i]->GetReturnType(), all_constant, constant_size);
 	}
 	if (all_constant) {
 		if (constant_size <= sizeof(int64_t)) {
@@ -432,12 +452,12 @@ struct SortKeyChunk {
 // Get Sort Key Length
 //===--------------------------------------------------------------------===//
 struct SortKeyLengthInfo {
-	explicit SortKeyLengthInfo(idx_t size) : constant_length(0) {
-		variable_lengths.resize(size, 0);
+	SortKeyLengthInfo(unsafe_vector<idx_t> &lengths, idx_t size) : constant_length(0), variable_lengths(lengths) {
+		variable_lengths.assign(size, 0);
 	}
 
 	idx_t constant_length;
-	unsafe_vector<idx_t> variable_lengths;
+	unsafe_vector<idx_t> &variable_lengths;
 };
 
 static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result);
@@ -847,24 +867,25 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 
 void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
                            const vector<OrderModifiers> &modifiers, const bool &all_constant, Vector &result,
-                           idx_t row_count) {
+                           idx_t row_count, CreateSortKeyState &state) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
 	// we do all of this in a vectorized manner
-	SortKeyLengthInfo key_lengths(row_count);
+	SortKeyLengthInfo key_lengths(state.lengths, row_count);
 	for (auto &vector_data : sort_key_data) {
 		GetSortKeyLength(*vector_data, key_lengths);
 	}
 	// allocate the empty sort keys
-	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[row_count]);
-	PrepareSortData(result, row_count, key_lengths, data_pointers.get(), all_constant);
+	auto &data_pointers = state.data_pointers;
+	data_pointers.resize(row_count);
+	PrepareSortData(result, row_count, key_lengths, data_pointers.data(), all_constant);
 
-	unsafe_vector<idx_t> offsets;
-	offsets.resize(row_count, 0);
+	auto &offsets = state.offsets;
+	offsets.assign(row_count, 0);
 	// now construct the sort keys
 	for (idx_t c = 0; c < sort_key_data.size(); c++) {
-		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.get());
+		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.data());
 		ConstructSortKey(*sort_key_data[c], info);
 	}
 	FinalizeSortData(result, row_count, key_lengths, offsets);
@@ -936,30 +957,38 @@ static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_k
 } // namespace
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
+	CreateSortKeyState state;
 	// prepare the sort key data
 	const auto input_count = input.size();
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
+	CreateSortKeyState state;
+	CreateSortKey(input, modifiers, result, state);
+}
+
+void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result,
+                                         CreateSortKeyState &state) {
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	D_ASSERT(modifiers.size() == input.ColumnCount());
 	for (idx_t r = 0; r < modifiers.size(); r++) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
 	}
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size(), state);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, idx_t input_count, OrderModifiers order_modifier,
                                          Vector &result) {
+	CreateSortKeyState state;
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
 
 void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
@@ -993,6 +1022,11 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector
 	}
 }
 
+static unique_ptr<FunctionLocalState> InitCreateSortKeyState(ExpressionState &, const BoundFunctionExpression &,
+                                                             optional_ptr<const FunctionData>) {
+	return make_uniq<CreateSortKeyState>();
+}
+
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
@@ -1001,10 +1035,21 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
-	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
+	auto &key_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CreateSortKeyState>();
+	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size(), key_state);
 #ifdef DEBUG
 	AssertSortKeyRoundTrip(sort_key_data, bind_data.modifiers, result, args.size());
 #endif
+}
+
+bool CreateSortKeyHelpers::IsNonNullSortKey(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expression.Cast<BoundFunctionExpression>().Function();
+	return function.GetBindCallback() == CreateSortKeyBind &&
+	       function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING &&
+	       function.GetProperties().GetBooleanProperty(NON_NULL_RESULT_PROPERTY);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1025,25 +1070,24 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	idx_t constant_size = 0;
 	child_list_t<LogicalType> children;
 	auto result = make_uniq<SortKeyBindData>();
+	const auto decimal_width_limit = input.GetDecimalWidthLimit();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
 		Value col = input.GetConstant(i);
-		const auto col_list = Parser::ParseColumnList(col.ToString());
+		const auto col_list = Parser(context).ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
 		}
 		const auto &col_def = col_list.GetColumn(PhysicalIndex(0));
 		const auto &col_name = col_def.GetName();
-		const auto &col_type = TransformStringToLogicalType(col_def.GetType().ToString(), context);
+		auto col_type = col_def.GetType();
+		if (col_type.IsUnbound()) {
+			// Resolve the parsed type against the catalog, within the decimal width limit of the bind
+			col_type = TransformStringToLogicalType(col_type.ToString(), context, &decimal_width_limit);
+		}
 
 		// Keep track of this to validate the arguments
-		const auto physical_type = col_type.InternalType();
-		if (!TypeIsConstantSize(physical_type)) {
-			all_constant = false;
-		} else {
-			// we always add one byte for the validity
-			constant_size += GetTypeIdSize(physical_type) + 1;
-		}
+		AccumulateSortKeyWidth(col_type, all_constant, constant_size);
 
 		// Add name/type to create a struct
 		children.emplace_back(col_name, col_type);
@@ -1054,19 +1098,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 
-	const auto &sort_key_arg = *arguments[0];
-	if (sort_key_arg.GetReturnType() == LogicalType::BIGINT) {
-		if (!all_constant || constant_size > sizeof(int64_t)) {
-			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
-		}
-	} else if (sort_key_arg.GetReturnType() == LogicalType::BLOB) {
-		if (all_constant && constant_size <= sizeof(int64_t)) {
-			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
-		}
-	} else {
-		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
-		                      sort_key_arg.GetReturnType().ToString());
-	}
+	VerifyDecodeSortKeyType(arguments[0]->GetReturnType(), all_constant, constant_size);
 	function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 
 	return std::move(result);
@@ -1151,6 +1183,17 @@ struct DecodeSortKeyData {
 		return data[position++];
 	}
 };
+
+struct DecodeSortKeyState : FunctionLocalState {
+	vector<DecodeSortKeyData> rows;
+	vector<int64_t> swapped;
+	vector<DecodeSortKeyVectorData> columns;
+};
+
+static unique_ptr<FunctionLocalState> InitDecodeSortKeyState(ExpressionState &, const BoundFunctionExpression &,
+                                                             optional_ptr<const FunctionData>) {
+	return make_uniq<DecodeSortKeyState>();
+}
 
 void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_offset, idx_t count);
@@ -1433,8 +1476,10 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
-	vector<DecodeSortKeyData> decode_data(count);
-	vector<int64_t> bswapped_ints(count);
+	auto &decode_state = ExecuteFunctionState::GetFunctionState(state)->Cast<DecodeSortKeyState>();
+	auto &decode_data = decode_state.rows;
+	auto &bswapped_ints = decode_state.swapped;
+	decode_data.resize(count);
 	if (sort_key_vec.GetType() == LogicalType::BLOB) {
 		const auto sort_keys = UnifiedVectorFormat::GetData<string_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
@@ -1451,6 +1496,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 	} else {
 		D_ASSERT(sort_key_vec.GetType() == LogicalType::BIGINT);
+		bswapped_ints.resize(count);
 		const auto sort_keys = UnifiedVectorFormat::GetData<int64_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
@@ -1473,8 +1519,10 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
 		auto &child_vector = child_vectors[c];
-		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
-		DecodeSortKeyRecursive(decode_data.data(), sort_key_data, child_vector, 0, count);
+		if (c == decode_state.columns.size()) {
+			decode_state.columns.emplace_back(child_vector.GetType(), bind_data.modifiers[c]);
+		}
+		DecodeSortKeyRecursive(decode_data.data(), decode_state.columns[c], child_vector, 0, count);
 	}
 }
 
@@ -1484,9 +1532,34 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
-	sort_key_function.SetVarArgs(LogicalType::ANY);
+	sort_key_function.GetSignature().GetParameter(0).SetName("key1");
+	sort_key_function.GetSignature().AddArgs("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	sort_key_function.GetProperties().SetProperty(CreateSortKeyHelpers::NON_NULL_RESULT_PROPERTY, Value::BOOLEAN(true));
+	sort_key_function.SetInitStateCallback(InitCreateSortKeyState);
 	return sort_key_function;
+}
+
+unique_ptr<Expression> DecodeSortKeyFun::Bind(unique_ptr<Expression> sort_key, child_list_t<LogicalType> columns,
+                                              vector<OrderModifiers> modifiers) {
+	D_ASSERT(columns.size() == modifiers.size());
+	bool all_constant = true;
+	idx_t constant_size = 0;
+	for (auto &column : columns) {
+		AccumulateSortKeyWidth(column.second, all_constant, constant_size);
+	}
+	VerifyDecodeSortKeyType(sort_key->GetReturnType(), all_constant, constant_size);
+
+	auto bind_data = make_uniq<SortKeyBindData>();
+	bind_data->modifiers = std::move(modifiers);
+	bind_data->all_constant = all_constant;
+	ScalarFunction definition("decode_sort_key", {sort_key->GetReturnType()}, LogicalType::STRUCT(std::move(columns)),
+	                          DecodeSortKeyFunction);
+	definition.SetInitStateCallback(InitDecodeSortKeyState);
+	BoundScalarFunction function(definition);
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(sort_key));
+	return make_uniq<BoundFunctionExpression>(std::move(function), std::move(children), std::move(bind_data));
 }
 
 ScalarFunction DecodeSortKeyFun::GetFunction() {
@@ -1494,7 +1567,8 @@ ScalarFunction DecodeSortKeyFun::GetFunction() {
 	    "decode_sort_key",
 	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
 	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
-	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
+	sort_key_function.GetSignature().AddArgs("args", LogicalType::VARCHAR);
+	sort_key_function.SetInitStateCallback(InitDecodeSortKeyState);
 	return sort_key_function;
 }
 

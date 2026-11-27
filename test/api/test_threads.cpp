@@ -2,8 +2,9 @@
 #include "test_helpers.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -66,22 +67,19 @@ TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// FIXME: not yet
 	{
 		DuckDB db(nullptr);
-		auto file_system = make_uniq<VirtualFileSystem>();
-		REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
+		REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads());
 	}
 	// but we can set another value
 	{
 		DBConfig config;
-		config.options.maximum_threads = 10;
+		Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(10));
 		DuckDB db(nullptr, &config);
 		REQUIRE(db.NumberOfThreads() == 10);
 	}
 	// zero is not erlaubt
 	{
 		DBConfig config;
-		config.options.maximum_threads = 0;
-		DuckDB db;
-		REQUIRE_THROWS(db = DuckDB(nullptr, &config));
+		REQUIRE_THROWS(config.SetOptionByName("threads", Value::BIGINT(0)));
 	}
 }
 
@@ -92,7 +90,7 @@ TEST_CASE("Test external threads", "[api]") {
 	auto options = config.GetOptions();
 
 	con.Query("SET threads=13");
-	REQUIRE(config.options.maximum_threads == 13);
+	REQUIRE(Settings::Get<ThreadsSetting>(config) == 13);
 	REQUIRE(db.NumberOfThreads() == 13);
 	con.Query("SET external_threads=13");
 	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 13);
@@ -119,12 +117,116 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("RESET threads");
-	auto file_system = make_uniq<VirtualFileSystem>();
-	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(*file_system));
-	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
+	REQUIRE(NumericCast<idx_t>(Settings::Get<ThreadsSetting>(config)) == DBConfig().GetSystemMaxThreads());
+	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads());
 }
 
 #ifndef DUCKDB_NO_THREADS
+namespace {
+
+struct ThreadCapSourceState : public GlobalSourceState {
+	explicit ThreadCapSourceState(idx_t limit_p) : limit(limit_p) {
+	}
+	idx_t limit;
+
+	idx_t MaxThreads() override {
+		return limit;
+	}
+};
+
+struct ThreadCapOperatorState : public GlobalOperatorState {
+	explicit ThreadCapOperatorState(idx_t limit_p) : limit(limit_p) {
+	}
+	idx_t limit;
+
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		return limit;
+	}
+};
+
+struct ThreadCapSinkState : public GlobalSinkState {
+	explicit ThreadCapSinkState(idx_t limit_p) : limit(limit_p) {
+	}
+	idx_t limit;
+	idx_t calls = 0;
+	idx_t input_limit = 0;
+
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		calls++;
+		input_limit = source_max_threads;
+		return limit;
+	}
+};
+
+class ThreadCapOperator : public PhysicalOperator {
+public:
+	ThreadCapOperator(PhysicalPlan &plan, idx_t limit_p)
+	    : PhysicalOperator(plan, PhysicalOperatorType::INVALID, {LogicalType::INTEGER}, 0), limit(limit_p) {
+	}
+
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override {
+		return make_uniq<ThreadCapSourceState>(limit);
+	}
+	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override {
+		return make_uniq<ThreadCapOperatorState>(limit);
+	}
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override {
+		return make_uniq<ThreadCapSinkState>(limit);
+	}
+	bool IsSource() const override {
+		return true;
+	}
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSource() const override {
+		return true;
+	}
+	bool ParallelOperator() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
+
+private:
+	idx_t limit;
+};
+
+} // namespace
+
+// SQL cannot supply a sink callback that raises the accumulated source/operator limit.
+TEST_CASE("Pipeline sink thread limits cannot raise source or operator caps", "[api]") {
+	DBConfig config;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(8));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	Executor executor(*con.context);
+	PipelineBuildState build_state;
+	struct Limits {
+		idx_t source, op, sink, expected, sink_input;
+	};
+	const Limits cases[] = {{1, 8, 8, 1, 1}, {8, 2, 8, 2, 2}, {8, 8, 3, 3, 8},
+	                        {0, 8, 8, 0, 0}, {8, 8, 0, 0, 8}, {16, 16, 16, 8, 8}};
+	for (const auto &limits : cases) {
+		CAPTURE(limits.source, limits.op, limits.sink);
+		PhysicalPlan plan(Allocator::Get(*con.context));
+		auto &source = plan.Make<ThreadCapOperator>(limits.source);
+		auto &op = plan.Make<ThreadCapOperator>(limits.op);
+		auto &sink = plan.Make<ThreadCapOperator>(limits.sink);
+		Pipeline pipeline(executor);
+		build_state.SetPipelineSource(pipeline, source);
+		build_state.SetPipelineOperators(pipeline, {op});
+		build_state.SetPipelineSink(pipeline, sink, 1);
+		pipeline.Ready();
+		pipeline.Reset();
+		REQUIRE(pipeline.GetMaxThreads() == limits.expected);
+		auto &sink_state = sink.sink_state->Cast<ThreadCapSinkState>();
+		REQUIRE(sink_state.calls == 1);
+		REQUIRE(sink_state.input_limit == limits.sink_input);
+	}
+}
+
 TEST_CASE("Test async threads", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -137,7 +239,7 @@ TEST_CASE("Test async threads", "[api]") {
 	REQUIRE(scheduler.NumberOfAsyncThreads() == 2);
 }
 
-static idx_t ColumnDataScanMaxThreads(Connection &con, MaterializedQueryResult &result,
+static idx_t ColumnDataScanMaxThreads(Connection &con, QueryResult &result,
                                       const OperatorPartitionInfo &partition_info) {
 	PhysicalPlan physical_plan(Allocator::Get(*con.context));
 	auto &scan = physical_plan.Make<PhysicalColumnDataScan>(result.GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN,
@@ -181,18 +283,20 @@ TEST_CASE("Test scheduling with no threads", "[api]") {
 	Connection con1(db);
 	Connection con2(db);
 
-	const auto query_1 = con1.PendingQuery("SELECT 42");
-	const auto query_2 = con2.PendingQuery("SELECT 42");
+	const auto query_1 = con1.Submit("SELECT 42");
+	const auto query_2 = con2.Submit("SELECT 42");
 	// Get the completed pipelines. Because "executeTask" was never called, there should be no completed pipelines.
 	auto query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
 	REQUIRE((query_1_pipelines == 0));
 
 	// Execute the second query
-	REQUIRE_NO_FAIL(query_2->Execute());
+	query_2->Complete();
+	REQUIRE_NO_FAIL(*query_2);
 
 	// And even after that, there should still be no completed pipelines for the first query.
 	query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
 	REQUIRE((query_1_pipelines == 0));
-	REQUIRE_NO_FAIL(query_1->Execute());
+	query_1->Complete();
+	REQUIRE_NO_FAIL(*query_1);
 }
 #endif

@@ -48,7 +48,7 @@ struct BitstringAggBindData : public FunctionData {
 		return false;
 	}
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
 	                      const BoundAggregateFunction &) {
 		auto &bind_data = bind_data_p->Cast<BitstringAggBindData>();
 		serializer.WriteProperty(100, "min", bind_data.min);
@@ -123,15 +123,12 @@ struct BitStringAggOperation {
 		if (min > max) {
 			throw InvalidInputException("Invalid explicit bitstring range: Minimum (%d) > maximum (%d)", min, max);
 		}
-		INPUT_TYPE result;
-		if (!TrySubtractOperator::Operation(max, min, result)) {
+		// the difference of two (at most 64-bit) values does not always fit in their own type, but it fits in a hugeint
+		const auto range = Hugeint::Convert(max) - Hugeint::Convert(min);
+		if (range >= Hugeint::Convert(NumericLimits<idx_t>::Maximum())) {
 			return NumericLimits<idx_t>::Maximum();
 		}
-		auto val = NumericCast<idx_t>(result);
-		if (val == NumericLimits<idx_t>::Maximum()) {
-			return val;
-		}
-		return val + 1;
+		return Hugeint::Cast<idx_t>(range) + 1;
 	}
 
 	template <class INPUT_TYPE, class STATE>
@@ -230,7 +227,7 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
 	if (NumericStats::HasMinMax(input.child_stats[0])) {
-		auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
+		auto &bind_agg_data = input.bind_data.write().Cast<BitstringAggBindData>();
 		bind_agg_data.min = NumericStats::Min(input.child_stats[0]);
 		bind_agg_data.max = NumericStats::Max(input.child_stats[0]);
 	}
@@ -251,6 +248,7 @@ template <class TYPE>
 void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
 	auto function = AggregateFunction::UnaryAggregate<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	    type, LogicalType::BIT);
+	function.SetFallible(); // out-of-range inputs and invalid or missing min/max bounds throw at runtime
 	function.SetBindCallback(BindBitstringAgg); // create new a 'BitstringAggBindData'
 	function.SetSerializeCallback(BitstringAggBindData::Serialize);
 	function.SetDeserializeCallback(BitstringAggBindData::Deserialize);
@@ -258,7 +256,7 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	    BitstringPropagateStats); // stores min and max from column stats in BitstringAggBindData
 	function.GetSignature().GetParameter(0).SetName("arg");
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
-	function.GetSignature() = FunctionSignature({{"arg", type}, {"min", type}, {"max", type}}, LogicalType::BIT);
+	function.GetSignature().AddParameter("min", type).AddParameter("max", type);
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	// note that the bind folds min and max into the bind data - they stay part of the expression tree, and the
 	// update callback simply does not read them

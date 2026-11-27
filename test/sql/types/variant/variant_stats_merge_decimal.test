@@ -1,0 +1,82 @@
+# name: test/sql/types/variant/variant_stats_merge_decimal.test
+# description: Statistics of VARIANTs shredded as DECIMALs of different width or scale are not merged
+# group: [variant]
+
+query I
+SELECT v::VARCHAR FROM (SELECT i::DECIMAL(4,1)::VARIANT v FROM range(2) r(i) UNION ALL SELECT i::DECIMAL(9,3)::VARIANT FROM range(2) r(i)) ORDER BY 1
+----
+0.0
+0.000
+1.0
+1.000
+
+query I
+SELECT (CASE WHEN i % 2 = 0 THEN i::DECIMAL(4,1)::VARIANT ELSE i::DECIMAL(4,2)::VARIANT END)::VARCHAR FROM range(2) r(i) ORDER BY 1
+----
+0.0
+1.00
+
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_decimal.db' AS d (ROW_GROUP_SIZE 2048)
+
+statement ok
+SET variant_minimum_shredding_size = 0
+
+statement ok
+CREATE TABLE d.t (id BIGINT, v VARIANT)
+
+statement ok
+INSERT INTO d.t SELECT i, (i % 10)::DECIMAL(4,1)::VARIANT FROM range(2048) r(i)
+
+statement ok
+INSERT INTO d.t SELECT i, ((i % 10) / 1000)::DECIMAL(9,3)::VARIANT FROM range(2048, 4096) r(i)
+
+statement ok
+CREATE TABLE d.t2 (v VARIANT)
+
+statement ok
+INSERT INTO d.t2 SELECT (i % 10)::DECIMAL(4,1)::VARIANT FROM range(2048) r(i)
+
+statement ok
+INSERT INTO d.t2 SELECT (i % 10)::DECIMAL(4,2)::VARIANT FROM range(2048, 4096) r(i)
+
+statement ok
+CHECKPOINT d
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('d.t')
+----
+2
+
+query II
+SELECT count(*), count(DISTINCT v::VARCHAR) FROM d.t
+----
+4096	20
+
+query I
+SELECT count(*) FROM d.t2 WHERE v::DECIMAL(4,2) = 9.00
+----
+409
+
+statement ok
+DETACH d
+
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_decimal.db' AS d (ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('d.t')
+----
+2
+
+query II
+SELECT count(*), count(DISTINCT v::VARCHAR) FROM d.t
+----
+4096	20
+
+query I
+SELECT count(*) FROM d.t2 WHERE v::DECIMAL(4,2) = 9.00
+----
+409

@@ -9,8 +9,11 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
+class Expression;
 
 struct OrderModifiers {
 	OrderModifiers(OrderType order_type, OrderByNullType null_type) : order_type(order_type), null_type(null_type) {
@@ -45,8 +48,19 @@ struct OrderModifiers {
 	}
 };
 
+struct CreateSortKeyState : FunctionLocalState {
+	unsafe_vector<idx_t> lengths;
+	unsafe_vector<idx_t> offsets;
+	unsafe_vector<data_ptr_t> data_pointers;
+};
+
 struct CreateSortKeyHelpers {
+	static constexpr const char *NON_NULL_RESULT_PROPERTY = "duckdb.create_sort_key.non_null_result";
+
+	static bool IsNonNullSortKey(const Expression &expression);
 	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result);
+	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result,
+	                          CreateSortKeyState &state);
 	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);
 	static bool IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order);
@@ -69,6 +83,9 @@ struct DecodeSortKeyFun {
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+	//! Binds decode_sort_key from bound column types, bypassing the VARCHAR column definitions the SQL form parses
+	static unique_ptr<Expression> Bind(unique_ptr<Expression> sort_key, child_list_t<LogicalType> columns,
+	                                   vector<OrderModifiers> modifiers);
 };
 
 } // namespace duckdb

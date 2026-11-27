@@ -10,7 +10,7 @@ LogicalOperatorDeepCopy::LogicalOperatorDeepCopy(Binder &binder, optional_ptr<bo
     : binder(binder), parameter_data(parameter_data) {
 }
 
-unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb::LogicalOperator> &op) {
+unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(const unique_ptr<duckdb::LogicalOperator> &op) {
 	auto copy = op->Copy(binder.context);
 	VisitOperator(*copy);
 	TableBindingReplacer replacer(table_idx_replacements, parameter_data);
@@ -135,6 +135,15 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 		ReplaceTableIndex<LogicalDummyScan>(op);
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
+		auto &empty_result = op.Cast<LogicalEmptyResult>();
+		for (auto &binding : empty_result.bindings) {
+			if (table_idx_replacements.find(binding.table_index) == table_idx_replacements.end()) {
+				table_idx_replacements[binding.table_index] = binder.GenerateTableIndex();
+			}
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		ReplaceTableIndex<LogicalCTERef>(op);
 		break;
@@ -234,6 +243,26 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
+		auto &view = op.Cast<LogicalSecureView>();
+		for (auto &binding : view.output_bindings) {
+			auto entry = table_idx_replacements.find(binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				binding.table_index = entry->second;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
+		auto &empty_result = op.Cast<LogicalEmptyResult>();
+		for (auto &binding : empty_result.bindings) {
+			auto entry = table_idx_replacements.find(binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				binding.table_index = entry->second;
+			}
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -252,7 +281,7 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		auto entry = table_idx_replacements.find(bound_column_ref.Binding().table_index);
 		if (entry != table_idx_replacements.end()) {
-			bound_column_ref.BindingMutable().table_index = entry->second;
+			expr = bound_column_ref.WithBinding(ColumnBinding(entry->second, bound_column_ref.Binding().column_index));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		// we have to replace the parameter data if it is a bound parameter

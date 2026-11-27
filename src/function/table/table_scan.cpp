@@ -1,4 +1,9 @@
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/function/table/native_scan_job.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
@@ -10,11 +15,14 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
@@ -31,25 +39,91 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 
 namespace duckdb {
 
+//! A pre-claimed scan assignment whose I/O is scheduled on the async pool ahead of decoding
+struct TableScanJobState {
+	//! Rows of the assignment, counted as scanned by the progress once a thread decodes the job
+	idx_t rows = 0;
+	//! The scan state the job's I/O and decoding operate on
+	unique_ptr<TableScanState> scan_state;
+};
+using TableScanJob = ScanReadAheadJobWrapper<TableScanJobState>;
+
+//! Tracks how many rows of a scan assignment have been consumed, for reporting progress
+struct ScanAssignmentProgress {
+	//! Rows of the current assignment
+	idx_t assignment_rows = 0;
+	//! Rows of the current assignment that were counted as scanned
+	idx_t reported_rows = 0;
+
+	void Start(idx_t rows) {
+		assignment_rows = rows;
+		reported_rows = 0;
+	}
+	//! Returns the rows consumed since the last update
+	idx_t Update(const TableScanState &scan_state) {
+		idx_t remaining = 0;
+		if (scan_state.table_state.GetRowGroup()) {
+			remaining = scan_state.table_state.RemainingAssignmentRows();
+		} else if (scan_state.local_state.GetRowGroup()) {
+			remaining = scan_state.local_state.RemainingAssignmentRows();
+		}
+		auto consumed = assignment_rows - MinValue<idx_t>(remaining, assignment_rows);
+		return Report(consumed);
+	}
+	//! Returns the rows of the assignment that were not yet counted
+	idx_t Finish() {
+		return Report(assignment_rows);
+	}
+
+private:
+	idx_t Report(idx_t consumed) {
+		if (consumed <= reported_rows) {
+			return 0;
+		}
+		auto delta = consumed - reported_rows;
+		reported_rows = consumed;
+		return delta;
+	}
+};
+
+enum class TableScanScheduling { UNINITIALIZED, DIRECT, ORDERED, AFFINITY };
+
 struct TableScanLocalState : public LocalTableFunctionState {
+	explicit TableScanLocalState(idx_t progress_index_p) : progress_index(progress_index_p) {
+	}
 	//! The current position in the scan.
 	TableScanState scan_state;
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
+	//! The read-ahead job currently being decoded
+	unique_ptr<TableScanJob> job;
+	//! Rows scanned by finished read-ahead jobs, folded in when their scan state is recycled
+	idx_t job_rows_scanned = 0;
+	//! Consumed rows of the assignment (or read-ahead job) currently being scanned
+	ScanAssignmentProgress assignment_progress;
 
-	idx_t rows_in_current_row_group = 0;
 	idx_t row_groups_scanned = 0;
+	//! Producer scratch, separate from the assignment currently being decoded.
+	unique_ptr<TableScanState> prepare_state;
+	vector<unique_ptr<NativeScanJob>> reusable_jobs;
+
+	//! Slot in the global scan state's progress counters
+	const idx_t progress_index;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -108,20 +182,24 @@ public:
 
 class DuckIndexScanState : public TableScanGlobalState {
 public:
-	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p)
-	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), arena(Allocator::Get(context)),
-	      row_ids(nullptr), row_id_count(0), finished_first_phase(false), started_last_phase(false) {
+	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p, unsafe_vector<row_t> &&row_ids_p)
+	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), row_ids(std::move(row_ids_p)),
+	      finished_first_phase(row_ids.empty()), started_last_phase(false) {
+		// Tasks claim STANDARD_VECTOR_SIZE row IDs at a time, and one more task can scan the transaction-local rows.
+		auto &duck_table = bind_data_p->Cast<TableScanBindData>().table.Cast<DuckTableEntry>();
+		auto local_table = LocalStorage::Get(context, duck_table.catalog).GetStorage(duck_table.GetStorage());
+		idx_t useful_threads = (row_ids.size() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		if (local_table && local_table->GetCollection().GetTotalRows() > 0) {
+			useful_threads++;
+		}
+		max_threads = MinValue<idx_t>(max_threads, MaxValue<idx_t>(useful_threads, 1));
 	}
 
 	//! The batch index of the next Sink.
 	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
 	atomic<idx_t> next_batch_index;
-	//! The arena allocator containing the memory of the row IDs.
-	ArenaAllocator arena;
-	//! A pointer to the row IDs.
-	row_t *row_ids;
-	//! The number of scanned row IDs.
-	idx_t row_id_count;
+	//! Finalized before construction and only read by Fetch tasks.
+	unsafe_vector<row_t> row_ids;
 	//! The column IDs of the to-be-scanned columns.
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
@@ -151,8 +229,33 @@ public:
 			l_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
-		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
+		local_storage.InitializeScan(context.client, storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
+	}
+
+	//! The index scan can return a superset of the matching rows, so apply all table filters to the fetched rows.
+	static void FilterFetchedRows(ScanFilterInfo &filter_info, DataChunk &chunk) {
+		auto adaptive_filter = filter_info.GetAdaptiveFilter();
+		if (!adaptive_filter || chunk.size() == 0) {
+			return;
+		}
+		const auto count = chunk.size();
+		SelectionVector sel;
+		sel.Initialize(nullptr);
+		idx_t approved_tuple_count = count;
+		auto &filter_list = filter_info.GetFilterList();
+		const auto &permutation = adaptive_filter->GetPermutation();
+		for (idx_t i = 0; i < filter_list.size(); i++) {
+			auto &filter = filter_list[permutation[i]];
+			ColumnSegment::FilterSelection(sel, chunk.data[filter.scan_column_index], *filter.filter_state, count,
+			                               approved_tuple_count);
+			if (approved_tuple_count == 0) {
+				break;
+			}
+		}
+		if (approved_tuple_count != count) {
+			chunk.Slice(sel, approved_tuple_count);
+		}
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
@@ -179,7 +282,7 @@ public:
 					next_batch_index++;
 
 					offset = l_state.batch_index * STANDARD_VECTOR_SIZE;
-					auto remaining = row_id_count - offset;
+					auto remaining = row_ids.size() - offset;
 					scan_count = remaining <= STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
 					finished_first_phase = remaining <= STANDARD_VECTOR_SIZE ? true : false;
 					phase_to_be_performed = ExecutionPhase::STORAGE;
@@ -188,6 +291,8 @@ public:
 					// will be on again
 					started_last_phase = true;
 					l_state.in_charge_of_final_stretch = true;
+					// The local rows form their own batch after all row ID batches.
+					l_state.batch_index = next_batch_index;
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
 				} else if (l_state.in_charge_of_final_stretch) {
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
@@ -201,15 +306,17 @@ public:
 			}
 			case ExecutionPhase::STORAGE: {
 				// Scan (in parallel) storage
-				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
+				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids.data() + offset);
 				Vector local_vector(LogicalType::ROW_TYPE, row_id_data, scan_count);
 
 				if (CanRemoveFilterColumns()) {
 					l_state.all_columns.Reset();
 					storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, l_state.fetch_state);
+					FilterFetchedRows(l_state.scan_state.GetFilterInfo(), l_state.all_columns);
 					output.ReferenceColumns(l_state.all_columns, projection_ids);
 				} else {
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
+					FilterFetchedRows(l_state.scan_state.GetFilterInfo(), output);
 				}
 
 				l_state.rows_scanned += scan_count;
@@ -222,6 +329,7 @@ public:
 					}
 
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
+					output.Reset();
 					continue;
 				}
 				return;
@@ -246,11 +354,11 @@ public:
 	}
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
-		if (row_id_count == 0) {
+		if (row_ids.empty()) {
 			return 100;
 		}
 		auto scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
-		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(row_id_count));
+		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(row_ids.size()));
 		return percentage > 100 ? 100 : percentage;
 	}
 
@@ -275,11 +383,18 @@ public:
 	DuckTableScanState(ClientContext &context, const FunctionData *bind_data_p)
 	    : TableScanGlobalState(context, bind_data_p), bind_data(bind_data_p->Cast<TableScanBindData>()),
 	      duck_table(bind_data.table.Cast<DuckTableEntry>()), tx(DuckTransaction::Get(context, duck_table.catalog)),
-	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()) {
+	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()),
+	      progress(MaxValue<idx_t>(1, context.db->NumberOfThreads())) {
+		// Persisted row groups can be smaller than the configured target size.
+		max_threads = MaxValue(max_threads, total_row_groups_to_scan);
+		for (auto &counter : progress) {
+			counter.store(0, std::memory_order_relaxed);
+		}
 	}
 
 public:
 	ParallelTableScanState state;
+	unique_ptr<ScanReadAhead> read_ahead;
 
 private:
 	const TableScanBindData &bind_data;
@@ -291,6 +406,44 @@ private:
 	vector<StorageIndex> storage_ids;
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
+	//! Guards scheduling setup and ordered batch index assignment
+	mutex read_ahead_lock;
+	//! Batch index assigned to the next produced job
+	idx_t next_job_index = 0;
+	ScanStatePool<TableScanState> state_pool;
+	//! Preallocated counters spread progress updates without registering local states
+	vector<PaddedAtomic<idx_t>> progress;
+	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
+
+private:
+	void InitializeScheduling(ExecutionContext &context, TableFunctionInitInput &input) {
+		lock_guard<mutex> guard(read_ahead_lock);
+		if (scheduling != TableScanScheduling::UNINITIALIZED) {
+			return;
+		}
+		auto &blocks = storage.GetTableIOManager().GetBlockManagerForRowData();
+		idx_t affinity_shards = 0;
+		if (input.execution_order == PipelineExecutionOrder::UNORDERED) {
+			const bool supported_scan = input.max_threads > 1 && !blocks.InMemory() && !bind_data.is_create_index &&
+			                            !bind_data.order_options && !sample_options;
+			if (supported_scan &&
+			    CollectionScanState::SupportsAssignmentBlockDiscovery(storage_ids, storage.GetTypes())) {
+				const auto shard_count = BlockAllocator::Get(storage.GetAttached()).GetPoolShardCount();
+				if (shard_count > 1 || ClientConfig::GetConfig(context.client).verify_parallelism) {
+					affinity_shards = shard_count;
+				}
+			}
+		}
+		const bool repeatable_percentage_sample =
+		    sample_options && sample_options->repeatable && sample_options->is_percentage;
+		const bool prefetch = !bind_data.is_create_index && !repeatable_percentage_sample && blocks.Prefetch();
+		const auto policy = affinity_shards ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
+		read_ahead = ScanReadAhead::Create(context.client, policy, prefetch, MaxValue<idx_t>(affinity_shards, 1),
+		                                   input.max_threads);
+		scheduling = affinity_shards ? TableScanScheduling::AFFINITY
+		             : read_ahead    ? TableScanScheduling::ORDERED
+		                             : TableScanScheduling::DIRECT;
+	}
 
 public:
 	//! Retains the scan initialization info shared by all scan states of this scan
@@ -316,17 +469,92 @@ public:
 
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
-		auto l_state = make_uniq<TableScanLocalState>();
+		const auto counter_index = TaskScheduler::GetEstimatedCPUId() % progress.size();
+		auto l_state = make_uniq<TableScanLocalState>(counter_index);
 		InitializeScanState(context.client, l_state->scan_state);
 
-		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
-		if (l_state->rows_in_current_row_group > 0) {
-			l_state->row_groups_scanned++;
+		InitializeScheduling(context, input);
+		if (scheduling == TableScanScheduling::DIRECT) {
+			ClaimAssignment(context.client, *l_state);
 		}
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
 		return std::move(l_state);
+	}
+
+	unique_ptr<ScanReadAheadJob> ProduceAffinityJob(ClientContext &context, TableScanLocalState &l_state,
+	                                                vector<unique_ptr<AsyncTask>> &io_tasks) {
+		context.InterruptCheck();
+		if (!l_state.prepare_state) {
+			l_state.prepare_state = make_uniq<TableScanState>();
+			InitializeScanState(context, *l_state.prepare_state);
+		}
+		unique_ptr<NativeScanJob> job;
+		if (!l_state.reusable_jobs.empty()) {
+			job = std::move(l_state.reusable_jobs.back());
+			l_state.reusable_jobs.pop_back();
+		} else {
+			job = make_uniq<NativeScanJob>(BlockAllocator::Get(storage.GetAttached()));
+		}
+		auto &prepare = *l_state.prepare_state;
+		if (!storage.NextParallelScanAssignment(context, state, prepare, job->assignment)) {
+			return nullptr;
+		}
+		if (job->assignment.source == TableScanSource::PERSISTENT) {
+			prepare.table_state.PrepareAssignmentBlocks(job->blocks, io_tasks, read_ahead->PrefetchEnabled());
+		}
+		prepare.ReleasePins();
+		return std::move(job);
+	}
+
+	ScanReadAheadAcquire ClaimAffinityAssignment(ClientContext &context, TableFunctionInput &input,
+	                                             TableScanLocalState &l_state) {
+		AddProgress(l_state, l_state.assignment_progress.Finish());
+		unique_ptr<ScanReadAheadJob> claimed;
+		const auto shard = BlockAllocator::Get(storage.GetAttached()).GetLocalPoolShard();
+		auto produce = [&](vector<unique_ptr<AsyncTask>> &tasks) {
+			return ProduceAffinityJob(context, l_state, tasks);
+		};
+		const auto result = read_ahead->AcquireReadyJob(context, input, std::ref(produce), claimed, shard);
+		if (result != ScanReadAheadAcquire::ACQUIRED) {
+			D_ASSERT(!claimed);
+			return result;
+		}
+		auto job = unique_ptr_cast<ScanReadAheadJob, NativeScanJob>(std::move(claimed));
+		l_state.assignment_progress.Start(job->assignment.row_group.RowCount());
+		if (l_state.scan_state.StartAssignment(job->assignment, read_ahead->PrefetchEnabled())) {
+			l_state.row_groups_scanned++;
+		}
+		job->assignment = TableScanAssignment();
+		static constexpr idx_t MAX_REUSABLE_JOBS = 8;
+		if (l_state.reusable_jobs.size() < MAX_REUSABLE_JOBS) {
+			l_state.reusable_jobs.push_back(std::move(job));
+		}
+		return ScanReadAheadAcquire::ACQUIRED;
+	}
+
+	//! Claims the next assignment into the thread's own scan state, returns false when none are left
+	bool ClaimAssignment(ClientContext &context, TableScanLocalState &l_state) {
+		AddProgress(l_state, l_state.assignment_progress.Finish());
+		auto rows = storage.NextParallelScan(context, state, l_state.scan_state);
+		if (!rows.IsValid()) {
+			return false;
+		}
+		l_state.assignment_progress.Start(rows.GetIndex());
+		l_state.row_groups_scanned++;
+		return true;
+	}
+
+	void AddProgress(const TableScanLocalState &l_state, idx_t rows) {
+		if (rows) {
+			progress[l_state.progress_index].fetch_add(rows, std::memory_order_relaxed);
+		}
+	}
+
+	//! Counts the rows of the current assignment that were consumed by the scan
+	void UpdateScanProgress(TableScanLocalState &l_state, const TableScanState &scan_state) {
+		AddProgress(l_state, l_state.assignment_progress.Update(scan_state));
 	}
 
 	//! How TableScanFunc's loop proceeds after a persistent scan iteration
@@ -346,18 +574,19 @@ public:
 
 	//! Prepares the next vector, schedules its I/O and decodes it, draining local storage when exhausted
 	PersistentScanResult ScanPersistentStorage(ClientContext &context, TableFunctionInput &data_p,
-	                                           TableScanLocalState &l_state, DataChunk &output) {
+	                                           TableScanLocalState &l_state, TableScanState &scan_state,
+	                                           DataChunk &output) {
 		// persistent storage phase, prepare the next vector and schedule its I/O before decoding
-		auto &table_state = l_state.scan_state.table_state;
+		auto &table_state = scan_state.table_state;
 		vector<unique_ptr<AsyncTask>> io_tasks;
 		if (!table_state.PrepareScanIO(tx, io_tasks)) {
 			// we are done, scan drains any claimed local storage rows
-			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, l_state.scan_state); });
+			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, scan_state); });
 			return PersistentScanResult::EXHAUSTED;
 		}
 		auto io_result = AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
 		// on resume the prepared vector is decoded without registering I/O again
-		if (io_result.GetResultType() == AsyncResultType::BLOCKED && data_p.HandleBlocked(io_result)) {
+		if (io_result.GetResultType() == AsyncResultType::BLOCKED && data_p.HandleBlocked(context, io_result)) {
 			return PersistentScanResult::YIELD;
 		}
 		EmitChunk(l_state, output, [&](DataChunk &chunk) { table_state.ProcessPreparedScan(tx, chunk); });
@@ -365,18 +594,118 @@ public:
 			return PersistentScanResult::YIELD;
 		}
 		// the prepared vector was filtered out entirely, go the next vector
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		return PersistentScanResult::NEXT_VECTOR;
+	}
+
+	//! Claims the next assignment as a job and registers its I/O, returns null when there are no more assignments
+	unique_ptr<TableScanJob> ProduceJob(ClientContext &context, vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<TableScanJob>();
+		// jobs recycle finished scan states, create a fresh one when none was available
+		job->scan_state = state_pool.TryPop();
+		if (!job->scan_state) {
+			job->scan_state = make_uniq<TableScanState>();
+			InitializeScanState(context, *job->scan_state);
+		}
+		{
+			// only the claim and its index need the lock, the per-column setup runs outside it
+			lock_guard<mutex> guard(read_ahead_lock);
+			const auto rows = storage.NextParallelScan(context, state, *job->scan_state, false);
+			if (!rows.IsValid()) {
+				return nullptr;
+			}
+			job->rows = rows.GetIndex();
+			job->batch_index = next_job_index++;
+		}
+		job->scan_state->InitializeColumnScans();
+		// preparing the first vector skips the leading vectors the zonemaps or sampling reject before registering I/O
+		job->scan_state->table_state.PrepareScanIO(tx, io_tasks, true);
+		return job;
+	}
+
+	//! Drops a settled job's row group when a filter set since it was produced prunes it
+	static void RecheckJob(TableScanLocalState &l_state) {
+		if (!l_state.job->scan_state->table_state.RecheckPreparedRowGroup()) {
+			// the row group is dropped without being scanned
+			l_state.row_groups_scanned--;
+		}
+	}
+
+	// Try to return control to the executor instead of looping back within the scan.
+	static bool TryYieldControl(TableFunctionInput &data_p) {
+		if (data_p.results_execution_mode != AsyncResultsExecutionMode::TASK_EXECUTOR) {
+			return false;
+		}
+		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+		return true;
+	}
+
+	//! Decodes read-ahead jobs, returns true when the caller must yield, false once every assignment is consumed
+	bool ScanWithReadAhead(ClientContext &context, TableFunctionInput &data_p, TableScanLocalState &l_state,
+	                       DataChunk &output) {
+		while (true) {
+			if (l_state.job && l_state.job->io_completion) {
+				// resuming after parking, the job's I/O has completed
+				read_ahead->WaitForJob(*l_state.job);
+				RecheckJob(l_state);
+			}
+			if (!l_state.job) {
+				unique_ptr<ScanReadAheadJob> claimed;
+				auto acquired = read_ahead->AcquireJob(
+				    context, data_p,
+				    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, io_tasks); }, claimed);
+				if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
+					return false;
+				}
+				l_state.job = unique_ptr_cast<ScanReadAheadJob, TableScanJob>(std::move(claimed));
+				l_state.row_groups_scanned++;
+				l_state.assignment_progress.Start(l_state.job->rows);
+				if (acquired == ScanReadAheadAcquire::PARKED) {
+					return true;
+				}
+				RecheckJob(l_state);
+			}
+			auto &job_scan = *l_state.job->scan_state;
+			// the job's I/O was registered when it was produced, so no I/O is scheduled here
+			auto scan_result = ScanPersistentStorage(context, data_p, l_state, job_scan, output);
+			UpdateScanProgress(l_state, job_scan);
+			switch (scan_result) {
+			case PersistentScanResult::YIELD:
+				return true;
+			case PersistentScanResult::NEXT_VECTOR:
+				// the prepared vector was filtered out, we got to return control before scanning the next one
+				if (TryYieldControl(data_p)) {
+					return true;
+				}
+				continue;
+			case PersistentScanResult::EXHAUSTED:
+				break;
+			}
+			if (output.size() > 0) {
+				return true;
+			}
+			// the job is exhausted, fold its scan counters into this thread and recycle its state
+			AddProgress(l_state, l_state.assignment_progress.Finish());
+			l_state.job_rows_scanned += job_scan.RowsScanned();
+			job_scan.table_state.rows_scanned = 0;
+			job_scan.local_state.rows_scanned = 0;
+			// a pooled state outlives the pipeline, it must not keep blocks pinned that a sink may still convert
+			job_scan.ReleasePins();
+			state_pool.Push(std::move(l_state.job->scan_state));
+			l_state.job.reset();
+			if (TryYieldControl(data_p)) {
+				return true;
+			}
+		}
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		{
 			AsyncResult test_result;
-			if (AsyncResult::TryGenerateTestResult(test_result) && data_p.HandleBlocked(test_result)) {
+			if (AsyncResult::TryGenerateTestResult(test_result) && data_p.HandleBlocked(context, test_result)) {
 				return;
 			}
 		}
@@ -385,8 +714,18 @@ public:
 		do {
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output);
+				UpdateScanProgress(l_state, l_state.scan_state);
+			} else if (scheduling == TableScanScheduling::ORDERED) {
+				if (!ScanWithReadAhead(context, data_p, l_state, output) &&
+				    data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+					// every assignment went to a read-ahead job, the thread's own scan state never claims one
+					data_p.async_result = AsyncResultType::FINISHED;
+				}
+				return;
 			} else {
-				switch (ScanPersistentStorage(context, data_p, l_state, output)) {
+				auto scan_result = ScanPersistentStorage(context, data_p, l_state, l_state.scan_state, output);
+				UpdateScanProgress(l_state, l_state.scan_state);
+				switch (scan_result) {
 				case PersistentScanResult::YIELD:
 					return;
 				case PersistentScanResult::NEXT_VECTOR:
@@ -399,26 +738,27 @@ public:
 				return;
 			}
 
-			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
-			if (l_state.rows_in_current_row_group > 0) {
-				l_state.row_groups_scanned++;
+			bool claimed;
+			if (scheduling == TableScanScheduling::AFFINITY) {
+				const auto acquired = ClaimAffinityAssignment(context, data_p, l_state);
+				if (acquired == ScanReadAheadAcquire::PARKED) {
+					return;
+				}
+				claimed = acquired == ScanReadAheadAcquire::ACQUIRED;
+			} else {
+				claimed = ClaimAssignment(context, l_state);
 			}
-
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
-				if (l_state.rows_in_current_row_group == 0) {
-					data_p.async_result = AsyncResultType::FINISHED;
-				} else {
-					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-				}
+				data_p.async_result = claimed ? AsyncResultType::HAVE_MORE_OUTPUT : AsyncResultType::FINISHED;
 				return;
 			}
-			if (l_state.rows_in_current_row_group == 0) {
+			if (!claimed) {
 				return;
 			}
 
 			// Before looping back, check if we are interrupted
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		} while (true);
 	}
 
@@ -428,9 +768,14 @@ public:
 			return 100;
 		}
 
-		idx_t scanned_rows = state.scan_state.processed_rows;
-		scanned_rows += state.local_state.processed_rows;
-		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
+		// rows count once they are consumed by a scan, or when their assignment is skipped entirely
+		idx_t done_rows = 0;
+		for (auto &counter : progress) {
+			done_rows += counter.load(std::memory_order_relaxed);
+		}
+		done_rows += state.scan_state.skipped_rows.load();
+		done_rows += state.local_state.skipped_rows.load();
+		auto percentage = 100 * (static_cast<double>(done_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
 			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,
 			// then we finished this table.
@@ -442,19 +787,25 @@ public:
 	OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                TableFunctionGetPartitionInput &input) override {
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
-		if (l_state.scan_state.table_state.row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state.batch_index);
+		D_ASSERT(scheduling != TableScanScheduling::AFFINITY);
+		// with read-ahead the assignment being decoded lives in the claimed job's scan state
+		auto &scan_state = l_state.job ? *l_state.job->scan_state : l_state.scan_state;
+		if (scan_state.table_state.GetRowGroup()) {
+			return OperatorPartitionData(scan_state.table_state.batch_index);
 		}
-		if (l_state.scan_state.local_state.row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state.batch_index +
-			                             l_state.scan_state.local_state.batch_index);
+		if (scan_state.local_state.GetRowGroup()) {
+			return OperatorPartitionData(scan_state.table_state.batch_index + scan_state.local_state.batch_index);
 		}
 		return OperatorPartitionData(0);
 	}
 
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
 		const auto &l_state = state.Cast<TableScanLocalState>();
-		return l_state.scan_state.table_state.rows_scanned + l_state.scan_state.local_state.rows_scanned;
+		auto result = l_state.scan_state.RowsScanned() + l_state.job_rows_scanned;
+		if (l_state.job) {
+			result += l_state.job->scan_state->RowsScanned();
+		}
+		return result;
 	}
 
 	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) override {
@@ -510,23 +861,11 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             const TableScanBindData &bind_data, set<row_t> &row_ids,
+                                                             const TableScanBindData &bind_data,
+                                                             unsafe_vector<row_t> &&row_ids,
                                                              unique_ptr<StorageLockKey> vacuum_lock) {
-	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
+	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get(), std::move(row_ids));
 	g_state->vacuum_lock = std::move(vacuum_lock);
-	g_state->finished_first_phase = row_ids.empty() ? true : false;
-	g_state->started_last_phase = false;
-
-	if (!row_ids.empty()) {
-		auto row_id_ptr = g_state->arena.AllocateAligned(row_ids.size() * sizeof(row_t));
-		g_state->row_ids = reinterpret_cast<row_t *>(row_id_ptr);
-		g_state->row_id_count = row_ids.size();
-
-		idx_t row_id_count = 0;
-		for (const auto row_id : row_ids) {
-			g_state->row_ids[row_id_count++] = row_id;
-		}
-	}
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	if (input.CanRemoveFilterColumns()) {
@@ -612,21 +951,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (ExpressionFilter::IsRootOptionalExpression(func)) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+			return !optional_child ||
+			       CollectValuesAndComparisonsFromExpression(*optional_child, in_values, comparisons);
 		}
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
@@ -674,54 +1002,53 @@ static bool ValueQualifies(const Value &value, const vector<ComparisonCondition>
 	return true;
 }
 
-static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &values) {
+static bool ExtractValuesFromExpression(const Expression &expr, const LogicalType &key_type, DataChunk &key_columns) {
 	value_set_t in_values;
 	vector<ComparisonCondition> comparisons;
 	if (!CollectValuesAndComparisonsFromExpression(expr, in_values, comparisons) || in_values.empty()) {
 		return false;
 	}
-	for (auto &value : in_values) {
-		if (ValueQualifies(value, comparisons)) {
-			values.insert(value);
+	key_columns.Initialize(Allocator::DefaultAllocator(), {key_type}, in_values.size());
+	for (const auto &value : in_values) {
+		if (!ValueQualifies(value, comparisons)) {
+			continue;
 		}
+		if (value.type() != key_type) {
+			return false;
+		}
+		key_columns.data[0].Append(value);
 	}
-	return !values.empty();
+	return key_columns.size() > 0;
 }
 
-void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnRefExpression &bound_ref,
-                                  vector<unique_ptr<Expression>> &expressions) {
-	for (const auto &value : unique_values) {
-		auto bound_constant = make_uniq<BoundConstantExpression>(value);
-		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
-		                                                     std::move(bound_constant));
-		expressions.push_back(std::move(filter_expr));
+static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<ART> &art, const Expression &index_expr,
+                                                         const ColumnDefinition &col, const TableFilter &filter,
+                                                         ProjectionIndex storage_index) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScan");
+	ColumnBinding binding(TableIndex(0), storage_index);
+	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
+
+	auto key_columns = make_uniq<DataChunk>();
+	if (!ExtractValuesFromExpression(*expr_filter.expr, col.Type(), *key_columns)) {
+		auto filter_expr = expr_filter.ToExpression(bound_ref);
+		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
-}
-
-vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
-                                                        idx_t storage_idx) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExtractFilterExpressions");
-	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
-	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-
-	// Extract all exact values we can derive from the filter tree.
-	vector<unique_ptr<Expression>> expressions;
-	value_set_t values;
-	if (ExtractValuesFromExpression(*expr_filter.expr, values)) {
-		ExtractExpressionsFromValues(values, *bound_ref, expressions);
+	if (key_columns->size() == 1) {
+		auto filter_expr =
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                      make_uniq<BoundConstantExpression>(key_columns->GetValue(0, 0)));
+		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
 
-	// Attempt matching the top-level filter to the index expression.
-	if (expressions.empty()) {
-		auto filter_expr = expr_filter.ToExpression(*bound_ref);
-		expressions.push_back(std::move(filter_expr));
+	if (!bound_ref.Equals(index_expr)) {
+		return nullptr;
 	}
-
-	return expressions;
+	return art->InitializeBatchScan(std::move(key_columns));
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
-                  TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
+                  TableFilterSet &filter_set, RowIdVectorOutput &row_ids) {
+	row_ids.Reset();
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art->UnboundExpressionCount() > 1) {
@@ -756,12 +1083,10 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 
 	// A bound column reference in an unbound index expression is an ordinal into indexed_columns, which is not the
 	// column's position in this scan. Rebind the references to the ART column's position in the scan input.
-	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			return;
-		}
-		expr.Cast<BoundColumnRefExpression>().BindingMutable().column_index = storage_index;
-	});
+	index_expr = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(index_expr), [&](const BoundColumnRefExpression &colref) {
+		    return colref.WithBinding(ColumnBinding(colref.Binding().table_index, storage_index));
+	    });
 
 	// Try to find a matching filter for the column.
 	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
@@ -769,32 +1094,17 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
-	for (const auto &filter_expr : expressions) {
-		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
-		if (!scan_state) {
+	auto scan_state = TryInitializeIndexScan(art, *index_expr, col, *filter, storage_index);
+	if (!scan_state) {
+		return false;
+	}
+	if (!art->Scan(*scan_state, row_ids)) {
+		return false;
+	}
+	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+		auto delta_index = art.FindDelta(delta);
+		if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
 			return false;
-		}
-
-		if (!art->Scan(*scan_state, max_count, row_ids)) {
-			row_ids.clear();
-			return false;
-		}
-		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
-			auto delta_index = art.FindDelta(delta);
-			if (!delta_index) {
-				continue;
-			}
-			auto delta_scan_state = delta_index->TryInitializeScan(*index_expr, *filter_expr);
-			if (!delta_scan_state) {
-				return false;
-			}
-
-			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!delta_index->Scan(*delta_scan_state, max_count, row_ids)) {
-				row_ids.clear();
-				return false;
-			}
 		}
 	}
 	return true;
@@ -817,15 +1127,20 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
+	// The index scan does not apply the sample.
+	if (input.sample_options) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
 	auto &filter_set = *input.filters;
 
-	// FIXME: We currently only support scanning one ART with one filter.
-	// If multiple filters exist, i.e., a = 11 AND b = 24, we need to
-	// 1.	1.1. Find + scan one ART for a = 11.
-	//		1.2. Find + scan one ART for b = 24.
-	//		1.3. Return the intersecting row IDs.
+	// Scan one ART with the filter on its column. The index scan applies all filters to the fetched rows.
+	// FIXME: For multiple filters, i.e., a = 11 AND b = 24, we could also
+	// 1. Scan the ARTs for a = 11 and b = 24, and intersect the row IDs.
 	// 2. (Reorder and) scan a single ART with a compound key of (a, b).
-	if (filter_set.FilterCount() != 1) {
+	// FIXME: We use the first ART within the thresholds, not the most selective one. Each failed probe can scan up
+	// to max_count row IDs before falling back to a table scan.
+	if (!filter_set.HasFilters()) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -844,9 +1159,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	auto &column_list = duck_table.GetColumns();
 	bool index_scan = false;
-	set<row_t> row_ids;
+	RowIdVectorOutput row_ids(max_count);
 
-	info->BindIndexes(context, ART::TYPE_NAME);
+	// a read does not need an index whose stored keys do not match: it is left unbound and the scan does without it
+	info->BindIndexes(context, ART::TYPE_NAME, true);
 
 	// Exclude rowid-shifting vacuum from the ART probe until the index scan finishes: collected rowids must be
 	// fetched against the matching row-group tree. Falling back to a table scan releases the lock on return.
@@ -862,8 +1178,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		auto index = entry->GetReadHandle<ART>();
-		index_scan = TryScanIndex(index, column_list, input, filter_set, max_count, row_ids);
+		{
+			auto index = entry->GetReadHandle<ART>();
+			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids);
+		}
 		if (index_scan) {
 			// found an index - break
 			break;
@@ -873,23 +1191,17 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
-	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids, std::move(vacuum_lock));
+	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids.TakeRows(), std::move(vacuum_lock));
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
 	auto &column_id = input.column_index;
-	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
-
-	// Don't emit statistics for tables with outstanding transaction-local data.
-	if (local_storage.Find(duck_table.GetStorage())) {
-		return nullptr;
-	}
-
 	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn()) {
 		return nullptr;
 	}
+
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
 	if (column.Generated()) {
 		return nullptr;
@@ -926,9 +1238,9 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	return storage.GetPartitionStats(context);
 }
 
-BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+optional_ptr<TableCatalogEntry> TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return BindInfo(bind_data.table);
+	return &bind_data.table;
 }
 
 void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
@@ -963,8 +1275,8 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 	return result;
 }
 
-static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &function) {
+static void TableScanSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
+                               const BoundTableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	// the catalog/schema/name are only the innermost qualification - "qualified_name" carries the full (possibly
 	// nested) schema path
@@ -978,7 +1290,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
@@ -1020,20 +1332,67 @@ virtual_column_map_t TableScanGetVirtualColumns(ClientContext &context, optional
 	return bind_data.table.GetVirtualColumns();
 }
 
-vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<const FunctionData> bind_data) {
 	vector<column_t> result;
 	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 	return result;
 }
 
-void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<FunctionData> bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, cow_ptr<FunctionData> &bind_data_p) {
+	auto &bind_data = bind_data_p.write().Cast<TableScanBindData>();
 	bind_data.order_options = std::move(order_options);
 }
 
-void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionData> bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+void SetPartitionsToScan(vector<idx_t> partition_indices, cow_ptr<FunctionData> &bind_data_p) {
+	auto &bind_data = bind_data_p.write().Cast<TableScanBindData>();
 	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
+}
+
+static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
+	auto &data = get.bind_data->Cast<TableScanBindData>();
+	if (has_input) {
+		return "input_child";
+	}
+	if (get.ordinality_idx.IsValid()) {
+		return "ordinality";
+	}
+	if (!get.scan_partition_indices.empty()) {
+		return "scan_partitions";
+	}
+	if (data.is_create_index) {
+		return "create_index";
+	}
+	if (data.partitions_to_scan) {
+		return "bound_scan_partitions";
+	}
+	const bool has_filters =
+	    get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters;
+	for (auto &index : get.GetColumnIds()) {
+		if (index.IsRowNumberColumn() && has_filters) {
+			return "row_number_with_filters";
+		}
+		if (index.IsVirtualColumn() && !index.IsRowIdColumn() && !index.IsRowNumberColumn()) {
+			return "virtual_column";
+		}
+		if (!index.IsVirtualColumn()) {
+			auto &definition = data.table.GetColumn(index.ToLogical());
+			if (!index.IsPushdownExtract() && definition.Type() != get.GetColumnType(index)) {
+				return "column_type";
+			}
+		}
+	}
+	return string();
+}
+
+static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get) {
+	auto guard = TableScanToSQLGuard(get, !get.children.empty());
+	if (!guard.empty()) {
+		return {nullptr, std::move(guard)};
+	}
+	auto table = make_uniq<BaseTableRef>();
+	auto entry = get.GetTable();
+	table->SetQualifiedName(entry->schema.GetQualifiedName(entry->name));
+	return {std::move(table), {}};
 }
 
 TableFunction TableScanFunction::GetFunction() {
@@ -1046,10 +1405,11 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
+	scan_function.to_sql = TableScanToSQL;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_partition_stats = TableScanGetPartitionStats;
-	scan_function.get_bind_info = TableScanGetBindInfo;
+	scan_function.get_table_entry = TableScanGetTableEntry;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/column_segment_info_scan_type.hpp"
+#include "duckdb/common/enums/constraint_check_mode.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -35,12 +36,16 @@ class Serializer;
 class StorageManager;
 class TableCatalogEntry;
 class TableIOManager;
+class TableStorageInfo;
 class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
+class TableStatistics;
 class ConflictManager;
 class TableScanState;
+struct TableScanAssignment;
+struct CollectionCheckpointResult;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
@@ -73,7 +78,8 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-	          const vector<StorageIndex> &bound_columns, Expression &cast_expr);
+	          const vector<StorageIndex> &bound_columns, Expression &cast_expr,
+	          optional_ptr<BoundConstraint> constraint_to_verify = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
 	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
 
@@ -97,7 +103,11 @@ public:
 	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
 	                            const vector<ColumnIndex> &column_indexes);
-	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	optional_idx NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                              bool initialize_columns = true);
+	//! Claims a range without column initialization and retains it for another worker
+	bool NextParallelScanAssignment(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                                TableScanAssignment &assignment);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -190,6 +200,8 @@ public:
 	//! commit (e.g. because of an I/O exception)
 	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
+	//! Revert an append that failed before it was finalized
+	void RevertFailedAppend(TableAppendState &state);
 
 	void ScanTableSegment(DuckTransaction &transaction, idx_t start_row, idx_t count,
 	                      const std::function<void(DataChunk &chunk)> &function);
@@ -225,10 +237,10 @@ public:
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	//! Obtains a lock during a checkpoint operation that prevents other threads from reading this table
-	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
+	//! Install checkpointed row groups.
+	void PublishCheckpoint(CollectionCheckpointResult result, TableStatistics &checkpoint_stats);
 	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
 	void CommitDropTable(CommitDropState &drop_state);
 	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
@@ -238,6 +250,10 @@ public:
 	idx_t GetTotalRows() const;
 	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
+	//! The number of row groups, including the ones that are not loaded yet, without loading them
+	idx_t GetRowGroupCountWithoutLoading() const;
+	//! The same, including the row groups of the transaction-local storage
+	idx_t GetRowGroupCountWithoutLoading(ClientContext &context);
 	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo>
@@ -249,10 +265,6 @@ public:
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);
-	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
-	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
-	bool IndexNameIsUnique(const string &name);
-
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -288,16 +300,20 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              IndexStorageInfo index_info);
+	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list.
-	void AddIndex(unique_ptr<Index> index);
+	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
 
 private:
+	optional_idx NextParallelScanInternal(ClientContext &context, ParallelTableScanState &state,
+	                                      TableScanState &scan_state, bool initialize_columns,
+	                                      optional_ptr<TableScanAssignment> assignment);
 	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(ClientContext &context, LocalStorage &local_storage, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,

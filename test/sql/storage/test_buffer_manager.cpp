@@ -3,7 +3,6 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -13,11 +12,11 @@
 using namespace duckdb;
 
 TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
-	duckdb::unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	config->SetOptionByName("default_block_size", Value::UBIGINT(DEFAULT_BLOCK_ALLOC_SIZE));
-	config->options.maximum_threads = 1;
+	Settings::Set<ThreadsSetting>(*config, SetScope::GLOBAL, Value::BIGINT(1));
 	// ZSTD can store this in a smaller way, force uncompressed so the 5mb max test correctly fails
 	config->SetOptionByName("force_compression", "uncompressed");
 
@@ -79,7 +78,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 }
 
 TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
-	duckdb::unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -263,7 +262,7 @@ TEST_CASE("Test evicted_data not double-decremented for variable-sized blocks", 
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	config->SetOptionByName("default_block_size", Value::UBIGINT(DEFAULT_BLOCK_ALLOC_SIZE));
-	config->options.maximum_threads = 1;
+	Settings::Set<ThreadsSetting>(*config, SetScope::GLOBAL, Value::BIGINT(1));
 	DeleteDatabase(storage_database);
 	DuckDB db(storage_database, config.get());
 	Connection con(db);

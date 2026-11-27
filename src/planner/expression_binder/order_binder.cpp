@@ -35,9 +35,7 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.GetAlias();
 		}
 	}
-	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
-	result->SetAlias(std::move(alias));
-	result->SetQueryLocation(expr.GetQueryLocation());
+	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index), std::move(alias), expr.GetQueryLocation());
 	return std::move(result);
 }
 
@@ -56,7 +54,8 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 	case ExpressionClass::CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
 		// ORDER BY a constant
-		if (!constant.GetValue().type().IsIntegral()) {
+		int64_t order_value;
+		if (!constant.GetLiteral().TryGetInt64(order_value)) {
 			// non-integral expression
 			// ORDER BY <constant> has no effect
 			// this is disabled by default (matching Postgres) - but we can control this with a setting
@@ -71,7 +70,6 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			break;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-		auto order_value = constant.GetValue().GetValue<int64_t>();
 		return static_cast<idx_t>(order_value <= 0 ? NumericLimits<int64_t>::Maximum() : order_value - 1);
 	}
 	case ExpressionClass::COLUMN_REF: {
@@ -131,9 +129,8 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	}
 	child_list_t<Value> values;
 	values.emplace_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
-	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
-	result->SetAlias(expr.GetAlias());
-	result->SetQueryLocation(expr.GetQueryLocation());
+	auto result =
+	    make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)), expr.GetAlias(), expr.GetQueryLocation());
 	return std::move(result);
 }
 

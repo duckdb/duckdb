@@ -22,13 +22,16 @@
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
 #include <cmath>
+#include <functional>
 
 namespace duckdb {
 
+class Context;
 class String;
 class CastFunctionSet;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
+struct bignum_t;
 
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
@@ -66,7 +69,7 @@ public:
 	//! Create a VARCHAR value
 	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
 	//! Create a VARCHAR value
-	DUCKDB_API Value(std::string_view val);
+	DUCKDB_API Value(std::string_view val); // NOLINT: Allow implicit conversion from `std::string_view`
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
@@ -85,6 +88,8 @@ public:
 	inline bool IsNull() const {
 		return is_null;
 	}
+	//! Whether the value is within the domain of its type (e.g. valid UTF-8, ENUM index within the dictionary)
+	DUCKDB_API bool IsValid() const;
 
 	//! Create the lowest possible value of a given type (numeric only)
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);
@@ -163,10 +168,12 @@ public:
 	DUCKDB_API static Value ENUM(uint64_t value, const LogicalType &original_type);
 
 	// Decimal values
-	DUCKDB_API static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);
-	DUCKDB_API static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);
-	DUCKDB_API static Value DECIMAL(int64_t value, uint8_t width, uint8_t scale);
-	DUCKDB_API static Value DECIMAL(hugeint_t value, uint8_t width, uint8_t scale);
+	DUCKDB_API static Value DECIMAL(int16_t value, uint32_t width, uint32_t scale);
+	DUCKDB_API static Value DECIMAL(int32_t value, uint32_t width, uint32_t scale);
+	DUCKDB_API static Value DECIMAL(int64_t value, uint32_t width, uint32_t scale);
+	DUCKDB_API static Value DECIMAL(hugeint_t value, uint32_t width, uint32_t scale);
+	//! Create a decimal Value from the BIGNUM blob of its unscaled value, the storage of widths above 38
+	DUCKDB_API static Value DECIMAL(bignum_t value, uint32_t width, uint32_t scale);
 	//! Create a float Value from a specified value
 	DUCKDB_API static Value FLOAT(float value);
 	//! Create a double Value from a specified value
@@ -203,7 +210,9 @@ public:
 		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
 	static Value BLOB_RAW(std::string_view data) {
-		return Value::BLOB(const_data_ptr_cast(data.data()), data.size());
+		return Value::BLOB(
+		    const_data_ptr_cast(data.data()), // NOLINT(bugprone-suspicious-stringview-data-usage): length is passed
+		    data.size());
 	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
@@ -215,6 +224,8 @@ public:
 
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
+	DUCKDB_API static Value GEOGRAPHY(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value GEOGRAPHY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
 
 	DUCKDB_API static Value TYPE(const LogicalType &type);
 	DUCKDB_API static Value TYPE(const string_t &serialized_type);
@@ -249,6 +260,9 @@ public:
 	DUCKDB_API string ToString() const;
 	//! Convert this value to a SQL-parseable string
 	DUCKDB_API string ToSQLString() const;
+	//! Render a nested value as SQL via child_to_sql
+	DUCKDB_API static string NestedToSQLString(const Value &value,
+	                                           const std::function<string(const Value &)> &child_to_sql);
 
 	DUCKDB_API uintptr_t GetPointer() const;
 
@@ -256,6 +270,7 @@ public:
 	DUCKDB_API Value CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
 	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
+	DUCKDB_API Value CastAs(Context &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast this value to another type - returns the result, or nullopt if the cast is not possible.
 	//! Never throws on a failed cast; pass "error_message" to obtain the reason for the failure
@@ -263,6 +278,8 @@ public:
 	                                     const LogicalType &target_type, string *error_message = nullptr,
 	                                     bool strict = false) const;
 	DUCKDB_API optional<Value> TryCastAs(ClientContext &context, const LogicalType &target_type,
+	                                     string *error_message = nullptr, bool strict = false) const;
+	DUCKDB_API optional<Value> TryCastAs(Context &context, const LogicalType &target_type,
 	                                     string *error_message = nullptr, bool strict = false) const;
 	DUCKDB_API optional<Value> DefaultTryCastAs(const LogicalType &target_type, string *error_message = nullptr,
 	                                            bool strict = false) const;

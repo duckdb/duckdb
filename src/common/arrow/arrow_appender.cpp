@@ -10,8 +10,33 @@
 #include "duckdb/common/arrow/appender/list.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 
 namespace duckdb {
+
+//! A 32-byte little-endian two's complement Arrow decimal256 value
+struct ArrowDecimal256 {
+	uint64_t words[4];
+};
+
+//! Converts the BIGNUM blob of a wide decimal into an Arrow decimal256
+struct ArrowWideDecimalConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		TGT result;
+		DecimalHelper<bignum_t>::ToTwosComplement(input, data_ptr_cast(&result), sizeof(TGT), false);
+		return result;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+		memset(&value, 0, sizeof(TGT));
+	}
+};
 
 //===--------------------------------------------------------------------===//
 // ArrowAppender
@@ -46,6 +71,14 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 
 idx_t ArrowAppender::RowCount() const {
 	return row_count;
+}
+
+idx_t ArrowAppender::ByteSize() const {
+	idx_t bytes = 0;
+	for (auto &data : root_data) {
+		bytes += data->ByteSize();
+	}
+	return bytes;
 }
 
 void ArrowAppender::ReleaseArray(ArrowArray *array) {
@@ -88,7 +121,16 @@ ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<Arr
 	result->buffers[0] = append_data.GetValidityBuffer().data();
 
 	if (append_data.finalize) {
-		append_data.finalize(append_data, type, result.get());
+		// An extension type's appender tree was initialized (and appended) with the extension's INTERNAL
+		// (storage) type — see InitializeChild — so it must also be finalized with that type: a nested
+		// finalizer (struct/list/map) sizes its child walk from the type it is given, and the LOGICAL
+		// type's shape need not match the storage-built child_data (e.g. a canonical Arrow extension over
+		// struct storage whose logical type has a different child count).
+		if (append_data.extension_data) {
+			append_data.finalize(append_data, append_data.extension_data->GetInternalType(), result.get());
+		} else {
+			append_data.finalize(append_data, type, result.get());
+		}
 	}
 
 	append_data.array = std::move(result);
@@ -233,6 +275,11 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			break;
 		case PhysicalType::INT128:
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
+			break;
+		case PhysicalType::VARCHAR:
+			// wide decimals become Arrow decimal256 (the schema conversion rejects widths above 76 digits)
+			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, bignum_t, ArrowWideDecimalConverter>>(
+			    append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal decimal type");

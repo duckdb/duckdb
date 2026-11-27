@@ -1,0 +1,22 @@
+name ${BENCHMARK_NAME}
+group micro
+subgroup optimizer
+
+load
+SET max_expression_depth=10000;
+CREATE TABLE t AS SELECT i AS k, i % 7 AS v FROM range(50) r(i);
+CREATE VIEW v1 AS SELECT ${ODD_KEY} AS k, a.v FROM t a JOIN t b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v2 AS SELECT ${EVEN_KEY} AS k, a.v FROM v1 a JOIN v1 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v3 AS SELECT ${ODD_KEY} AS k, a.v FROM v2 a JOIN v2 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v4 AS SELECT ${EVEN_KEY} AS k, a.v FROM v3 a JOIN v3 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v5 AS SELECT ${ODD_KEY} AS k, a.v FROM v4 a JOIN v4 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v6 AS SELECT ${EVEN_KEY} AS k, a.v FROM v5 a JOIN v5 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v7 AS SELECT ${ODD_KEY} AS k, a.v FROM v6 a JOIN v6 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v8 AS SELECT ${EVEN_KEY} AS k, a.v FROM v7 a JOIN v7 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v9 AS SELECT ${ODD_KEY} AS k, a.v FROM v8 a JOIN v8 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v10 AS SELECT ${EVEN_KEY} AS k, a.v FROM v9 a JOIN v9 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v11 AS SELECT ${ODD_KEY} AS k, a.v FROM v10 a JOIN v10 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v12 AS SELECT ${EVEN_KEY} AS k, a.v FROM v11 a JOIN v11 b ON a.k = b.k AND a.v = b.v;
+
+run
+PREPARE large_join AS SELECT count(*) FROM ${VIEW};
