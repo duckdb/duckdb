@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cstdio>
 #include <fstream>
+#include <cerrno>
 #include <cstring>
 #include <atomic>
 #include <chrono>
@@ -6396,6 +6397,132 @@ TEST_CASE("ADBC - Ingestion fails when its last appended rows fail", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
 
 	auto count = db.Query("SELECT count(*) FROM keyed");
+	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+}
+
+// Passes through the batches of another stream, then fails with EIO
+struct FailingArrowStream {
+	ArrowArrayStream *inner;
+	idx_t batches_before_failure;
+	bool fail_schema;
+
+	static int GetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+		auto &self = *static_cast<FailingArrowStream *>(stream->private_data);
+		if (self.fail_schema) {
+			return EIO;
+		}
+		return self.inner->get_schema(self.inner, out);
+	}
+	static int GetNext(ArrowArrayStream *stream, ArrowArray *out) {
+		auto &self = *static_cast<FailingArrowStream *>(stream->private_data);
+		if (self.batches_before_failure == 0) {
+			return EIO;
+		}
+		self.batches_before_failure--;
+		return self.inner->get_next(self.inner, out);
+	}
+	static const char *GetLastError(ArrowArrayStream *stream) {
+		return "simulated failure";
+	}
+	static void Release(ArrowArrayStream *stream) {
+		stream->release = nullptr;
+	}
+
+	ArrowArrayStream Stream() {
+		ArrowArrayStream stream;
+		stream.get_schema = GetSchema;
+		stream.get_next = GetNext;
+		stream.get_last_error = GetLastError;
+		stream.release = Release;
+		stream.private_data = this;
+		return stream;
+	}
+};
+
+static AdbcStatusCode IngestFailingStream(ADBCTestDatabase &db, FailingArrowStream &failing, const char *mode,
+                                          AdbcError &error) {
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_TARGET_TABLE, "t", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_MODE, mode, &db.adbc_error)));
+	auto stream = failing.Stream();
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &stream, &db.adbc_error)));
+	int64_t rows_affected = -1;
+	auto status = AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	return status;
+}
+
+TEST_CASE("ADBC - Ingestion fails when its input stream fails", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	bool autocommit = true;
+	SECTION("autocommit") {
+	}
+	SECTION("manual commit") {
+		autocommit = false;
+		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+		                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	}
+	// 300 batches of 2048 rows pass the appender's flush threshold, so rows reach the table before the failure
+	FailingArrowStream failing {&db.QueryArrowForIngest("SELECT range AS i FROM range(1000000)"), 300, false};
+	AdbcError error = ADBC_ERROR_INIT;
+	REQUIRE(IngestFailingStream(db, failing, ADBC_INGEST_OPTION_MODE_CREATE, error) == ADBC_STATUS_IO);
+	REQUIRE(string(error.message).find("Failed to get next batch from the input stream") != string::npos);
+	REQUIRE(string(error.message).find("simulated failure") != string::npos);
+	error.release(&error);
+	if (!autocommit) {
+		REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error)));
+	}
+
+	auto count = db.Query("SELECT count(*) FROM duckdb_tables() WHERE table_name = 't'");
+	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+}
+
+TEST_CASE("ADBC - Failed append or replace from a failing stream keeps the existing rows", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("CREATE TABLE t (i BIGINT)")->HasError());
+	REQUIRE(!db.Query("INSERT INTO t VALUES (42)")->HasError());
+	bool autocommit = true;
+	SECTION("autocommit") {
+	}
+	SECTION("manual commit") {
+		autocommit = false;
+		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+		                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	}
+	for (auto mode : {ADBC_INGEST_OPTION_MODE_APPEND, ADBC_INGEST_OPTION_MODE_REPLACE}) {
+		INFO(mode);
+		FailingArrowStream failing {&db.QueryArrowForIngest("SELECT range AS i FROM range(1000000)"), 300, false};
+		AdbcError error = ADBC_ERROR_INIT;
+		REQUIRE(IngestFailingStream(db, failing, mode, error) == ADBC_STATUS_IO);
+		error.release(&error);
+		if (!autocommit) {
+			REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error)));
+		}
+
+		auto result = db.Query("SELECT list(i) FROM t");
+		REQUIRE(result->Collection().GetValue(0, 0) == Value::LIST(LogicalType::BIGINT, {Value::BIGINT(42)}));
+	}
+}
+
+TEST_CASE("ADBC - Ingestion fails when its input stream has no schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	FailingArrowStream failing {&db.QueryArrowForIngest("SELECT 1 AS i"), 0, true};
+	AdbcError error = ADBC_ERROR_INIT;
+	REQUIRE(IngestFailingStream(db, failing, ADBC_INGEST_OPTION_MODE_CREATE, error) == ADBC_STATUS_INVALID_ARGUMENT);
+	REQUIRE(string(error.message).find("Failed to get schema from the input stream") != string::npos);
+	error.release(&error);
+
+	auto count = db.Query("SELECT count(*) FROM duckdb_tables() WHERE table_name = 't'");
 	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
 }
 
