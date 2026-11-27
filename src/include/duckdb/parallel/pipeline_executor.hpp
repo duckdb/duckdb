@@ -145,7 +145,7 @@ private:
 
 	//! Source operator indicated that there is no more output possible
 	bool exhausted_source = false;
-	//! The last fetch was blocked. It is retried before stopping early: woken read-ahead scans pass the wake on
+	//! The last source fetch returned BLOCKED; it is retried before this executor stops early
 	bool source_blocked = false;
 	//! Source or intermediate operator indicated that there is no more output possible
 	bool exhausted_pipeline = false;

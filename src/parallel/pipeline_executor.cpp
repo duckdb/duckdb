@@ -381,8 +381,9 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			SourceFetchResult source_result;
 			if (!next_batch_blocked) {
 				auto finished_operator_idx = pipeline.finished_operator_idx.load(std::memory_order_relaxed);
+				// Another thread's operator finished the pipeline. A blocked fetch is still retried first: sources
+				// such as the scan read-ahead wake one waiting task at a time and rely on it to wake the next one
 				if (finished_operator_idx >= 0 && !source_blocked) {
-					// another thread's operator finished the pipeline
 					FinishProcessing(finished_operator_idx);
 					return FlushAndFinalize(chunk_budget);
 				}
