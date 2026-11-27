@@ -220,6 +220,13 @@ struct ResidualFilterStats {
 
 static CardinalityValue GetResidualOnSelectivity(const Expression &expression);
 
+enum class JoinSelectivityModel {
+	//! Estimate relation subgraphs, retaining composite-key heuristics and unknown-domain fallbacks.
+	RELATION_GRAPH,
+	//! Count distinct equality connections using reliable column domains.
+	INDEPENDENT_EQUALITIES
+};
+
 struct CardinalityEstimatorState {
 	void InitializeEdgeIndex();
 	bool TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const;
@@ -238,8 +245,8 @@ struct CardinalityEstimatorState {
 	reference_map_t<JoinRelationSet, column_binding_map_t<RelationColumnStats>> projected_columns;
 	vector<ResidualFilterStats> residual_filters;
 	unordered_set<idx_t> leaf_filters;
-	//! Keep one equality policy across all subsets of the region.
-	bool use_independent_equalities = false;
+	//! Select once so every memoized subset of the region uses the same model.
+	JoinSelectivityModel selectivity_model = JoinSelectivityModel::RELATION_GRAPH;
 };
 
 CardinalityEstimator::CardinalityEstimator(JoinRelationSetManager &set_manager,
@@ -848,7 +855,7 @@ void CardinalityEstimator::MergeDisconnectedSelectivitySubgraphs(SelectivityStat
 	state.subgraphs.push_back(final_subgraph);
 }
 
-bool CardinalityEstimator::CanUseIndependentEqualities() {
+JoinSelectivityModel CardinalityEstimator::ChooseSelectivityModel() {
 	for (auto &edge : state->edges) {
 		if (edge.GetPredicate().GetJoinType() != JoinType::INNER || edge.residual ||
 		    edge.GetFilter().left_set == edge.GetFilter().right_set) {
@@ -856,14 +863,14 @@ bool CardinalityEstimator::CanUseIndependentEqualities() {
 		}
 		auto pair = GetEqualityJoinPair(edge, set_manager);
 		if (!pair || !edge.HasReliableDistinctCount()) {
-			return false;
+			return JoinSelectivityModel::RELATION_GRAPH;
 		}
 		// Marginal distinct counts do not establish independent matching of composite tuples.
 		if (predicate_model.HasDirectCompositeEquality(*pair)) {
-			return false;
+			return JoinSelectivityModel::RELATION_GRAPH;
 		}
 	}
-	return true;
+	return JoinSelectivityModel::INDEPENDENT_EQUALITIES;
 }
 
 static bool ConnectEquality(JoinEqualityGroups &groups, FilterInfoWithTotalDomains &edge) {
@@ -880,37 +887,46 @@ static bool ConnectEquality(JoinEqualityGroups &groups, FilterInfoWithTotalDomai
 }
 
 CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
-	SelectivityState selectivity_state(*this);
-	JoinEqualityGroups groups;
-	CardinalityValue selectivity(1);
-	auto process_edge = [&](FilterInfoWithTotalDomains &edge) {
-		auto &filter = edge.GetFilter();
-		if (edge.GetPredicate().GetJoinType() == JoinType::INNER && filter.left_set != filter.right_set &&
-		    IsFilterApplicable(filter, set) && !edge.residual) {
-			if (!state->use_independent_equalities) {
-				ProcessSelectivityEdge(edge, set, selectivity_state);
-			} else if (ConnectEquality(groups, edge)) {
-				selectivity = selectivity / GetEffectiveDistinctCount(edge.GetDistinctCount());
+	auto for_each_edge = [&](auto &&callback) {
+		auto process_edge = [&](FilterInfoWithTotalDomains &edge) {
+			auto &filter = edge.GetFilter();
+			if (edge.GetPredicate().GetJoinType() == JoinType::INNER && filter.left_set != filter.right_set &&
+			    IsFilterApplicable(filter, set) && !edge.residual) {
+				callback(edge);
+			}
+		};
+		vector<idx_t> candidates;
+		if (state->TryGetCandidateEdges(set, candidates)) {
+			for (auto index : candidates) {
+				process_edge(state->edges[index]);
+			}
+		} else {
+			for (auto &edge : state->edges) {
+				process_edge(edge);
 			}
 		}
 	};
-	vector<idx_t> candidates;
-	if (state->TryGetCandidateEdges(set, candidates)) {
-		for (auto index : candidates) {
-			process_edge(state->edges[index]);
-		}
-	} else {
-		for (auto &edge : state->edges) {
-			process_edge(edge);
-		}
-	}
-	if (state->use_independent_equalities) {
+	switch (state->selectivity_model) {
+	case JoinSelectivityModel::INDEPENDENT_EQUALITIES: {
+		JoinEqualityGroups groups;
+		CardinalityValue selectivity(1);
+		for_each_edge([&](FilterInfoWithTotalDomains &edge) {
+			if (ConnectEquality(groups, edge)) {
+				selectivity = selectivity / GetEffectiveDistinctCount(edge.GetDistinctCount());
+			}
+		});
 		return selectivity;
 	}
-	MergeDisconnectedSelectivitySubgraphs(selectivity_state);
-	auto result =
-	    selectivity_state.subgraphs.empty() ? CardinalityValue(1) : selectivity_state.subgraphs[0].selectivity;
-	return result / CardinalityValue(1.0 + static_cast<double>(selectivity_state.unused_edge_tdoms.size()));
+	case JoinSelectivityModel::RELATION_GRAPH: {
+		SelectivityState selectivity_state(*this);
+		for_each_edge([&](FilterInfoWithTotalDomains &edge) { ProcessSelectivityEdge(edge, set, selectivity_state); });
+		MergeDisconnectedSelectivitySubgraphs(selectivity_state);
+		auto result =
+		    selectivity_state.subgraphs.empty() ? CardinalityValue(1) : selectivity_state.subgraphs[0].selectivity;
+		return result / CardinalityValue(1.0 + static_cast<double>(selectivity_state.unused_edge_tdoms.size()));
+	}
+	}
+	throw InternalException("Unknown join selectivity model");
 }
 
 CardinalityValue CardinalityEstimator::GetInnerSelectivity(JoinRelationSet &set) {
@@ -1417,7 +1433,7 @@ void CardinalityEstimator::Initialize(vector<RelationStats> relations,
 	}
 	std::stable_sort(state->edges.begin(), state->edges.end(), SortEdges);
 	state->InitializeEdgeIndex();
-	state->use_independent_equalities = CanUseIndependentEqualities();
+	state->selectivity_model = ChooseSelectivityModel();
 	for (auto &op : operators) {
 		D_ASSERT(op->index == state->operators.size());
 		state->operators.push_back(*op);
