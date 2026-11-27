@@ -1972,7 +1972,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_hand
  * Lets a callback run SQL inside the transaction it is called in, such as a table function's bind callback reading a
  * table. The connection sees everything the context's transaction sees, including its uncommitted changes and the
  * context's temporary objects, and what it changes is part of that transaction. A statement of the connection that
- * fails invalidates the transaction as a failure of the context's own statement would.
+ * fails invalidates the transaction as a failure of the context's own statement would. It starts with the context's
+ * search path (`USE`, `SET schema`, `SET search_path`), so unqualified names resolve as they do in the context's own
+ * statements.
  *
  * The connection cannot start, commit or roll back a transaction: those statements fail with
  * ERROR_DATABASE_TRANSACTION, and like any failing statement invalidate the transaction. The connection stays in the
