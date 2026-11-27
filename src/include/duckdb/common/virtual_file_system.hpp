@@ -38,8 +38,9 @@ public:
 	DUCKDB_API unique_ptr<FileHandle> WrapOpenedFile(Context &context, unique_ptr<FileHandle> handle,
 	                                                 const OpenFileInfo &file, const FileOpenFlags &flags);
 	//! The file system that handles a path: a registered sub-system, or the default file system. Throws if it is
-	//! disabled. Loads the extension that provides the file system if there is one and a context is given.
-	DUCKDB_API BaseFileSystem &FindFileSystem(const string &path, optional_ptr<Context> context);
+	//! disabled. The overload with a context first loads the extension that provides the file system, if any.
+	DUCKDB_API BaseFileSystem &FindFileSystem(const string &path);
+	DUCKDB_API BaseFileSystem &FindFileSystem(Context &context, const string &path);
 
 	DUCKDB_API void RegisterSubSystem(unique_ptr<BaseFileSystem> fs);
 	DUCKDB_API void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
@@ -59,7 +60,7 @@ public:
 
 private:
 	BaseFileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
-	                               optional_ptr<Context> context);
+	                               optional_ptr<DatabaseInstance> autoload_db);
 	optional_ptr<BaseFileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
 	// Return nullptr if compression is not involved, throw exception if compression is requested but no usable
 	// filesystem gets registered.

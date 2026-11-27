@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 
 	// Serialize the statement
 	if (serialize) {
-		duckdb::BufferedFileWriter target(db.GetFileSystem(), target_location);
+		duckdb::BufferedFileWriter target(db.GetFileSystem(), con.context->GetContext(), target_location);
 
 		con.BeginTransaction();
 		duckdb::Parser p(*con.context);

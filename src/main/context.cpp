@@ -263,6 +263,10 @@ optional_ptr<ClientContext> Context::TryGetClientContext(optional_ptr<Context> c
 	return context->TryGetClientContext();
 }
 
+Context &Context::GetOrDatabase(optional_ptr<ClientContext> client, DatabaseInstance &db) {
+	return client ? client->GetContext() : db.GetContext();
+}
+
 optional_ptr<QueryProfiler> Context::TryGetQueryProfiler(optional_ptr<Context> context) {
 	if (!context) {
 		return nullptr;

@@ -166,7 +166,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	}
 
 	idx_t file_size;
-	auto in_buffer = ReadExtensionFileFromDisk(context ? context->GetContext() : db.GetContext(), fs, file, file_size);
+	auto in_buffer = ReadExtensionFileFromDisk(Context::GetOrDatabase(context, db), fs, file, file_size);
 
 	ExtensionInstallInfo info;
 
@@ -196,7 +196,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 		info.repository_name = options.repository->name;
 	}
 
-	Context &query_context = context ? context->GetContext() : db.GetContext();
+	Context &query_context = Context::GetOrDatabase(context, db);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
 	                    extension_decompressed_size, info, db);
 
@@ -342,7 +342,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 		info.full_path = download_url;
 	}
 
-	Context &query_context = context ? context->GetContext() : db.GetContext();
+	Context &query_context = Context::GetOrDatabase(context, db);
 	auto &fs = FileSystem::GetLocal(db);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 

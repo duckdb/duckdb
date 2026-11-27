@@ -217,7 +217,7 @@ BaseFileSystem &FileSystem::FindFileSystem(const string &path) {
 	if (fixed_fs) {
 		return *fixed_fs;
 	}
-	return GetFileSystem().FindFileSystem(path, GetContext());
+	return GetFileSystem().FindFileSystem(GetContext(), path);
 }
 
 string FileSystem::JoinPath(const string &a, const string &path) {
@@ -232,7 +232,7 @@ BaseFileSystem &FileSystem::PathFileSystem(const string &path) const {
 	if (fixed_fs) {
 		return *fixed_fs;
 	}
-	return GetFileSystem().FindFileSystem(path, nullptr);
+	return GetFileSystem().FindFileSystem(path);
 }
 
 void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) {

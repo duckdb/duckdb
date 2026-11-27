@@ -53,6 +53,8 @@ public:
 	//! Null-safe variants for optional services
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<Context> services);
 	DUCKDB_API static optional_ptr<QueryProfiler> TryGetQueryProfiler(optional_ptr<Context> services);
+	//! The services of the client if there is one, otherwise the database-wide services
+	DUCKDB_API static Context &GetOrDatabase(optional_ptr<ClientContext> client, DatabaseInstance &db);
 	//! Checks whether the query was interrupted (or timed out, checked only every 256th call) and throws if so - no-op
 	//! without a client
 	DUCKDB_API void FastInterruptCheck() const;

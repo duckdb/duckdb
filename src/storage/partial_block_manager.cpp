@@ -358,28 +358,23 @@ unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
 	return block;
 }
 
-//! Index checkpoints do not provide a context: their blocks are flushed with the database-wide context
-static Context &FlushContext(optional_ptr<Context> context, BlockManager &block_manager) {
-	return context ? *context : block_manager.buffer_manager.GetDatabase().GetContext();
-}
-
-void PartialBlockManager::RetainOrFlush(optional_ptr<Context> context, unique_ptr<PartialBlock> partial_block) {
+void PartialBlockManager::RetainOrFlush(Context &context, unique_ptr<PartialBlock> partial_block) {
 	auto min_reusable_space = block_manager.GetBlockSize() - max_partial_block_size;
 	auto available_space = partial_block->AvailableSpace();
 
 	if (partial_block->UseCount() >= max_use_count) {
-		partial_block->Flush(FlushContext(context, block_manager), partial_block_type);
+		partial_block->Flush(context, partial_block_type);
 		return;
 	}
 	if (available_space < min_reusable_space) {
-		partial_block->Flush(FlushContext(context, block_manager), partial_block_type);
+		partial_block->Flush(context, partial_block_type);
 		return;
 	}
 
 	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
 
 	if (auto pruned_block = PruneFreeList()) {
-		pruned_block->Flush(FlushContext(context, block_manager), partial_block_type);
+		pruned_block->Flush(context, partial_block_type);
 	}
 }
 
@@ -405,12 +400,7 @@ optional<BlockPointer> PartialBlockManager::Write(Context &context, BlockPackabl
 	return WriteCopy(context, packable, source, byte_size);
 }
 
-optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, const BufferHandle &source,
-                                                  uint32_t byte_size) {
-	return WriteCopy(nullptr, packable, source, byte_size);
-}
-
-optional<BlockPointer> PartialBlockManager::WriteCopy(optional_ptr<Context> context, BlockPackable &packable,
+optional<BlockPointer> PartialBlockManager::WriteCopy(Context &context, BlockPackable &packable,
                                                       const BufferHandle &source, uint32_t byte_size) {
 	unique_lock<mutex> lock(partial_block_lock);
 

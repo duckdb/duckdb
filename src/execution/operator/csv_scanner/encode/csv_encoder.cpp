@@ -100,7 +100,7 @@ void CSVEncoder::DetectByteOrder() {
 		    memcmp(encoded_buffer.Ptr(), mark.first.data(), mark.first.size()) != 0) {
 			continue;
 		}
-		auto &client_context = *context.GetClientContext();
+		auto &client_context = *context.TryGetClientContext();
 		auto entry = EncodingFunction::Find(client_context, mark.second);
 		if (!entry) {
 			throw InternalException("Encoding \"%s\" picked by a byte order mark does not exist", mark.second);

@@ -353,7 +353,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(context ? context->GetContext() : GetContext());
+		storage->Initialize(Context::GetOrDatabase(context, db));
 	}
 }
 

@@ -882,7 +882,7 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 			allocator.FreeData(pointer, freed_size);
 			CHECK(allocator.GetCachedMemory() == freed_size);
 			// With the second one the trimmed allocations reach the threshold.
-			auto second_result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
+			auto second_result = pool.EvictBlocks(services, MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
 			CHECK(second_result.success);
 			CHECK(allocator.GetCachedMemory() == 0);
 			CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==

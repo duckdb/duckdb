@@ -214,7 +214,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(Context &context, const OpenF
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
 	auto registry = file_system_registry.atomic_load();
-	auto &internal_filesystem = FindFileSystem(registry, file.path, &context);
+	auto &internal_filesystem = FindFileSystem(registry, file.path, context.GetDatabase());
 	auto file_handle = internal_filesystem.OpenFile(context, file, flags);
 	if (!file_handle) {
 		return nullptr;
@@ -333,17 +333,22 @@ bool VirtualFileSystem::IsDisabledForPath(const string &path) {
 	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
 }
 
-BaseFileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<Context> context) {
+BaseFileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 	auto registry = file_system_registry.atomic_load();
-	return FindFileSystem(registry, path, context);
+	return FindFileSystem(registry, path, nullptr);
+}
+
+BaseFileSystem &VirtualFileSystem::FindFileSystem(Context &context, const string &path) {
+	auto registry = file_system_registry.atomic_load();
+	return FindFileSystem(registry, path, context.GetDatabase());
 }
 
 BaseFileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
-                                                  optional_ptr<Context> context) {
+                                                  optional_ptr<DatabaseInstance> autoload_db) {
 	auto fs = FindFileSystemInternal(*registry, path);
 
-	if (!fs && context) {
-		ExtensionHelper::AutoLoadExtensionForPath(context->GetDatabase(), path);
+	if (!fs && autoload_db) {
+		ExtensionHelper::AutoLoadExtensionForPath(*autoload_db, path);
 		// refresh the registry after loading extensions
 		registry = file_system_registry.atomic_load();
 
