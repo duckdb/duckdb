@@ -1,0 +1,56 @@
+# name: test/optimizer/filter_pushdown/signed_zero_scan_filters.test
+# description: Later scan-filter batches preserve expressions that distinguish signed zero
+# group: [filter_pushdown]
+
+statement ok
+CREATE TABLE t(k DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (-1), (1);
+
+# SQL value equality treats the zero constants as equal, but these predicates
+# have opposite results. A later batch must not deduplicate them.
+query I
+WITH c AS MATERIALIZED (
+    SELECT * FROM t
+    WHERE signbit(k * 0.0::DOUBLE) AND signbit(k * -0.0::DOUBLE)
+)
+SELECT count(*) FROM c WHERE k <> 0;
+----
+0
+
+# The bound targets are distinct expressions: for k = -1 they produce pi and
+# -pi. Combining the bounds as if they had the same target is unsound.
+query I
+WITH c AS MATERIALIZED (
+    SELECT * FROM t WHERE atan2(0.0::DOUBLE, k) > 3
+)
+SELECT count(*) FROM c WHERE atan2(-0.0::DOUBLE, k) < -3;
+----
+1
+
+statement ok
+CREATE TABLE big AS SELECT ((i % 2) * 2 - 1)::DOUBLE AS k FROM range(100000) r(i);
+
+statement ok
+CREATE TABLE probe_keys AS SELECT -1::DOUBLE AS k;
+
+# Statistics push another bound into this scan even without runtime join
+# filters. Both paths must retain the distinct signbit predicates.
+query I
+SELECT count(*) FROM big JOIN probe_keys USING (k)
+WHERE signbit(big.k * 0.0::DOUBLE) AND signbit(big.k * -0.0::DOUBLE);
+----
+0
+
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown';
+
+query I
+SELECT count(*) FROM big JOIN probe_keys USING (k)
+WHERE signbit(big.k * 0.0::DOUBLE) AND signbit(big.k * -0.0::DOUBLE);
+----
+0
+
+statement ok
+RESET disabled_optimizers;

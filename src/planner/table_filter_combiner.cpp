@@ -1,5 +1,6 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -54,7 +55,7 @@ static FilterResult CombineScanComparison(const Expression &candidate, optional_
 	auto &target = flipped ? right : left;
 	auto &constant_expr = flipped ? left : right;
 	if (constant_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-	    target.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+	    target.GetExpressionType() == ExpressionType::VALUE_CONSTANT || !FilterCombiner::CanMatchExpression(target)) {
 		return FilterResult::SUCCESS;
 	}
 	auto &constant = constant_expr.Cast<BoundConstantExpression>().GetValue();
@@ -111,6 +112,9 @@ static FilterResult CombineScanComparisons(const vector<reference<const Expressi
 			continue;
 		}
 		auto &in = expr.Cast<BoundOperatorExpression>();
+		if (!FilterCombiner::CanMatchExpression(*in.GetChildren()[0])) {
+			continue;
+		}
 		auto entry = bounds.find(*in.GetChildren()[0]);
 		if (entry == bounds.end()) {
 			continue;
@@ -212,7 +216,8 @@ FilterResult TableFilterSet::Finalize() {
 				can_reorder = false;
 				break;
 			}
-			if (!ExpressionFilter::GetOptionalFilterChild(conjunct.get())) {
+			if (!ExpressionFilter::GetOptionalFilterChild(conjunct.get()) &&
+			    FilterCombiner::CanMatchExpression(conjunct.get())) {
 				required.insert(conjunct.get());
 			}
 		}
@@ -228,12 +233,15 @@ FilterResult TableFilterSet::Finalize() {
 			if (ExpressionFilter::ContainsInternalTableFilterFunction(optional_child ? *optional_child : expr)) {
 				continue;
 			}
-			if (optional_child && required.find(*optional_child) != required.end()) {
+			// Expression equality can conflate constants that a function distinguishes, such as signed zeros.
+			const bool can_match = FilterCombiner::CanMatchExpression(expr) &&
+			                       (!optional_child || FilterCombiner::CanMatchExpression(*optional_child));
+			if (can_match && optional_child && required.find(*optional_child) != required.end()) {
 				removed.insert(expr);
 				continue;
 			}
 			// Optional duplicates include the wrapper's configuration. Runtime state stays opaque.
-			if (seen.insert(expr).second) {
+			if (!can_match || seen.insert(expr).second) {
 				candidates.push_back(expr);
 			} else {
 				removed.insert(expr);
