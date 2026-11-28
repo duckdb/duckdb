@@ -102,6 +102,20 @@ enum class RemoteCapability : uint8_t {
 	CONNECT,
 };
 
+//! The input language a catalog that supports RemoteCapability::CONNECT declares for routed input.
+//! It is a declaration to CLIENTS (the shell, UIs): it does not change how the engine parses anything.
+//! How the input is actually cut into statements is owned by the catalog itself, which can install its
+//! own grammar for the connection through AttachedDatabase::SetConnectedGrammar.
+//!  - DEFAULT: no special input handling - the input is statements for whatever grammar the
+//!    connection uses (today's behaviour).
+//!  - NATURAL_TEXT: the catalog takes free text, one message per submission: interactive clients
+//!    should submit each line whole (Enter sends), with no SQL statement termination, highlighting
+//!    or completion - a quote is a character and a semicolon is not a boundary.
+enum class ConnectedInputLanguage : uint8_t {
+	DEFAULT,
+	NATURAL_TEXT,
+};
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -419,6 +433,11 @@ public:
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;
+	}
+	//! The input language this catalog declares for routed input while CONNECT-ed; see
+	//! ConnectedInputLanguage. Only consulted for catalogs that support RemoteCapability::CONNECT.
+	virtual ConnectedInputLanguage GetConnectedInputLanguage() const {
+		return ConnectedInputLanguage::DEFAULT;
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
 	//! Execute a full (non-query) statement remotely - the returned table ref yields the statement's result
