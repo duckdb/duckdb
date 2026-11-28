@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/planner.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -132,6 +134,35 @@ const BoundFunctionInfo &RequireIdentityFunction(const vector<BoundFunctionInfo>
 }
 
 } // namespace
+
+TEST_CASE("Bound lambda function copies share bind data until mutation", "[optimizer][function_identity]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+
+	Parser parser(*con.context);
+	parser.ParseQuery(
+	    "SELECT list_transform([i], lambda x: list_transform([x], lambda y: x + y)[1]) FROM range(3) t(i)");
+	REQUIRE(parser.statements.size() == 1);
+	Planner planner(*con.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	auto &original = planner.plan->Cast<LogicalProjection>().expressions[0]->Cast<BoundFunctionExpression>();
+	REQUIRE(original.BindInfo());
+	auto copied_expression = original.Copy();
+	auto &copy = copied_expression->Cast<BoundFunctionExpression>();
+	REQUIRE(copy.Equals(original));
+	REQUIRE(original.GetChildren()[1]->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA);
+	REQUIRE(original.GetChildren()[1].get() != copy.GetChildren()[1].get());
+
+	const bool shared_until_write = original.BindInfo().shares_with(copy.BindInfo());
+	const auto &original_data = original.BindInfo()->Cast<ListLambdaBindData>();
+	const bool original_has_index = original_data.has_index;
+	copy.BindInfoMutable().write().Cast<ListLambdaBindData>().has_index = !original_has_index;
+	CHECK_FALSE(original.BindInfo().shares_with(copy.BindInfo()));
+	CHECK(original_data.has_index == original_has_index);
+	CHECK(shared_until_write);
+	con.Rollback();
+}
 
 TEST_CASE("LIKE rewrites keep the definition of the built-in they introduce", "[optimizer][function_identity]") {
 	DuckDB db(nullptr);
