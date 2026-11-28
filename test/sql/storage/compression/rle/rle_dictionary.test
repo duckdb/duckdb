@@ -172,10 +172,11 @@ SET perfect_ht_threshold=0
 statement ok
 SET debug_enable_caching_operators=false
 
-# The optimizer must push the filter into the scan to select sparse rows there.
+# The optimizer must push the filter into the scan: sparse selections are selected there, dense ones sliced.
+# The 67-row tail vector selects 16 rows, which counts as dense.
 query I
 SELECT NOT check_rle_representation() OR current_setting('debug_disable_optimizer') OR
-    bool_and(vector_type(k) = 'FLAT_VECTOR')
+    bool_and(vector_type(k) = CASE WHEN i % 4096 < 2048 AND i < 262144 THEN 'FLAT_VECTOR' ELSE 'DICTIONARY_VECTOR' END)
 FROM selection_input WHERE pick
 ----
 true
