@@ -701,8 +701,7 @@ void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_col
 			auto &target_vector = top_collection.Values(insert_result, c);
 			auto &render_lengths = top_collection.RenderLengths(insert_result, c);
 			context.CastToVarchar(source_vector, target_vector, insert_count);
-			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
-			                    null_render_length);
+			ConvertRenderVector(target_vector, render_lengths, insert_count, result.Types()[c], null_render_length);
 		}
 		insert_result.SetChildCardinality(insert_count);
 
@@ -820,8 +819,7 @@ void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bott
 			auto &target_vector = bottom_collection.Values(insert_result, c);
 			auto &render_lengths = bottom_collection.RenderLengths(insert_result, c);
 			context.CastToVarchar(source_vector, target_vector, insert_count);
-			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
-			                    null_render_length);
+			ConvertRenderVector(target_vector, render_lengths, insert_count, result.Types()[c], null_render_length);
 		}
 		insert_result.SetChildCardinality(insert_count);
 		// construct the render collection
