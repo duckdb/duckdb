@@ -346,8 +346,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	const bool range_end = window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE ||
 	                       window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE;
 	if ((range_start || range_end) && bound_orders.size() == 1) {
-		result->RetainSQLRange(range_start ? bound_start.get() : nullptr, range_end ? bound_end.get() : nullptr,
-		                       bound_orders[0]->GetReturnType());
+		result->RetainSQLRange(bound_orders[0]->GetReturnType());
 	}
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.

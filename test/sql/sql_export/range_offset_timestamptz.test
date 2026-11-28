@@ -1,0 +1,109 @@
+# name: test/sql/sql_export/range_offset_timestamptz.test
+# description: An INTERVAL RANGE offset over a TIMESTAMPTZ key is exported with the frame arithmetic of the plan
+# group: [sql_export]
+
+require icu
+
+require skip_reload
+
+statement ok
+SET TimeZone='America/New_York';
+
+# the keys straddle a daylight saving change, where a day is 23 hours
+
+statement ok
+CREATE TABLE range_zoned AS SELECT id, tz::TIMESTAMPTZ AS tz, INTERVAL (id % 2 + 1) DAY AS iv FROM (VALUES (1, '2024-03-08 12:00:00-05'), (2, '2024-03-09 11:30:00-05'), (3, '2024-03-09 11:30:00-05'), (4, '2024-03-10 12:00:00-04'), (5, '2024-03-11 11:30:00-04'), (6, NULL)) t(id, tz);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz RANGE BETWEEN INTERVAL 1 DAY PRECEDING AND CURRENT ROW) FROM range_zoned ORDER BY id
+----
+1	1
+2	3
+3	3
+4	1
+5	2
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz RANGE BETWEEN INTERVAL 24 HOUR PRECEDING AND CURRENT ROW) FROM range_zoned ORDER BY id
+----
+1	1
+2	3
+3	3
+4	3
+5	2
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz DESC RANGE BETWEEN INTERVAL 1 DAY PRECEDING AND INTERVAL 36 HOUR FOLLOWING) FROM range_zoned ORDER BY id
+----
+1	3
+2	3
+3	3
+4	4
+5	2
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz ASC NULLS FIRST RANGE BETWEEN INTERVAL 1 MONTH PRECEDING AND INTERVAL 1 DAY PRECEDING) FROM range_zoned ORDER BY id
+----
+1	0
+2	0
+3	0
+4	3
+5	3
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz DESC NULLS LAST RANGE BETWEEN INTERVAL 1 DAY FOLLOWING AND INTERVAL 2 MONTH FOLLOWING) FROM range_zoned ORDER BY id
+----
+1	0
+2	0
+3	0
+4	3
+5	3
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz RANGE BETWEEN INTERVAL 0 DAY PRECEDING AND INTERVAL 0 DAY FOLLOWING) FROM range_zoned ORDER BY id
+----
+1	1
+2	2
+3	2
+4	1
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz RANGE BETWEEN iv PRECEDING AND iv FOLLOWING) FROM range_zoned ORDER BY id
+----
+1	4
+2	3
+3	5
+4	2
+5	4
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY tz DESC RANGE BETWEEN iv PRECEDING AND INTERVAL 1 DAY FOLLOWING) FROM range_zoned ORDER BY id
+----
+1	4
+2	3
+3	5
+4	2
+5	2
+6	1
+
+endloop
+
+endloop

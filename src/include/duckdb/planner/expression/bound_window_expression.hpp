@@ -113,14 +113,7 @@ public:
 	unique_ptr<Expression> &EndExprMutable() {
 		return end_expr;
 	}
-	void RetainSQLRange(optional_ptr<const Expression> start, optional_ptr<const Expression> end,
-	                    const LogicalType &order_type);
-	const unique_ptr<ParsedExpression> &SQLRangeStart() const {
-		return sql_range_start;
-	}
-	const unique_ptr<ParsedExpression> &SQLRangeEnd() const {
-		return sql_range_end;
-	}
+	void RetainSQLRange(const LogicalType &order_type);
 	const LogicalType &SQLRangeOrderType() const {
 		return sql_range_order_type;
 	}
@@ -221,9 +214,7 @@ private:
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
 
-	//! Literal SQL offsets before endpoint arithmetic; these are not execution children.
-	unique_ptr<ParsedExpression> sql_range_start;
-	unique_ptr<ParsedExpression> sql_range_end;
+	//! The type of the RANGE ordering operand before endpoint arithmetic
 	LogicalType sql_range_order_type = LogicalType::INVALID;
 
 	unique_ptr<WindowRangeBoundary> sql_range_start_boundary;

@@ -1,0 +1,756 @@
+# name: test/sql/sql_export/range_offset_types.test
+# description: A constant RANGE offset is exported in the type the frame arithmetic takes it in
+# group: [sql_export]
+
+require skip_reload
+
+# keys with duplicates and a NULL, in every numeric type. d is an offset column in the type of the key
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL(4,1) DECIMAL(9,2) DECIMAL(18,3) DECIMAL(38,2) FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE range_keys AS SELECT id, k::{type} AS k, 1::{type} AS d FROM (VALUES (1, 1), (2, 2), (3, 2), (4, 4), (5, 7), (6, NULL)) t(id, k);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+# a literal offset is fitted to the key: both endpoints, both directions, both NULL orders
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 1 PRECEDING AND 2 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC RANGE BETWEEN 2 PRECEDING AND 1 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k ASC NULLS FIRST RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) FROM range_keys ORDER BY id
+----
+1	6
+2	7
+3	7
+4	12
+5	16
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC NULLS LAST RANGE BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWING) FROM range_keys ORDER BY id
+----
+1	12
+2	12
+3	12
+4	16
+5	21
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k ASC NULLS LAST RANGE BETWEEN 1 FOLLOWING AND 3 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	9
+2	4
+3	4
+4	5
+5	NULL
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC NULLS FIRST RANGE BETWEEN 3 PRECEDING AND 1 PRECEDING) FROM range_keys ORDER BY id
+----
+1	9
+2	4
+3	4
+4	5
+5	NULL
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_keys ORDER BY id
+----
+1	1
+2	6
+3	6
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN CURRENT ROW AND 2 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	9
+3	9
+4	4
+5	5
+6	6
+
+# zero offsets, whose arithmetic the optimizer removes
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	1
+2	5
+3	5
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC RANGE BETWEEN 0 PRECEDING AND CURRENT ROW) FROM range_keys ORDER BY id
+----
+1	1
+2	5
+3	5
+4	4
+5	5
+6	6
+
+# a folded constant expression and a typed constant
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 2 - 1 PRECEDING AND 1 + 1 FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 1::{type} PRECEDING AND 2::{type} FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+# a column offset
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN d PRECEDING AND d + d FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC RANGE BETWEEN d + d PRECEDING AND d FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+endloop
+
+endloop
+
+endloop
+
+# an offset typed differently than the key: the binder selects the arithmetic from both types
+
+statement ok
+SET VARIABLE one_tinyint = 1::TINYINT;
+
+statement ok
+SET VARIABLE one_integer = 1::INTEGER;
+
+statement ok
+SET VARIABLE one_bigint = 1::BIGINT;
+
+statement ok
+SET VARIABLE one_uhugeint = 1::UHUGEINT;
+
+statement ok
+SET VARIABLE one_double = 1::DOUBLE;
+
+foreach type TINYINT INTEGER BIGINT HUGEINT DECIMAL(9,2) DECIMAL(38,2) DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE range_keys AS SELECT id, k::{type} AS k FROM (VALUES (1, 1), (2, 2), (3, 2), (4, 4), (5, 7), (6, NULL)) t(id, k);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+foreach offset one_tinyint one_integer one_bigint one_double
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN getvariable('{offset}') PRECEDING AND getvariable('{offset}') FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	6
+3	6
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC RANGE BETWEEN getvariable('{offset}') PRECEDING AND CURRENT ROW) FROM range_keys ORDER BY id
+----
+1	6
+2	5
+3	5
+4	4
+5	5
+6	6
+
+endloop
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k RANGE BETWEEN 1::TINYINT PRECEDING AND 2::BIGINT FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	10
+3	10
+4	4
+5	5
+6	6
+
+query II
+SELECT id, sum(id) OVER (ORDER BY k DESC RANGE BETWEEN 1::BIGINT PRECEDING AND 2::TINYINT FOLLOWING) FROM range_keys ORDER BY id
+----
+1	6
+2	6
+3	6
+4	9
+5	5
+6	6
+
+endloop
+
+endloop
+
+endloop
+
+# keys at the edge of their type: the exported offset must not move the arithmetic to a wider type
+
+statement ok
+CREATE TABLE range_edge AS SELECT i::INTEGER AS id, (124 + i)::TINYINT AS t, (2147483644 + i)::INTEGER AS n, (9223372036854775804 + i)::BIGINT AS b, '170141183460469231731687303715884105724'::HUGEINT + i AS h, '340282366920938463463374607431768211452'::UHUGEINT + i::UHUGEINT AS u, i::UTINYINT AS z FROM range(4) r(i);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+query II
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY t DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY n RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY n DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY n RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY b DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY h RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY h DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY h RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY u RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY u DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY u RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+# overflow at the edge raises the error of the plain statement
+
+statement error
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT8 (127 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY t DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT8 (127 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY n RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT32 (2147483647 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY n DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT32 (2147483647 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT64 (9223372036854775807 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY b DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT64 (9223372036854775807 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY h RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT128 (170141183460469231731687303715884105727 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY h DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT128 (170141183460469231731687303715884105727 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY u RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of UINT128 (340282366920938463463374607431768211455 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY u DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of UINT128 (340282366920938463463374607431768211455 + 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY z RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in subtraction of UINT8 (0 - 1)!
+
+statement error
+SELECT id, count(*) OVER (ORDER BY z DESC RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in subtraction of UINT8 (0 - 1)!
+
+# a wider offset moves the arithmetic of the plain statement, and of the exported one with it
+
+query II
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN CURRENT ROW AND 1::INTEGER FOLLOWING) FROM range_edge ORDER BY id
+----
+0	2
+1	2
+2	2
+3	1
+
+statement error
+SELECT id, count(*) OVER (ORDER BY n RANGE BETWEEN CURRENT ROW AND getvariable('one_bigint') FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT32 (2147483647 + 1)!
+
+query II
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN getvariable('one_uhugeint') PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN getvariable('one_integer') PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY h RANGE BETWEEN getvariable('one_integer') PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+statement error
+SELECT id, count(*) OVER (ORDER BY b RANGE BETWEEN CURRENT ROW AND getvariable('one_integer') FOLLOWING) FROM range_edge ORDER BY id
+----
+Out of Range Error: Overflow in addition of INT64 (9223372036854775807 + 1)!
+
+endloop
+
+endloop
+
+# INTERVAL offsets over temporal keys
+
+statement ok
+CREATE TABLE range_times AS SELECT id, d, d::TIMESTAMP AS ts, TIME '10:00:00' + INTERVAL (id * 20) MINUTE AS tm, INTERVAL (id % 2 + 1) DAY AS iv FROM (VALUES (1, DATE '2024-02-27'), (2, DATE '2024-02-28'), (3, DATE '2024-02-28'), (4, DATE '2024-02-29'), (5, DATE '2024-03-31'), (6, NULL)) t(id, d);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+# DATE arithmetic is computed as TIMESTAMP, which the ordering key is cast to
+
+foreach key d ts
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} RANGE BETWEEN INTERVAL 1 DAY PRECEDING AND CURRENT ROW) FROM range_times ORDER BY id
+----
+1	1
+2	3
+3	3
+4	3
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} DESC RANGE BETWEEN INTERVAL 1 DAY PRECEDING AND INTERVAL 36 HOUR FOLLOWING) FROM range_times ORDER BY id
+----
+1	3
+2	4
+3	4
+4	3
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} ASC NULLS FIRST RANGE BETWEEN INTERVAL 1 MONTH PRECEDING AND INTERVAL 1 DAY PRECEDING) FROM range_times ORDER BY id
+----
+1	0
+2	1
+3	1
+4	3
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} DESC NULLS LAST RANGE BETWEEN INTERVAL 1 DAY FOLLOWING AND INTERVAL 2 MONTH FOLLOWING) FROM range_times ORDER BY id
+----
+1	0
+2	1
+3	1
+4	3
+5	4
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} RANGE BETWEEN INTERVAL 0 DAY PRECEDING AND INTERVAL 0 DAY FOLLOWING) FROM range_times ORDER BY id
+----
+1	1
+2	2
+3	2
+4	1
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} RANGE BETWEEN iv PRECEDING AND iv FOLLOWING) FROM range_times ORDER BY id
+----
+1	4
+2	4
+3	4
+4	3
+5	1
+6	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY {key} DESC RANGE BETWEEN iv PRECEDING AND INTERVAL 1 DAY FOLLOWING) FROM range_times ORDER BY id
+----
+1	4
+2	4
+3	4
+4	3
+5	1
+6	1
+
+endloop
+
+# TIME
+
+query II
+SELECT id, count(*) OVER (ORDER BY tm RANGE BETWEEN INTERVAL 30 MINUTE PRECEDING AND INTERVAL 20 MINUTE FOLLOWING) FROM range_times ORDER BY id
+----
+1	2
+2	3
+3	3
+4	3
+5	3
+6	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY tm DESC RANGE BETWEEN INTERVAL 0 MINUTE PRECEDING AND INTERVAL 40 MINUTE FOLLOWING) FROM range_times ORDER BY id
+----
+1	1
+2	2
+3	3
+4	3
+5	3
+6	3
+
+query II
+SELECT id, count(*) OVER (ORDER BY tm ASC NULLS FIRST RANGE BETWEEN INTERVAL 1 HOUR PRECEDING AND INTERVAL 20 MINUTE PRECEDING) FROM range_times ORDER BY id
+----
+1	0
+2	1
+3	2
+4	3
+5	3
+6	3
+
+endloop
+
+endloop
+
+statement ok
+SET debug_verify_statement='none';
+
+statement ok
+SET debug_verify_serializer=false;
+
+# the exported text spells the offset in the type of the arithmetic
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY t RANGE BETWEEN 1 PRECEDING AND 0 FOLLOWING) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(1 AS TINYINT\) PRECEDING AND CAST\(0 AS TINYINT\) FOLLOWING.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY u DESC RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(1 AS UHUGEINT\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY b RANGE BETWEEN getvariable('one_uhugeint') PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(1 AS BIGINT\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY h RANGE BETWEEN getvariable('one_integer') PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(1 AS HUGEINT\) PRECEDING AND CURRENT ROW.*
+
+# an endpoint the optimizer reduced to the ordering key has no offset operand left. It is exported as zero in the
+# offset type of the recorded call: a zero that is not a literal, and a constant key the arithmetic was folded over
+
+statement ok
+SET VARIABLE zero_uhugeint = 0::UHUGEINT;
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+query II
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN 1 - 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY b DESC RANGE BETWEEN getvariable('zero_uhugeint') PRECEDING AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY 5::INTEGER RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+query II
+SELECT id, count(*) OVER (ORDER BY 5::DOUBLE RANGE BETWEEN 0 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+# the constant key absorbs the offset, which leaves the key as the endpoint
+query II
+SELECT id, count(*) OVER (ORDER BY 1e300::DOUBLE RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+endloop
+
+endloop
+
+statement ok
+SET debug_verify_statement='none';
+
+statement ok
+SET debug_verify_serializer=false;
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY t RANGE BETWEEN 1 - 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0 AS INTEGER\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY b DESC RANGE BETWEEN getvariable('zero_uhugeint') PRECEDING AND 1 FOLLOWING) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0 AS BIGINT\) PRECEDING AND CAST\(1 AS BIGINT\) FOLLOWING.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 5::DOUBLE RANGE BETWEEN 0 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0\.0 AS DOUBLE\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 1e300::DOUBLE RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0\.0 AS DOUBLE\) PRECEDING AND CURRENT ROW.*
+
+# an endpoint that is neither the recorded call nor the ordering key is refused: a constant key with a non-zero offset
+# folded into it, and a zero offset that is not numeric
+statement error
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 5::INTEGER RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+The RANGE endpoint does not retain its SQL offset and ordering operand
+
+statement error
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY TIMESTAMP '2020-01-01' RANGE BETWEEN INTERVAL 0 DAY PRECEDING AND CURRENT ROW) FROM range_edge
+----
+The RANGE endpoint does not retain its SQL offset and ordering operand
