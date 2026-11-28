@@ -152,7 +152,15 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	for (auto &child : children) {
 		new_children.push_back(child->Copy());
 	}
-	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
+	cow_ptr<FunctionData> new_bind_info;
+	if (bind_info) {
+		if (function.HasBindLambdaCallback()) {
+			// Avoid copying the nested lambda body again through its bind data.
+			new_bind_info = bind_info;
+		} else {
+			new_bind_info = bind_info->Copy();
+		}
+	}
 
 	auto copy =
 	    make_uniq<BoundFunctionExpression>(function, std::move(new_children), std::move(new_bind_info), is_operator);
