@@ -1,0 +1,70 @@
+# name: test/sql/function/generic/replace_type_aggregate_state.test
+# description: replace_type keeps the alias and extension info of subtrees it does not change
+# group: [generic]
+
+load {TEST_DIR}/replace_type_aggregate_state.db
+
+statement ok
+CREATE TABLE s AS SELECT avg(x) EXPORT_STATE AS st, count(x) EXPORT_STATE AS cnt FROM range(3) t(x);
+
+# nothing replaced: the AGGREGATE_STATE container comes back as itself
+query TR
+SELECT typeof(replace_type(st, NULL::VARCHAR, NULL::BLOB)), finalize(replace_type(st, NULL::VARCHAR, NULL::BLOB)) FROM s
+----
+AGGREGATE_STATE	1.0
+
+# an untouched state next to a replaced sibling keeps its identity, the changed path is rebuilt
+query TR
+SELECT typeof(replace_type({'st': st, 'n': 1::BIGINT}, NULL::BIGINT, NULL::HUGEINT)),
+       finalize(replace_type({'st': st, 'n': 1::BIGINT}, NULL::BIGINT, NULL::HUGEINT).st)
+FROM s
+----
+STRUCT(st AGGREGATE_STATE, n HUGEINT)	1.0
+
+query T
+SELECT typeof(replace_type(MAP {1::BIGINT: [st]}, NULL::BIGINT, NULL::HUGEINT)) FROM s
+----
+MAP(HUGEINT, AGGREGATE_STATE[])
+
+# protection: a state whose own child is replaced loses its identity, as before
+query T
+SELECT typeof(replace_type(st, NULL::HUGEINT, NULL::DOUBLE)) FROM s
+----
+STRUCT(count UBIGINT, "value" DOUBLE)
+
+statement error
+SELECT finalize(replace_type(st, NULL::HUGEINT, NULL::DOUBLE)) FROM s
+----
+Can only "finalize"
+
+# protection: a parameterless aliased state (count) is a leaf and was never rebuilt
+query TI
+SELECT typeof(replace_type({'c': cnt, 'n': 1::BIGINT}, NULL::BIGINT, NULL::HUGEINT).c),
+       finalize(replace_type({'c': cnt, 'n': 1::BIGINT}, NULL::BIGINT, NULL::HUGEINT).c)
+FROM s
+----
+AGGREGATE_STATE	3
+
+# the kept identity reaches a stored column and survives a checkpoint and reopen
+statement ok
+CREATE TABLE r AS SELECT replace_type({'st': st, 'n': 1::BIGINT}, NULL::BIGINT, NULL::HUGEINT) AS c FROM s
+
+query T
+SELECT data_type FROM duckdb_columns() WHERE table_name = 'r'
+----
+STRUCT(st AGGREGATE_STATE, n HUGEINT)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query T
+SELECT data_type FROM duckdb_columns() WHERE table_name = 'r'
+----
+STRUCT(st AGGREGATE_STATE, n HUGEINT)
+
+query R
+SELECT finalize(c.st) FROM r
+----
+1.0
