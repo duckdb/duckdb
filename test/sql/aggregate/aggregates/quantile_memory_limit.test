@@ -15,3 +15,20 @@ query I
 SELECT median(i) FROM range(200000) t(i)
 ----
 99999.5
+
+# grouped states spill: 8M buffered values per aggregate do not fit in the limit
+query IIII
+SELECT count(*), sum(m), sum(d), sum(s.v) FROM (
+	SELECT median(i) m, mad(i) d, median({'v': i}) s FROM range(8000000) t(i) GROUP BY i % 10000
+)
+----
+10000	39999995000.0	20000000000.0	39949995000
+
+# the naive window aggregator (DISTINCT) frees the quantile states of each expression after its finalize
+query II
+SELECT max(a), max(b) FROM (
+	SELECT median(DISTINCT s) OVER w a, quantile_disc(DISTINCT s, 0.25) OVER w b
+	FROM (SELECT lpad(i::VARCHAR, 40, '0') s FROM range(2048) t(i)) WINDOW w AS (ORDER BY s)
+)
+----
+0000000000000000000000000000000000001023	0000000000000000000000000000000000000511

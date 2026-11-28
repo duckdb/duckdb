@@ -265,3 +265,9 @@ SELECT g, list_sort(approx_top_k(v, 2)) FROM topk GROUP BY ROLLUP(g) ORDER BY AL
 0	[a, b]
 1	[x, y]
 NULL	[a, x]
+
+# holistic aggregates are computed per grouping set, combining their states would copy every value
+query II
+EXPLAIN SELECT region, product, median(amount) FROM sales GROUP BY ROLLUP(region, product);
+----
+physical_plan	<!REGEX>:.*combine_aggr.*

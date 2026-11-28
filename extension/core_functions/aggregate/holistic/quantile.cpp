@@ -191,8 +191,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
 	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
 	                   Vector &result, idx_t row_idx) {
-		auto &state = *reinterpret_cast<STATE *>(l_state);
-		auto gstate = reinterpret_cast<const STATE *>(g_state);
+		auto &state = STATE::Get(l_state);
+		auto gstate = STATE::Get(g_state);
 
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
@@ -321,8 +321,8 @@ struct QuantileListOperation : QuantileOperation {
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
 	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
 	                   Vector &list, idx_t row_idx) {
-		auto &state = *reinterpret_cast<STATE *>(l_state);
-		auto gstate = reinterpret_cast<const STATE *>(g_state);
+		auto &state = STATE::Get(l_state);
+		auto gstate = STATE::Get(g_state);
 
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
@@ -449,8 +449,9 @@ struct ScalarDiscreteQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, INPUT_TYPE, OP>(type, type);
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
-		fun.SetWindowBatchCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
-		fun.SetWindowInitCallback(OP::WindowInit<STATE, INPUT_TYPE>);
+		fun.SetInitWindowStateCallback(QuantileWindowState<INPUT_TYPE>::Init);
+		fun.SetWindowBatchCallback(OP::Window<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE, INPUT_TYPE>);
+		fun.SetWindowInitCallback(OP::WindowInit<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE>);
 #endif
 		return fun;
 	}
@@ -460,10 +461,9 @@ struct ScalarDiscreteQuantile {
 		using OP = QuantileScalarFallback;
 
 		AggregateFunction fun({type}, type, AggregateFunction::StateSize<STATE>,
-		                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-		                      QuantileSortKeyUpdate, ListCombineFunction<OP>,
-		                      AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, nullptr,
-		                      AggregateFunction::StateDestroy<STATE, OP>);
+		                      AggregateFunction::StateInitialize<STATE, OP>, QuantileSortKeyUpdate,
+		                      ListCombineFunction<OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr,
+		                      nullptr);
 		fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<string_t>::Init);
 		fun.SetStructStateExport(QuantileStateLayout<STATE, StateListType<StateSortKey<StateInputType<0>>>>);
 		return fun;
@@ -480,8 +480,9 @@ struct ListDiscreteQuantile {
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
-		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
-		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
+		fun.SetInitWindowStateCallback(QuantileWindowState<INPUT_TYPE>::Init);
+		fun.SetWindowBatchCallback(OP::template Window<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE, list_entry_t>);
+		fun.SetWindowInitCallback(OP::template WindowInit<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE>);
 #endif
 		return fun;
 	}
@@ -491,10 +492,9 @@ struct ListDiscreteQuantile {
 		using OP = QuantileListFallback;
 
 		AggregateFunction fun({type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
-		                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-		                      QuantileSortKeyUpdate, ListCombineFunction<OP>,
-		                      AggregateFunction::StateFinalize<STATE, list_entry_t, OP>, nullptr, nullptr,
-		                      AggregateFunction::StateDestroy<STATE, OP>);
+		                      AggregateFunction::StateInitialize<STATE, OP>, QuantileSortKeyUpdate,
+		                      ListCombineFunction<OP>, AggregateFunction::StateFinalize<STATE, list_entry_t, OP>,
+		                      nullptr, nullptr);
 		fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<string_t>::Init);
 		fun.SetStructStateExport(QuantileStateLayout<STATE, StateListType<StateSortKey<StateInputType<0>>>>);
 		return fun;
@@ -590,8 +590,9 @@ struct ScalarContinuousQuantile {
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
-		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
-		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
+		fun.SetInitWindowStateCallback(QuantileWindowState<INPUT_TYPE>::Init);
+		fun.SetWindowBatchCallback(OP::template Window<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE, TARGET_TYPE>);
+		fun.SetWindowInitCallback(OP::template WindowInit<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE>);
 #endif
 		return fun;
 	}
@@ -607,8 +608,9 @@ struct ListContinuousQuantile {
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
-		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
-		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
+		fun.SetInitWindowStateCallback(QuantileWindowState<INPUT_TYPE>::Init);
+		fun.SetWindowBatchCallback(OP::template Window<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE, list_entry_t>);
+		fun.SetWindowInitCallback(OP::template WindowInit<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE>);
 #endif
 		return fun;
 	}
@@ -731,8 +733,13 @@ static LogicalType InterpolationType(const LogicalType &type) {
 
 struct MedianFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
-		auto fun = CanInterpolate(type) ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
+		const auto can_interpolate = CanInterpolate(type);
+		auto fun = can_interpolate ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
 		fun.SetName("median");
+		fun.SetIsHolistic(true);
+		// Only medians without window callbacks reach the trees. Discrete ones such as the sort-key fallback keep them
+		// because naive is quadratic on running frames, and continuous ones stay naive like quantile_cont
+		fun.SetAllowsWindowTrees(!can_interpolate);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		return fun;

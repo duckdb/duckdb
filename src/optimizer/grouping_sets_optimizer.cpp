@@ -64,6 +64,10 @@ static bool CanRewriteAggregate(const BoundAggregateExpression &aggregate) {
 	}
 	// mirror the requirements of ExportAggregateFunction::Bind so that binding the export cannot fail
 	auto &function = aggregate.Function();
+	if (function.IsHolistic()) {
+		// combining holistic states copies all their values - computing each grouping set separately is cheaper
+		return false;
+	}
 	if (!function.HasStateCombineCallback() || function.HasStateDestructorCallback() ||
 	    !function.HasStateSizeCallback() || !function.HasStateFinalizeCallback() ||
 	    !function.HasGetStateTypeCallback()) {

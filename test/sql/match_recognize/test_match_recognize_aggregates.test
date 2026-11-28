@@ -448,3 +448,15 @@ SELECT rn, cls FROM (VALUES (1,1),(2,2),(3,1),(4,1),(5,3)) t(rn,v) MATCH_RECOGNI
 2	A
 3	A
 4	B
+
+# a holistic aggregate in a condition: the running median of 10, 30 and 12 is 12, so unlike avg the
+# third row stays in the first match, and 11 is below the median of all four
+query II
+SELECT rn, mn FROM (VALUES (1,10),(2,30),(3,12),(4,11)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES MATCH_NUMBER() AS mn ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS v >= median(A.v)
+) ORDER BY rn
+----
+1	1
+2	1
+3	1
+4	2

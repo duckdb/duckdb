@@ -1019,6 +1019,18 @@ SELECT count(*) FROM (
 ----
 0
 
+# holistic aggregates are not streamed, every row would finalize all values so far
+query TT
+EXPLAIN SELECT median(i::VARCHAR) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# nor are combined holistic states
+query TT
+EXPLAIN SELECT combine_aggr(to_aggregate_state([i], 'median', ['BIGINT'])) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
 # a per-row n keeps top-n off the streaming window, which would check n only on the first row
 statement error
 SELECT arg_max(i, i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);

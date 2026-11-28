@@ -88,8 +88,8 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity &&
-	       is_holistic == rhs.is_holistic && combine_source_retention == rhs.combine_source_retention &&
-	       can_stream == rhs.can_stream;
+	       is_holistic == rhs.is_holistic && allow_window_trees == rhs.allow_window_trees &&
+	       combine_source_retention == rhs.combine_source_retention && can_stream == rhs.can_stream;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);
@@ -105,7 +105,7 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
 	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&
 	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
-	       import_aggregate_state == rhs.import_aggregate_state;
+	       import_aggregate_state == rhs.import_aggregate_state && init_window_state == rhs.init_window_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
