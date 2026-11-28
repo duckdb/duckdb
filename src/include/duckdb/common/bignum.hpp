@@ -38,6 +38,26 @@ struct bignum_t {
 	bignum_t &operator=(const bignum_t &rhs) = default;
 	bignum_t &operator=(bignum_t &&rhs) = default;
 
+	//! The blob of a BIGNUM orders like its value
+	bool operator==(const bignum_t &rhs) const {
+		return data == rhs.data;
+	}
+	bool operator!=(const bignum_t &rhs) const {
+		return data != rhs.data;
+	}
+	bool operator<(const bignum_t &rhs) const {
+		return data < rhs.data;
+	}
+	bool operator>(const bignum_t &rhs) const {
+		return data > rhs.data;
+	}
+	bool operator<=(const bignum_t &rhs) const {
+		return data <= rhs.data;
+	}
+	bool operator>=(const bignum_t &rhs) const {
+		return data >= rhs.data;
+	}
+
 	void Print() const;
 };
 

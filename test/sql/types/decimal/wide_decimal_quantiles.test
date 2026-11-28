@@ -1,25 +1,333 @@
 # name: test/sql/types/decimal/wide_decimal_quantiles.test
-# description: Approximate quantiles of decimals wider than 38 digits compute through DOUBLE
+# description: Quantiles of decimals wider than 38 digits are decimals, computed like the fixed-size decimals
 # group: [decimal]
 
-query II
-SELECT approx_quantile(x, 0.5), reservoir_quantile(x, 0.5) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+# the aggregates below are also executed from a serialized plan
+statement ok
+SET debug_verify_serializer = true;
+
+# the quantiles of a wide decimal have its type
+query IIII
+SELECT typeof(median(x)), typeof(quantile_cont(x, 0.5)), typeof(quantile_disc(x, 0.5)), typeof(mad(x))
+FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
 ----
-2.0	2.0
+DECIMAL(40,3)	DECIMAL(40,3)	DECIMAL(40,3)	DECIMAL(40,3)
 
 query II
 SELECT typeof(approx_quantile(x, 0.5)), typeof(reservoir_quantile(x, 0.5)) FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
 ----
-DOUBLE	DOUBLE
+DECIMAL(40,3)	DECIMAL(40,3)
+
+query IIII
+SELECT typeof(quantile_cont(x, [0.25, 0.75])), typeof(quantile_disc(x, [0.25, 0.75])),
+       typeof(approx_quantile(x, [0.25, 0.75])), typeof(reservoir_quantile(x, [0.25, 0.75]))
+FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+DECIMAL(40,3)[]	DECIMAL(40,3)[]	DECIMAL(40,3)[]	DECIMAL(40,3)[]
+
+query IIIII
+SELECT median(x), quantile_cont(x, 0.25), mad(x), approx_quantile(x, 0.5), reservoir_quantile(x, 0.5)
+FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+2.000	1.500	1.000	2.000	2.000
+
+# the interpolation is truncated to the scale, like the interpolation of the fixed-size decimals
+query IIII
+SELECT median(x::DECIMAL(40,0)), median(x::DECIMAL(38,0)), quantile_cont(x::DECIMAL(40,1), 0.3), quantile_cont(x::DECIMAL(38,1), 0.3)
+FROM (VALUES (1), (2), (4), (7)) t(x)
+----
+3	3	1.9	1.9
 
 query II
-SELECT typeof(approx_quantile(x, [0.25, 0.75])), typeof(reservoir_quantile(x, [0.25, 0.75])) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+SELECT median(x::DECIMAL(40,0)), median(x::DECIMAL(38,0)) FROM (VALUES (-1), (-2), (-4), (-7)) t(x)
 ----
-DOUBLE[]	DOUBLE[]
+-3	-3
+
+# NULLs are ignored, an empty group has no quantile
+query IIIIII
+SELECT median(x), quantile_cont(x, [0.5]), mad(x), approx_quantile(x, 0.5), reservoir_quantile(x, 0.5), quantile_disc(x, 0.5)
+FROM (VALUES ('1'::DECIMAL(40,3)), (NULL), ('3'::DECIMAL(40,3)), (NULL)) t(x)
+----
+2.000	[2.000]	1.000	2.000	1.000	1.000
+
+query IIIIIII
+SELECT median(x), quantile_cont(x, [0.5]), mad(x), approx_quantile(x, 0.5), approx_quantile(x, [0.5]), reservoir_quantile(x, 0.5), reservoir_quantile(x, [0.5])
+FROM (VALUES (NULL::DECIMAL(40,3))) t(x)
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+# values beyond 38 digits, of both signs and of different lengths: the BIGNUM blobs order like their values
+# (cast in each query, as tables and views with wide decimal columns need a recent storage version)
+statement ok
+CREATE TABLE big_text AS SELECT x FROM (VALUES
+	('-100000000000000000000000000000000000000000000000000.25'),
+	('-99999999999999999999999999999999999999999.75'),
+	('-340282366920938463463374607431768211456'),
+	('-65536.5'),
+	('-256'),
+	('-0.01'),
+	('0'),
+	('0.01'),
+	('255.99'),
+	('65536'),
+	('340282366920938463463374607431768211455'),
+	('99999999999999999999999999999999999999999.75'),
+	('100000000000000000000000000000000000000000000000000.25')) t(x);
+
+query IIII
+SELECT quantile_disc(x, 0) = min(x), quantile_disc(x, 1) = max(x), reservoir_quantile(x, 0) = min(x), reservoir_quantile(x, 1) = max(x)
+FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
+----
+true	true	true	true
+
+query I
+SELECT unnest(quantile_disc(x, [0.04, 0.12, 0.19, 0.27, 0.35, 0.42, 0.5, 0.58, 0.65, 0.73, 0.81, 0.88, 0.96])) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
+----
+-100000000000000000000000000000000000000000000000000.25
+-99999999999999999999999999999999999999999.75
+-340282366920938463463374607431768211456.00
+-65536.50
+-256.00
+-0.01
+0.00
+0.01
+255.99
+65536.00
+340282366920938463463374607431768211455.00
+99999999999999999999999999999999999999999.75
+100000000000000000000000000000000000000000000000000.25
+
+query III
+SELECT median(x), quantile_cont(x, [0, 0.5, 1]), reservoir_quantile(x, 0.5) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
+----
+0.00	[-100000000000000000000000000000000000000000000000000.25, 0.00, 100000000000000000000000000000000000000000000000000.25]	0.00
+
+# the deviations from the median 0 are the absolute values
+query I
+SELECT mad(x) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
+----
+65536.50
+
+# the difference of the two values is scaled exactly
+query III
+SELECT median(x), quantile_cont(x, 0.25), mad(x)
+FROM (VALUES ('100000000000000000000000000000000000000000000000000'::DECIMAL(51,0)), ('100000000000000000000000000000000000000000000000010'::DECIMAL(51,0))) t(x)
+----
+100000000000000000000000000000000000000000000000005	100000000000000000000000000000000000000000000000002	5
+
+# a difference that a DOUBLE holds exactly is scaled in DOUBLE, like the fixed-size decimals scale it
+query IIII
+SELECT quantile_cont(x::DECIMAL(40,0), 0.6), quantile_cont(x::DECIMAL(38,0), 0.6), quantile_cont(x::DECIMAL(40,0), 0.3), quantile_cont(x::DECIMAL(38,0), 0.3)
+FROM (VALUES (0), (5)) t(x)
+----
+3	3	1	1
+
+# a difference that a DOUBLE does not hold exactly is scaled exactly
+query III
+SELECT median(x), median(x) = 0, mad(x)
+FROM (VALUES ('0.5'::DECIMAL(40,38)), ('-0.5'::DECIMAL(40,38))) t(x)
+----
+0.00000000000000000000000000000000000000	true	0.50000000000000000000000000000000000000
+
+query III
+SELECT median(x), quantile_cont(x, 0.25), quantile_cont(x, [0.75])
+FROM (VALUES ('0'::DECIMAL(40,0)), ('100000000000000000000000000000000000001'::DECIMAL(40,0))) t(x)
+----
+50000000000000000000000000000000000000	25000000000000000000000000000000000000	[75000000000000000000000000000000000000]
+
+query II
+SELECT median(x), mad(x)
+FROM (VALUES ('-100000000000000000000000000000000000001'::DECIMAL(40,0)), ('100000000000000000000000000000000000002'::DECIMAL(40,0))) t(x)
+----
+0	100000000000000000000000000000000000001
+
+query II
+SELECT DISTINCT median(x) OVER (), mad(x) OVER ()
+FROM (VALUES ('-100000000000000000000000000000000000001'::DECIMAL(40,0)), ('100000000000000000000000000000000000002'::DECIMAL(40,0))) t(x)
+----
+0	100000000000000000000000000000000000001
+
+# a difference beyond the DOUBLE range
+query II
+SELECT median(x), quantile_cont(x, 0.75) = ('5' || repeat('0', 398))::DECIMAL(400,0)
+FROM (VALUES (('1' || repeat('0', 399))::DECIMAL(400,0)), (('-1' || repeat('0', 399))::DECIMAL(400,0))) t(x)
+----
+0	true
+
+# the approximate quantile sketches the values as DOUBLE: their magnitude decides whether the sketch holds them, not
+# the digits of the width or the scale
+query II
+SELECT approx_quantile(x, 0.5), approx_quantile(x, [0.5]) FROM (VALUES ('12345.67'::DECIMAL(400,2))) t(x)
+----
+12345.67	[12345.67]
+
+# a small value at a scale beyond 308 digits
+query III
+SELECT approx_quantile(x, 0.5) = 1, approx_quantile(x, [0.5]) = [1], typeof(approx_quantile(x, 0.5)) FROM (VALUES ('1'::DECIMAL(310,309))) t(x)
+----
+true	true	DECIMAL(310,309)
+
+# small values at a high scale: the quantile lies between them
+query III
+SELECT approx_quantile(x, 0.49) BETWEEN min(x) AND max(x), approx_quantile(x, 0.49)::DOUBLE BETWEEN -0.61 AND -0.59, approx_quantile(x, [0.01, 0.99])::DOUBLE[] = [-0.9, 0.9]
+FROM (SELECT (CASE WHEN i < 200 THEN '-0.9' ELSE '0.9' END)::DECIMAL(310,308) AS x FROM range(400) r(i))
+----
+true	true	true
+
+# tiny values at a high scale keep their digits
+query I
+SELECT approx_quantile(x, 0.5) FROM (VALUES ('0.000000000000000000000000000000000000000000000001'::DECIMAL(60,50)), ('0.000000000000000000000000000000000000000000000003'), ('0.000000000000000000000000000000000000000000000002')) t(x)
+----
+0.00000000000000000000000000000000000000000000000200
+
+# large values at a low scale, and at a scale that leaves more than 308 digits in the unscaled value
+query II
+SELECT approx_quantile(x, 0.5)::DOUBLE, approx_quantile(y, 0.5)::DOUBLE
+FROM (SELECT (i::VARCHAR || repeat('0', 305))::DECIMAL(400,0) AS x, (i::VARCHAR || repeat('0', 299))::DECIMAL(400,100) AS y FROM range(1, 4) r(i))
+----
+2e+305	2e+299
+
+# a value whose magnitude is beyond the DOUBLE range does not fit the sketch
+statement error
+SELECT approx_quantile(x, 0.5) FROM (VALUES (('1' || repeat('0', 399))::DECIMAL(400,0))) t(x)
+----
+approx_quantile sketches its input as DOUBLE: a DECIMAL(400,0) value with a magnitude beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch
+
+statement error
+SELECT approx_quantile(x, [0.5]) FROM (VALUES (('-1' || repeat('0', 399))::DECIMAL(400,0))) t(x)
+----
+approx_quantile sketches its input as DOUBLE: a DECIMAL(400,0) value with a magnitude beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch
+
+# the DOUBLE nearest to a value at the top of the width lies just beyond the width: the quantile is that value
+query II
+SELECT approx_quantile(x, 0.5) = x, approx_quantile(-x, 0.5) = -x FROM (VALUES (repeat('9', 40)::DECIMAL(40,0))) t(x) GROUP BY x
+----
+true	true
+
+# a quantile of the sketch is rounded to the nearest value of the type
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 12.5, 'max': 12.5, 'centroids': [{'mean': 12.5, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+13
+
+# an imported sketch can carry any value: a quantile out of the range of the type or not finite is an error, not a limit
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 1e45, 'max': 1e45, 'centroids': [{'mean': 1e45, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+is out of the range of DECIMAL(40,0)
+
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 'inf'::DOUBLE, 'max': 'inf'::DOUBLE, 'centroids': [{'mean': 'inf'::DOUBLE, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+the approximate quantile is not a finite value
+
+# the reservoir quantile samples the values themselves, at any scale and magnitude
+query II
+SELECT reservoir_quantile(x, 0.5) = any_value(x), reservoir_quantile(y, 0.5) = any_value(y)
+FROM (VALUES ('1'::DECIMAL(310,309), ('1' || repeat('0', 399))::DECIMAL(400,0))) t(x, y)
+----
+true	true
+
+# the same values in a fixed-size and in a wide decimal have the same quantiles
+statement ok
+CREATE TABLE vals AS SELECT ((i * 7919) % 100003 - 50000)::BIGINT AS a, i % 7 AS g FROM range(20000) t(i);
+
+statement ok
+INSERT INTO vals VALUES (NULL, 1), (NULL, 99);
+
+query IIIIII
+SELECT g,
+       median(f)::VARCHAR IS NOT DISTINCT FROM median(w)::VARCHAR,
+       quantile_cont(f, 0.37)::VARCHAR IS NOT DISTINCT FROM quantile_cont(w, 0.37)::VARCHAR,
+       quantile_cont(f, [0.1, 0.33, 0.9])::VARCHAR IS NOT DISTINCT FROM quantile_cont(w, [0.1, 0.33, 0.9])::VARCHAR,
+       quantile_disc(f, [0.2, 0.8])::VARCHAR IS NOT DISTINCT FROM quantile_disc(w, [0.2, 0.8])::VARCHAR,
+       mad(f)::VARCHAR IS NOT DISTINCT FROM mad(w)::VARCHAR
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
+----
+0	true	true	true	true	true
+1	true	true	true	true	true
+2	true	true	true	true	true
+3	true	true	true	true	true
+4	true	true	true	true	true
+5	true	true	true	true	true
+6	true	true	true	true	true
+99	true	true	true	true	true
+
+query IIIII
+SELECT g,
+       approx_quantile(f, 0.4)::VARCHAR IS NOT DISTINCT FROM approx_quantile(w, 0.4)::VARCHAR,
+       approx_quantile(f, [0.1, 0.9])::VARCHAR IS NOT DISTINCT FROM approx_quantile(w, [0.1, 0.9])::VARCHAR,
+       reservoir_quantile(f, 0.4)::VARCHAR IS NOT DISTINCT FROM reservoir_quantile(w, 0.4)::VARCHAR,
+       reservoir_quantile(f, [0.1, 0.9], 100)::VARCHAR IS NOT DISTINCT FROM reservoir_quantile(w, [0.1, 0.9], 100)::VARCHAR
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
+----
+0	true	true	true	true
+1	true	true	true	true
+2	true	true	true	true
+3	true	true	true	true
+4	true	true	true	true
+5	true	true	true	true
+6	true	true	true	true
+99	true	true	true	true
+
+query IIIII
+SELECT g, median(w), mad(w),
+       quantile_cont(w, [0.25, 0.75]) IS NOT DISTINCT FROM quantile_cont(f, [0.25, 0.75])::DECIMAL(40,3)[],
+       median(w) FILTER (WHERE w > 0) IS NOT DISTINCT FROM median(f) FILTER (WHERE f > 0)
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
+----
+0	-39.500	24996.500	true	true
+1	-13.000	25029.000	true	true
+2	29.000	25012.000	true	true
+3	6.000	24964.000	true	true
+4	-51.000	24964.000	true	true
+5	8.000	24964.000	true	true
+6	-15.000	25012.000	true	true
+99	NULL	NULL	true	true
+
+# windowed quantiles: sliding frames and frames that cover most of the partition
+query I
+SELECT count(*) FROM (
+	SELECT median(f) OVER wn::VARCHAR IS DISTINCT FROM median(w) OVER wn::VARCHAR AS a,
+	       quantile_cont(f, [0.2, 0.7]) OVER wn::VARCHAR IS DISTINCT FROM quantile_cont(w, [0.2, 0.7]) OVER wn::VARCHAR AS b,
+	       mad(f) OVER wn::VARCHAR IS DISTINCT FROM mad(w) OVER wn::VARCHAR AS c
+	FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
+	WINDOW wn AS (PARTITION BY g ORDER BY f ROWS BETWEEN 5 PRECEDING AND 3 FOLLOWING))
+WHERE a OR b OR c
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT median(f) OVER wn::VARCHAR IS DISTINCT FROM median(w) OVER wn::VARCHAR AS a,
+	       quantile_cont(f, 0.9) OVER wn::VARCHAR IS DISTINCT FROM quantile_cont(w, 0.9) OVER wn::VARCHAR AS b
+	FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
+	WINDOW wn AS (ORDER BY g, f ROWS BETWEEN 500 PRECEDING AND 500 FOLLOWING))
+WHERE a OR b
+----
+0
+
+query III
+SELECT x, median(x) OVER (ORDER BY x ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), mad(x) OVER (ORDER BY x ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+FROM (VALUES ('1'::DECIMAL(40,1)), ('2'::DECIMAL(40,1)), ('4'::DECIMAL(40,1)), (NULL)) t(x) ORDER BY x
+----
+1.0	1.0	0.0
+2.0	1.5	0.5
+4.0	3.0	1.0
+NULL	4.0	1.0
+
+# exported states
+query IIII
+SELECT finalize(median(w) EXPORT_STATE) = median(w), finalize(mad(w) EXPORT_STATE) = mad(w),
+       finalize(quantile_cont(w, [0.1, 0.9]) EXPORT_STATE) = quantile_cont(w, [0.1, 0.9]),
+       finalize(approx_quantile(w, 0.3) EXPORT_STATE) = approx_quantile(w, 0.3)
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
+----
+true	true	true	true
 
 require parquet
 
 query IIII
-SELECT approx_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, reservoir_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, typeof(approx_quantile(bigdec, 0.5)), typeof(reservoir_quantile(bigdec, 0.5)) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet' WHERE bigdec BETWEEN -1 AND 1
+SELECT approx_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, reservoir_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, typeof(approx_quantile(bigdec, 0.5)) = typeof(bigdec), typeof(reservoir_quantile(bigdec, 0.5)) = typeof(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet' WHERE bigdec BETWEEN -1 AND 1 GROUP BY typeof(bigdec)
 ----
-true	true	DOUBLE	DOUBLE
+true	true	true	true

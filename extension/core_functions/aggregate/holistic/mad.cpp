@@ -1,11 +1,13 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -38,6 +40,27 @@ struct MadAccessor {
 			const RESULT_TYPE delta = input - UnsafeNumericCast<RESULT_TYPE>(median);
 			return TryAbsOperator::Operation<RESULT_TYPE, RESULT_TYPE>(delta);
 		}
+	}
+};
+
+// bignum_t - bignum_t => bignum_t
+template <>
+struct MadAccessor<bignum_t, bignum_t, bignum_t> {
+	using INPUT_TYPE = bignum_t;
+	using RESULT_TYPE = bignum_t;
+	using MEDIAN_TYPE = bignum_t;
+	const MEDIAN_TYPE &median;
+	//! the deviations are BIGNUM blobs, which live in the heap of the accessor
+	mutable StringHeap heap;
+	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
+	}
+	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
+		// the blobs order like their values: the absolute deviation is the larger value minus the smaller one
+		const auto &larger = input < median ? median : input;
+		const auto &smaller = input < median ? input : median;
+		const BignumIntermediate lhs(larger);
+		const BignumIntermediate rhs(smaller);
+		return bignum_t(BignumIntermediate::Add(heap, lhs, rhs, true));
 	}
 };
 
@@ -166,7 +189,17 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// BIGNUM deviations are allocated blobs: compute each one once instead of inside every comparison of the
+			// selection, replacing the flattened values (scratch space) by their deviations
+			auto values = flattened.Data();
+			for (idx_t i = 0; i < state.linked_list.total_capacity; i++) {
+				values[i] = accessor(values[i]);
+			}
+			target = interp.template Operation<INPUT_TYPE, T>(values, finalize_data.result);
+		} else {
+			target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
+		}
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -305,6 +338,9 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const Logi
 			return GetTypedMedianAbsoluteDeviationAggregateFunction<int64_t, int64_t, int64_t>(type, type);
 		case PhysicalType::INT128:
 			return GetTypedMedianAbsoluteDeviationAggregateFunction<hugeint_t, hugeint_t, hugeint_t>(type, type);
+		case PhysicalType::VARCHAR:
+			// the bignum_t tier (above 38 digits): the BIGNUM blobs of the unscaled values
+			return GetTypedMedianAbsoluteDeviationAggregateFunction<bignum_t, bignum_t, bignum_t>(type, type);
 		default:
 			throw NotImplementedException("Unimplemented Median Absolute Deviation DECIMAL aggregate");
 		}
