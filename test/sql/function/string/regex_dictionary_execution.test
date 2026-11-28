@@ -28,7 +28,7 @@ CHECKPOINT
 
 restart
 
-# Forced row fetching does not produce dictionary vectors.
+# Forced row fetching and VARIANT round-trip verification can flatten the vectors under test.
 query I
 WITH types AS MATERIALIZED (
     SELECT vector_type(s) AS input_type,
@@ -46,6 +46,7 @@ WITH types AS MATERIALIZED (
     FROM strings
 )
 SELECT current_setting('debug_force_fetch_row')
+       OR lower(current_setting('debug_verify_vector')) = 'variant_vector'
        OR (count(*) > 0 AND bool_and(full_match_type = 'DICTIONARY_VECTOR')
            AND bool_and(partial_match_type = 'DICTIONARY_VECTOR')
            AND bool_and(byte_full_match_type = 'DICTIONARY_VECTOR')
@@ -110,6 +111,7 @@ WITH types AS MATERIALIZED (
     FROM strings
 )
 SELECT current_setting('debug_force_fetch_row')
+       OR lower(current_setting('debug_verify_vector')) = 'variant_vector'
        OR (count(*) > 0 AND bool_and(literal_type = 'DICTIONARY_VECTOR')
            AND bool_and(escaped_type = 'DICTIONARY_VECTOR')
            AND bool_and(replace_type = 'DICTIONARY_VECTOR')
