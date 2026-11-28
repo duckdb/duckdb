@@ -13,33 +13,29 @@
 
 namespace duckdb {
 
+static optional_ptr<PhysicalTableScan> FindUnfilteredTableScan(PhysicalOperator &op) {
+	reference<PhysicalOperator> current(op);
+	while (current.get().type == PhysicalOperatorType::PROJECTION) {
+		current = current.get().children[0];
+	}
+	if (current.get().type != PhysicalOperatorType::TABLE_SCAN) {
+		return nullptr;
+	}
+	auto &scan = current.get().Cast<PhysicalTableScan>();
+	if (scan.table_filters && scan.table_filters->HasFilters()) {
+		return nullptr;
+	}
+	return &scan;
+}
+
 bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, BoundLimitNode &offset_val) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	return true;
 #else
 	// we only want to use the batch limit when we are executing a complex query (e.g. involving a filter or join)
 	// if we are doing a limit over a table scan we are otherwise scanning a lot of rows just to throw them away
-	reference<PhysicalOperator> current_ref(child_node);
-	bool finished = false;
-	while (!finished) {
-		auto &current_op = current_ref.get();
-		switch (current_op.type) {
-		case PhysicalOperatorType::TABLE_SCAN: {
-			auto &table_scan = current_op.Cast<PhysicalTableScan>();
-			if (table_scan.table_filters && table_scan.table_filters->HasFilters()) {
-				finished = true;
-				break;
-			}
-			// limit on a table scan without filters - never use batch limit
-			return false;
-		}
-		case PhysicalOperatorType::PROJECTION:
-			current_ref = current_op.children[0];
-			break;
-		default:
-			finished = true;
-			break;
-		}
+	if (FindUnfilteredTableScan(child_node)) {
+		return false;
 	}
 	// we only use batch limit when we are computing a small amount of values
 	// as the batch limit materializes this many rows PER thread
@@ -214,7 +210,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 			return limit;
 		}
 
-		// source does not support batch index: use a non-parallel streaming limit
+		// An ordered streaming limit above projections can bound the unfiltered scan's read-ahead.
+		if (total_limit.IsValid() && op.limit_val.GetConstantValue() > 0) {
+			auto scan = FindUnfilteredTableScan(*limit_child);
+			if (scan && !scan->dynamic_filters && !scan->extra_info.sample_options && !scan->function.in_out_function) {
+				scan->read_ahead_row_limit = total_limit;
+			}
+		}
 		auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
 		                                           op.estimated_cardinality, false);
 		limit.children.push_back(*limit_child);

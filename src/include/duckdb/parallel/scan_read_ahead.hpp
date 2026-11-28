@@ -92,6 +92,8 @@ struct ScanReadAheadJob {
 	shared_ptr<ReadAheadJobCompletion> io_completion;
 	//! Budget charge for this job's I/O and scan metadata
 	idx_t budget_charge = 0;
+	//! Rows covered by this job, if the reader knows its cardinality.
+	optional_idx row_count;
 
 protected:
 	//! Derived destructors must settle I/O before destroying any state referenced by pending reads.
@@ -169,14 +171,19 @@ class ScanReadAhead {
 public:
 	ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
 	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor, bool prefetch_enabled = true,
-	              idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	              idx_t shard_count = 1, idx_t scan_concurrency = 0, optional_idx auto_row_limit = {});
 	~ScanReadAhead();
 
 	//! Create a driver with a fixed scheduling policy; prefetch also requires async threads and read_ahead_depth.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
+	//! An optional row limit bounds automatic ordered read-ahead.
 	//! Without prefetch, ordered scans need no driver; affinity scans retain their fixed assignment window.
 	static unique_ptr<ScanReadAhead> Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch = true,
-	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0,
+	                                        optional_idx auto_row_limit = {});
+	bool TracksRowLimit() const {
+		return track_row_limit;
+	}
 	bool PrefetchEnabled() const {
 		return prefetch_enabled;
 	}
@@ -244,6 +251,8 @@ private:
 		idx_t remaining;
 	};
 
+	//! Whether to fill the ordered queue before claiming another job.
+	bool OrderedQueueNeedsMore() const;
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
 	bool TryProduceBatch(const ProduceJobCallback &claim_and_schedule, idx_t local_shard);
@@ -319,6 +328,9 @@ private:
 
 	mutable mutex lock;
 	deque<unique_ptr<ScanReadAheadJob>> ready_queue;
+	const bool track_row_limit;
+	//! Row demand remaining after the admitted prefix, protected by lock.
+	optional_idx remaining_rows;
 	const unique_ptr<ScanAffinityQueue> affinity;
 	//! Jobs pushed out of order, held back until all earlier batch indexes are admitted to the queue
 	map<idx_t, unique_ptr<ScanReadAheadJob>> pending_jobs;

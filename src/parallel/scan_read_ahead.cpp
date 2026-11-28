@@ -2,6 +2,7 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_type.hpp"
@@ -216,14 +217,16 @@ idx_t ScanReadAhead::JobWindow(ScanReadAheadPolicy policy, idx_t read_ahead_dept
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p, bool prefetch_enabled_p,
-                             idx_t shard_count, idx_t scan_concurrency)
+                             idx_t shard_count, idx_t scan_concurrency, optional_idx auto_row_limit)
     : context(context), prefetch_enabled(prefetch_enabled_p),
       job_window(JobWindow(policy, read_ahead_depth, scan_concurrency)), memory_governor(std::move(memory_governor_p)),
       open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
                                   memory_governor ? 0 : read_ahead_depth)),
-      open_file_budget(GetOpenFileBudget(context)),
+      open_file_budget(GetOpenFileBudget(context)), track_row_limit(auto_row_limit.IsValid()),
+      remaining_rows(auto_row_limit),
       affinity(policy == ScanReadAheadPolicy::AFFINITY ? make_uniq<ScanAffinityQueue>(shard_count) : nullptr) {
 	D_ASSERT(read_ahead_depth > 0);
+	D_ASSERT(!track_row_limit || policy == ScanReadAheadPolicy::ORDERED);
 	if (affinity && memory_governor) {
 		memory_governor->UpdateReservation(MINIMUM_AFFINITY_JOB_CHARGE * AFFINITY_WINDOW);
 	}
@@ -241,7 +244,8 @@ void ScanReadAhead::CancelAndDrain() {
 }
 
 unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch,
-                                                idx_t shard_count, idx_t scan_concurrency) {
+                                                idx_t shard_count, idx_t scan_concurrency,
+                                                optional_idx auto_row_limit) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	prefetch = prefetch && TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() > 0 && configured_depth != 0;
 	if (!prefetch) {
@@ -252,10 +256,12 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanRead
 		return nullptr;
 	}
 	if (configured_depth < 0) {
-		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
+		if (auto_row_limit.IsValid() && auto_row_limit.GetIndex() > STANDARD_VECTOR_SIZE) {
+			auto_row_limit.SetInvalid();
+		}
 		return make_uniq<ScanReadAhead>(context, policy, NumericLimits<idx_t>::Maximum(),
 		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()), true, shard_count,
-		                                scan_concurrency);
+		                                scan_concurrency, auto_row_limit);
 	}
 	return make_uniq<ScanReadAhead>(context, policy, NumericCast<idx_t>(configured_depth), nullptr, true, shard_count,
 	                                scan_concurrency);
@@ -471,6 +477,15 @@ ScanReadAheadAcquire ScanReadAhead::AcquireReadyJob(ClientContext &context, Tabl
 	}
 }
 
+bool ScanReadAhead::OrderedQueueNeedsMore() const {
+	if (!track_row_limit) {
+		return true;
+	}
+	lock_guard<mutex> guard(lock);
+	// Refill an empty queue if a consumer still asks for a job.
+	return !remaining_rows.IsValid() || remaining_rows.GetIndex() > 0 || ready_queue.empty();
+}
+
 bool ScanReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
 	ThrowIfError();
 	if (IsDone() || !TryReserveSlot()) {
@@ -552,7 +567,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 	while (true) {
 		const auto epoch = ProgressEpoch();
 		// keep the queue full before claiming
-		while (TryProduceJob(claim_and_schedule)) {
+		while (OrderedQueueNeedsMore() && TryProduceJob(claim_and_schedule)) {
 		}
 		job = ClaimJob();
 		if (!job && IsDone() && !HasActiveProducers()) {
@@ -658,6 +673,15 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	}
 	idx_t admitted = 0;
 	while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {
+		if (remaining_rows.IsValid()) {
+			const auto rows = pending_jobs.begin()->second->row_count;
+			if (rows.IsValid()) {
+				const auto remaining = remaining_rows.GetIndex();
+				remaining_rows = remaining - MinValue(remaining, rows.GetIndex());
+			} else {
+				remaining_rows.SetInvalid();
+			}
+		}
 		ready_queue.push_back(std::move(pending_jobs.begin()->second));
 		pending_jobs.erase(pending_jobs.begin());
 		next_batch_index++;

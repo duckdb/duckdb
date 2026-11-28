@@ -48,6 +48,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
+	//! Ordered row demand for automatic read-ahead, including OFFSET.
+	optional_idx read_ahead_row_limit;
 	//! Currently stores info related to filters pushed down into MultiFileLists and sample rate pushed down into the
 	//! table scan
 	ExtraOperatorInfo extra_info;

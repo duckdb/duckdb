@@ -1,0 +1,114 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_small_ordered_limit.test
+# description: Automatic read-ahead queues enough rows for a small ordered limit
+# group: [read_ahead]
+
+require parquet
+
+# The test reads in-memory logs from earlier statements.
+require skip_reload
+
+statement ok
+SET debug_physical_table_scan_execution_strategy = DEFAULT;
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET async_threads = 1;
+
+statement ok
+SET preserve_insertion_order = true;
+
+statement ok
+SET read_ahead_depth = -1;
+
+statement ok
+COPY (SELECT i FROM range(8192) t(i)) TO '{TEST_DIR}/small_ordered_limit.parquet' (ROW_GROUP_SIZE 2048);
+
+statement ok
+CALL enable_logging(['AsyncTaskSchedule', 'ReadAheadBudget'], level = 'DEBUG');
+
+query I
+SELECT i FROM read_parquet('{TEST_DIR}/small_ordered_limit.parquet') LIMIT 1;
+----
+0
+
+query I
+SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD';
+----
+1
+
+# Allow the read-ahead memory reservation to grow for the two-file scan.
+statement ok
+SET debug_force_external = false;
+
+statement ok
+COPY (SELECT -1::BIGINT AS i) TO '{TEST_DIR}/small_ordered_limit_first.parquet' (FORMAT parquet);
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT i
+FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+LIMIT 2;
+----
+-1
+0
+
+query I
+SELECT max(active_jobs) FROM duckdb_logs_parsed('ReadAheadBudget');
+----
+2
+
+# Keep the projection between the limit and the scan.
+statement ok
+SET disabled_optimizers = 'late_materialization,limit_pushdown';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT projected
+FROM (
+    SELECT i + 10 AS projected
+    FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+)
+LIMIT 1 OFFSET 1;
+----
+physical_plan	<REGEX>:.*"name": "STREAMING_LIMIT".*"name": "PROJECTION".*"name": "READ_PARQUET".*
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT projected
+FROM (
+    SELECT i + 10 AS projected
+    FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+)
+LIMIT 1 OFFSET 1;
+----
+10
+
+query I
+SELECT max(active_jobs) FROM duckdb_logs_parsed('ReadAheadBudget');
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET read_ahead_depth = 4;
+
+query I
+SELECT i FROM read_parquet('{TEST_DIR}/small_ordered_limit.parquet') LIMIT 1;
+----
+0
+
+query I
+SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD';
+----
+4

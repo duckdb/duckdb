@@ -813,11 +813,12 @@ public:
 	}
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
-	                                MultiFileGlobalState &gstate) {
+	                                MultiFileGlobalState &gstate, optional_idx read_ahead_row_limit) {
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED);
+		gstate.read_ahead =
+		    ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, read_ahead_row_limit);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -934,7 +935,7 @@ public:
 				}
 			}
 		}
-		InitializeReadAhead(context, bind_data, *result);
+		InitializeReadAhead(context, bind_data, *result, input.read_ahead_row_limit);
 		return std::move(result);
 	}
 
@@ -1020,6 +1021,9 @@ public:
 		}
 		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
 			return nullptr;
+		}
+		if (gstate.read_ahead->TracksRowLimit()) {
+			job->row_count = job->reader->GetReadAheadRowCount(*job->scan_state);
 		}
 		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
