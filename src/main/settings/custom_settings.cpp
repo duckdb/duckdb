@@ -1551,7 +1551,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 
 Value SchemaSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	return Value(client_data.catalog_search_path->GetDefault().GetSchemaName());
+	return Value(client_data.catalog_search_path->GetDefault().SchemaToString());
 }
 
 //===----------------------------------------------------------------------===//

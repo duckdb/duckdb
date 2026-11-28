@@ -1,0 +1,93 @@
+# name: test/sql/catalog/nested_schema/schema_setting_dotted_name_roundtrip.test
+# description: current_setting('schema') keeps the quoting of a dotted schema name
+# group: [nested_schema]
+
+statement ok
+ATTACH '{TEST_DIR}/schema_setting_dotted_name.db' AS lake (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+USE lake;
+
+# a flat schema whose name contains a dot, and a nested schema with the same rendered path
+statement ok
+CREATE SCHEMA "s3.retail";
+
+statement ok
+CREATE SCHEMA s3;
+
+statement ok
+CREATE SCHEMA s3.retail;
+
+statement ok
+CREATE TABLE "s3.retail".t AS SELECT 'flat' AS source;
+
+statement ok
+CREATE TABLE s3.retail.t AS SELECT 'nested' AS source;
+
+statement ok
+SET schema = '"s3.retail"';
+
+query I
+SELECT * FROM t;
+----
+flat
+
+# the setting must render the dotted name quoted, like search_path does
+query II
+SELECT current_setting('schema'), current_setting('search_path');
+----
+"s3.retail"	lake."s3.retail"
+
+# a round trip through current_setting('schema') must select the same schema
+statement ok
+SET schema = current_setting('schema');
+
+query I
+SELECT * FROM t;
+----
+flat
+
+# the nested schema round-trips as well
+statement ok
+SET schema = 's3.retail';
+
+query I
+SELECT * FROM t;
+----
+nested
+
+query I
+SELECT current_setting('schema');
+----
+s3.retail
+
+statement ok
+SET schema = current_setting('schema');
+
+query I
+SELECT * FROM t;
+----
+nested
+
+# nested schemas with quoted components round-trip too
+statement ok
+CREATE SCHEMA s3."a.b";
+
+statement ok
+CREATE TABLE s3."a.b".t AS SELECT 'quoted nested' AS source;
+
+statement ok
+SET schema = 's3."a.b"';
+
+query I
+SELECT current_setting('schema');
+----
+s3."a.b"
+
+statement ok
+SET schema = current_setting('schema');
+
+query I
+SELECT * FROM t;
+----
+quoted nested
