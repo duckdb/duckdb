@@ -1,0 +1,141 @@
+# name: test/optimizer/pushdown/pushdown_past_decorrelation_row_number.test
+# description: Push filters past the row_number() decorrelation uses as a delim key
+# group: [pushdown]
+
+require parquet
+
+# day 1 holds 1000 ordinary rows and, at the end of the file, rows that make the subquery
+# awkward: a NULL struct, an empty list, a NULL element, a NULL id, and a duplicate pair.
+statement ok
+COPY (
+  SELECT i AS n, i // 1000 AS day, {'calls': [{'id': i*3}, {'id': i*3+1}]} AS v, [i*3, i*3+1] AS lst FROM range(30000) r(i)
+  UNION ALL SELECT 999001, 1, NULL, NULL
+  UNION ALL SELECT 999002, 1, {'calls': []}, []
+  UNION ALL SELECT 999003, 1, {'calls': [NULL]}, [NULL]
+  UNION ALL SELECT 999004, 1, {'calls': [{'id': NULL}]}, [NULL]
+  UNION ALL SELECT 999005, 1, {'calls': [{'id': 7}]}, [7]
+  UNION ALL SELECT 999005, 1, {'calls': [{'id': 7}]}, [7]
+) TO '{TEST_DIR}/decorrelation_row_number.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 8192)
+
+# A STRUCT cannot be a delim key, so decorrelation falls back to a row_number() over the outer
+# side and eliminates duplicates on that instead. Nothing reads those numbers, so a filter that
+# does not read them may run first. It reaches the scan and skips row groups.
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)
+----
+physical_plan	<REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 2 / 4.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)
+----
+1002
+
+# The same rows as when the filter is left where the query put it.
+statement ok
+SET disabled_optimizers = 'filter_pushdown'
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)
+----
+1002
+
+statement ok
+RESET disabled_optimizers
+
+# A window the query asked for is not marked, so its filter stays above it.
+query II
+EXPLAIN SELECT n FROM (SELECT n, day, row_number() OVER (ORDER BY n) AS rn
+                       FROM '{TEST_DIR}/decorrelation_row_number.parquet') WHERE day = 1
+----
+physical_plan	<!REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+# The other subquery types that fall back to the same window: NOT EXISTS, a scalar subquery,
+# and a correlation on a bare LIST. Each pushes, and each returns what it returns with the
+# filter left in place.
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND NOT EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)
+----
+physical_plan	<REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND (SELECT max(u.id) FROM unnest(t.v.calls) u) > 0
+----
+physical_plan	<REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.lst) u(x) WHERE x > 0)
+----
+physical_plan	<REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+query III
+SELECT
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND NOT EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)),
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND (SELECT max(u.id) FROM unnest(t.v.calls) u) > 0),
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.lst) u(x) WHERE x > 0))
+----
+4	1002	1002
+
+statement ok
+SET disabled_optimizers = 'filter_pushdown'
+
+query III
+SELECT
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND NOT EXISTS (SELECT 1 FROM unnest(t.v.calls) u WHERE u.id > 0)),
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND (SELECT max(u.id) FROM unnest(t.v.calls) u) > 0),
+  (SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+   WHERE t.day = 1 AND EXISTS (SELECT 1 FROM unnest(t.lst) u(x) WHERE x > 0))
+----
+4	1002	1002
+
+statement ok
+RESET disabled_optimizers
+
+# A volatile subquery falls back to the same window even though the correlated column is an
+# INTEGER that could have been the delim key. Without random() the plan has no such window,
+# so the two queries differ only in what forces the fallback.
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM range(3) r2 WHERE r2.range < t.n + 1)
+----
+physical_plan	<!REGEX>:(?s).*WINDOW.*
+
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM range(3) r2 WHERE r2.range < t.n + random() + 1)
+----
+physical_plan	<REGEX>:(?s).*PARQUET_SCAN.*Filters: day = 1.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM range(3) r2 WHERE r2.range < t.n + random() + 1)
+----
+1006
+
+statement ok
+SET disabled_optimizers = 'filter_pushdown'
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/decorrelation_row_number.parquet' t
+WHERE t.day = 1 AND EXISTS (SELECT 1 FROM range(3) r2 WHERE r2.range < t.n + random() + 1)
+----
+1006
+
+statement ok
+RESET disabled_optimizers

@@ -32,6 +32,11 @@ public:
 	//! The maximum number of rows to return per partition
 	optional_idx partition_limit;
 
+	//! Whether this row_number() is the delim key decorrelation falls back to when it cannot use the correlated
+	//! columns: their type cannot be a key, or the subquery holds a volatile expression. Nothing reads the
+	//! numbers it gives, so a filter may run before it and leave it fewer rows to number.
+	bool is_delim_row_number = false;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
