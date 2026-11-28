@@ -469,18 +469,46 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
+	ScanOptions visibility_options(TransactionData(MAX_TRANSACTION_ID, transaction_manager.LowestVisibilityBound()));
+	visibility_options.insert_type = InsertedScanType::ALL_ROWS;
+	visibility_options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
+
 	while (true) {
+		const idx_t vector_idx = scan_state.vector_index;
 		// scan the table
 		scan_chunk.Reset();
 		Scan(options, scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
+		D_ASSERT(scan_state.vector_index == vector_idx + 1);
+
+		const idx_t scan_count = scan_chunk.size();
+		const idx_t visible_count = GetSelVector(visibility_options, vector_idx, visible_sel, scan_count);
+
 		// execute the expression
 		append_chunk.Reset();
-		executor.ExecuteExpression(scan_chunk, append_vector);
-		changed_stats.UpdateDistinctStatistics(append_vector, scan_chunk.size(), hashes);
-		column_data->Append(append_state, append_vector, scan_chunk.size());
+		if (visible_count == scan_count) {
+			executor.ExecuteExpression(scan_chunk, append_vector);
+		} else {
+			FlatVector::SetSize(append_vector, scan_count);
+			for (idx_t i = 0; i < scan_count; i++) {
+				FlatVector::SetNull(append_vector, i, true);
+			}
+			if (visible_count > 0) {
+				scan_chunk.Slice(visible_sel, visible_count);
+				Vector cast_vector(target_type);
+				executor.ExecuteExpression(scan_chunk, cast_vector);
+				for (idx_t i = 0; i < visible_count; i++) {
+					append_vector.Copy(cast_vector, *FlatVector::IncrementalSelectionVector(), visible_count, i,
+					                   visible_sel.get_index(i), 1);
+				}
+			}
+		}
+		changed_stats.UpdateDistinctStatistics(append_vector, scan_count, hashes);
+		column_data->Append(append_state, append_vector, scan_count);
 	}
 	column_data->FinalizeAppend(nullptr, append_state);
 

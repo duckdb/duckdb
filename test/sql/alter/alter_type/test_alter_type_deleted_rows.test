@@ -1,0 +1,272 @@
+# name: test/sql/alter/alter_type/test_alter_type_deleted_rows.test
+# description: ALTER TYPE skips permanently deleted rows while preserving MVCC visibility and row slots
+# group: [alter_type]
+
+# A committed, permanently deleted value does not need to cast.
+statement ok con1
+CREATE TABLE t_basic(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_basic VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+DELETE FROM t_basic WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE t_basic ALTER v TYPE INTEGER
+
+query I con1
+SELECT v FROM t_basic ORDER BY v
+----
+1
+2
+
+# A deleted NULL placeholder is ignored by NOT NULL re-verification.
+statement ok con1
+CREATE TABLE nn(v VARCHAR NOT NULL)
+
+statement ok con1
+INSERT INTO nn VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+DELETE FROM nn WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE nn ALTER v TYPE INTEGER
+
+query I con1
+SELECT v FROM nn ORDER BY v
+----
+1
+2
+
+# A USING expression can reference other columns in the scan chunk.
+statement ok con1
+CREATE TABLE using_multi(v VARCHAR, w VARCHAR)
+
+statement ok con1
+INSERT INTO using_multi VALUES ('1', '2'), ('3', 'bad')
+
+statement ok con1
+DELETE FROM using_multi WHERE w = 'bad'
+
+statement ok con1
+ALTER TABLE using_multi ALTER v TYPE INTEGER USING (v || w)::INTEGER
+
+query II con1
+SELECT v, w FROM using_multi ORDER BY v
+----
+12	2
+
+# An older active snapshot can still see the deleted value, so the cast must fail.
+statement ok con1
+CREATE TABLE t_snapshot(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_snapshot VALUES ('1'), ('2'), ('x')
+
+statement ok con2
+BEGIN TRANSACTION
+
+query T con2
+SELECT v FROM t_snapshot ORDER BY v
+----
+1
+2
+x
+
+statement ok con1
+DELETE FROM t_snapshot WHERE v = 'x'
+
+statement error con1
+ALTER TABLE t_snapshot ALTER v TYPE INTEGER
+----
+<REGEX>:Conversion Error.*Could not convert string 'x' to INT32.*
+
+statement ok con2
+COMMIT
+
+statement ok con1
+ALTER TABLE t_snapshot ALTER v TYPE INTEGER
+
+query I con1
+SELECT v FROM t_snapshot ORDER BY v
+----
+1
+2
+
+# A delete in another connection is uncommitted and must still be cast.
+statement ok con1
+CREATE TABLE t_other_delete(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_other_delete VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DELETE FROM t_other_delete WHERE v = 'x'
+
+statement error con2
+ALTER TABLE t_other_delete ALTER v TYPE INTEGER
+----
+<REGEX>:Conversion Error.*Could not convert string 'x' to INT32.*
+
+statement ok con1
+ROLLBACK
+
+query T con1
+SELECT v FROM t_other_delete ORDER BY v
+----
+1
+2
+x
+
+query T con1
+SELECT typeof(v) FROM t_other_delete LIMIT 1
+----
+VARCHAR
+
+# A transaction's own uncommitted delete must also be cast.
+statement ok con1
+CREATE TABLE t_own_delete(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_own_delete VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DELETE FROM t_own_delete WHERE v = 'x'
+
+statement error con1
+ALTER TABLE t_own_delete ALTER v TYPE INTEGER
+----
+<REGEX>:Conversion Error.*Could not convert string 'x' to INT32.*
+
+statement ok con1
+ROLLBACK
+
+query T con1
+SELECT v FROM t_own_delete ORDER BY v
+----
+1
+2
+x
+
+# Invalid values across vector and row-group boundaries can be skipped without shifting slots.
+statement ok con1
+CREATE TABLE t_many AS
+SELECT i::INTEGER AS id,
+       CASE WHEN i % 2048 IN (0, 2047) OR i IN (122879, 122880, 245759, 245760)
+            THEN 'x' ELSE i::VARCHAR END AS v
+FROM range(368640) r(i)
+
+statement ok con1
+DELETE FROM t_many WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE t_many ALTER v TYPE INTEGER
+
+query III con1
+SELECT count(*), min(v), max(v) FROM t_many
+----
+368280	1	368638
+
+query I con1
+SELECT count(*) FROM t_many WHERE id <> v
+----
+0
+
+query II con1
+SELECT id, v FROM t_many WHERE id IN (122878, 122881, 245758, 245761) ORDER BY id
+----
+122878	122878
+122881	122881
+245758	245758
+245761	245761
+
+# An entirely deleted 2048-row vector does not need to cast.
+statement ok con1
+CREATE TABLE t_full_vector AS
+SELECT i::INTEGER AS id, CASE WHEN i < 2048 THEN 'x' ELSE i::VARCHAR END AS v
+FROM range(4096) r(i)
+
+statement ok con1
+DELETE FROM t_full_vector WHERE id < 2048
+
+statement ok con1
+ALTER TABLE t_full_vector ALTER v TYPE INTEGER
+
+query III con1
+SELECT count(*), min(v), max(v) FROM t_full_vector
+----
+2048	2048	4095
+
+query I con1
+SELECT count(*) FROM t_full_vector WHERE id <> v
+----
+0
+
+# Partial deletion also preserves nested STRUCT and LIST targets.
+statement ok con1
+CREATE TABLE t_struct(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_struct VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+DELETE FROM t_struct WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE t_struct ALTER v TYPE STRUCT(i INTEGER) USING {'i': v::INTEGER}
+
+query I con1
+SELECT v.i FROM t_struct ORDER BY v.i
+----
+1
+2
+
+statement ok con1
+CREATE TABLE t_list(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_list VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+DELETE FROM t_list WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE t_list ALTER v TYPE INTEGER[] USING [v::INTEGER]
+
+query I con1
+SELECT v[1] FROM t_list ORDER BY v[1]
+----
+1
+2
+
+# A deleted value that can cast must stay deleted after the type change.
+statement ok con1
+CREATE TABLE t_castable_delete(v VARCHAR)
+
+statement ok con1
+INSERT INTO t_castable_delete VALUES ('1'), ('2'), ('3')
+
+statement ok con1
+DELETE FROM t_castable_delete WHERE v = '3'
+
+statement ok con1
+ALTER TABLE t_castable_delete ALTER v TYPE INTEGER
+
+query I con1
+SELECT v FROM t_castable_delete ORDER BY v
+----
+1
+2
+
+query I con1
+SELECT count(*) FROM t_castable_delete WHERE v = 3
+----
+0
