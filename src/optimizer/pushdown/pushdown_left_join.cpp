@@ -112,8 +112,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<TableIndex> &left_bindings,
                                                              unordered_set<TableIndex> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	FilterPushdown left_pushdown(optimizer, projection_mode);
-	FilterPushdown right_pushdown(optimizer, projection_mode);
+	FilterPushdown left_pushdown(optimizer, projection_mode, inside_secure_view);
+	FilterPushdown right_pushdown(optimizer, projection_mode, inside_secure_view);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);
@@ -182,7 +182,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// (a=500) into the RHS
 	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
 		if (JoinSide::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
-			right_pushdown.AddFilter(std::move(filter));
+			right_pushdown.AddFilter(BarForChild(std::move(filter), *op->children[1]));
 		}
 	});
 	right_pushdown.GenerateFilters();

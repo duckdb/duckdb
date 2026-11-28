@@ -250,8 +250,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<Logical
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		PushDownFiltersOnCoalescedEqualJoinKeys(
-		    filters, join.conditions, [&](unique_ptr<Expression> filter) { left_filters.push_back(std::move(filter)); },
-		    [&](unique_ptr<Expression> filter) { right_filters.push_back(std::move(filter)); });
+		    filters, join.conditions,
+		    [&](unique_ptr<Expression> filter) {
+			    left_filters.push_back(BarForChild(std::move(filter), *op->children[0]));
+		    },
+		    [&](unique_ptr<Expression> filter) {
+			    right_filters.push_back(BarForChild(std::move(filter), *op->children[1]));
+		    });
 	}
 	if (can_split) {
 		PushDownComparisonFilters(filters, left_bindings, left_filters);

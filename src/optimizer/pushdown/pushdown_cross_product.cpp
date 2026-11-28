@@ -57,8 +57,8 @@ static bool HasTransitiveJoinBounds(const vector<unique_ptr<Filter>> &filters) {
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->children.size() > 1);
-	FilterPushdown left_pushdown(optimizer, projection_mode);
-	FilterPushdown right_pushdown(optimizer, projection_mode);
+	FilterPushdown left_pushdown(optimizer, projection_mode, inside_secure_view);
+	FilterPushdown right_pushdown(optimizer, projection_mode, inside_secure_view);
 	vector<unique_ptr<Expression>> join_expressions;
 	vector<unique_ptr<Expression>> deferred_filters;
 	auto join_ref_type = JoinRefType::REGULAR;
@@ -86,8 +86,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 			auto side = JoinSide::GetJoinSide(f->bindings, left_bindings, right_bindings);
 			if (side == JoinSide::LEFT) {
 				// bindings match left side: push into left
+				f->filter = BarForChild(std::move(f->filter), *op->children[0]);
+				f->ExtractBarrier();
 				left_pushdown.filters.push_back(std::move(f));
 			} else if (side == JoinSide::RIGHT) {
+				f->filter = BarForChild(std::move(f->filter), *op->children[1]);
+				f->ExtractBarrier();
 				right_pushdown.filters.push_back(std::move(f));
 			} else {
 				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
