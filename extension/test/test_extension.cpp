@@ -676,6 +676,40 @@ static bool PathWithinRoot(const string &path, string root) {
 #endif
 }
 
+struct TestRoot {
+	string root;
+	string canonical_root;
+};
+
+static vector<TestRoot> CollectTestRoots(FileSystem &fs, const vector<string> &test_roots) {
+	vector<TestRoot> roots;
+	for (auto &root : test_roots) {
+		if (!fs.DirectoryExists(root)) {
+			continue;
+		}
+		roots.push_back({root, NormalizePath(fs.CanonicalizePath(root))});
+	}
+	// drop roots contained within another root, so overlapping roots do not discover a test twice
+	vector<TestRoot> result;
+	for (idx_t index = 0; index < roots.size(); index++) {
+		bool contained = false;
+		for (idx_t other = 0; other < roots.size() && !contained; other++) {
+			if (other == index) {
+				continue;
+			}
+			if (roots[index].canonical_root == roots[other].canonical_root) {
+				contained = other < index;
+			} else {
+				contained = PathWithinRoot(roots[index].canonical_root, roots[other].canonical_root);
+			}
+		}
+		if (!contained) {
+			result.push_back(roots[index]);
+		}
+	}
+	return result;
+}
+
 static TestDescription ResolveSQLTest(ClientContext &context, const string &test_id, const vector<string> &test_roots) {
 	auto test_name = NormalizePath(test_id.substr(4));
 	if (test_name.empty() || FileSystem::IsRemoteFile(test_name) || !IsSQLLogicTest(test_name)) {
@@ -688,11 +722,8 @@ static TestDescription ResolveSQLTest(ClientContext &context, const string &test
 		throw InvalidInputException("Unknown DuckDB test id '%s'", test_id);
 	}
 
-	for (auto &root : test_roots) {
-		if (!fs.DirectoryExists(root)) {
-			continue;
-		}
-		auto canonical_root = NormalizePath(fs.CanonicalizePath(root));
+	for (auto &test_root : CollectTestRoots(fs, test_roots)) {
+		auto &canonical_root = test_root.canonical_root;
 		if (!PathWithinRoot(canonical_path, canonical_root)) {
 			continue;
 		}
@@ -808,10 +839,8 @@ static vector<TestDescription> DiscoverTests(ClientContext &context, TestRegistr
 	if (!StringUtil::EndsWith(working_directory, "/")) {
 		working_directory += "/";
 	}
-	for (auto &root : test_roots) {
-		if (!fs.DirectoryExists(root)) {
-			continue;
-		}
+	for (auto &test_root : CollectTestRoots(fs, test_roots)) {
+		auto &root = test_root.root;
 		auto normalized_root = NormalizePath(root);
 		auto is_sqlite_root = IsSQLiteTestRoot(normalized_root);
 		ListFilesRecursive(fs, root, [&](const string &path) {

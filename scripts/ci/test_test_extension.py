@@ -302,6 +302,32 @@ class TestExtensionIntegrationTest(unittest.TestCase):
                 self.assertIn("Binder Error", row["diagnostics"])
                 self.assertIn("nonexistent_column", row["diagnostics"])
 
+    def test_overlapping_test_roots_discover_each_test_once(self):
+        # Out-of-tree extension builds pass both <root>/test and the extension's
+        # LOAD_TESTS directory <root>/test/sql, so nested and repeated roots must
+        # not discover a test twice.
+        nested_root = self.test_root / "test" / "sql"
+        nested_root.mkdir(parents=True)
+        (nested_root / "overlap.test").write_text("query I\nSELECT 42\n----\n42\n")
+        roots = [self.test_root, nested_root, self.test_root]
+        scan_sql = f"SELECT test_id FROM scan_tests([], test_roots = {run_tests.sql_string_list(roots)});"
+        rows = self.query(run_tests.build_test_protocol_sql(self.binary, scan_sql))
+        test_ids = [row["test_id"] for row in rows if "test_id" in row]
+        expected = "sql:" + (nested_root / "overlap.test").as_posix()
+        self.assertEqual(test_ids, [expected])
+        database = self.root / "overlap_results.duckdb"
+        run_sql = (
+            f"SELECT * FROM run_tests({run_tests.sql_string_list(test_ids)}, "
+            f"test_roots={run_tests.sql_string_list(roots)}, "
+            f"test_flags={run_tests.sql_string_list(['--temp-dir-root', str(self.temp_root)])}, "
+            f"state_database={run_tests.sql_string(database)});\n"
+            f"ATTACH {run_tests.sql_string(database)} AS overlap;\n"
+            "SELECT test_id, status FROM overlap.test_results;"
+        )
+        rows = self.query(run_tests.build_test_protocol_sql(self.binary, run_sql))
+        results = [row for row in rows if "status" in row]
+        self.assertEqual(results, [{"test_id": expected, "status": "passed"}])
+
     def test_legacy_unittest_entrypoint_runs_tests_from_generated_extension_roots(self):
         self.create_test(
             "legacy_runner_external_root.test",
