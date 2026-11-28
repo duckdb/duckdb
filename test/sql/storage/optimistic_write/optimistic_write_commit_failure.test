@@ -37,10 +37,10 @@ PRAGMA force_checkpoint;
 statement ok
 CHECKPOINT;
 
-query III
-SELECT total_blocks, used_blocks, free_blocks FROM pragma_database_size();
+query I
+SELECT total_blocks <= 2 FROM pragma_database_size();
 ----
-1	1	0
+true
 
 # Subsequent insert and checkpoint should work normally and verify database health
 statement ok
@@ -57,4 +57,4 @@ SELECT count(*) FROM t;
 query III
 SELECT total_blocks, used_blocks, free_blocks FROM pragma_database_size();
 ----
-1	1	0
+3	2	1

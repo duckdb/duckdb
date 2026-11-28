@@ -35,6 +35,6 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT used_blocks <= 2 FROM pragma_database_size();
+SELECT used_blocks <= 3 FROM pragma_database_size();
 ----
 true

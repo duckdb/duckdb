@@ -10,8 +10,14 @@ load {TEST_DIR}/nop_updates_sf1.db
 statement ok
 CALL dbgen(sf=1);
 
+statement ok
+UPDATE lineitem SET l_orderkey = l_orderkey,l_partkey = l_partkey,l_suppkey = l_suppkey,l_linenumber = l_linenumber,l_quantity = l_quantity,l_extendedprice = l_extendedprice,l_discount = l_discount,l_tax = l_tax,l_returnflag = l_returnflag,l_linestatus = l_linestatus,l_shipdate = l_shipdate,l_commitdate = l_commitdate,l_receiptdate = l_receiptdate,l_shipinstruct = l_shipinstruct,l_shipmode = l_shipmode,l_comment = l_comment;
+
+statement ok
+CHECKPOINT
+
 query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+SELECT used_blocks FROM pragma_database_size();
 
 statement ok
 UPDATE lineitem SET l_orderkey = l_orderkey,l_partkey = l_partkey,l_suppkey = l_suppkey,l_linenumber = l_linenumber,l_quantity = l_quantity,l_extendedprice = l_extendedprice,l_discount = l_discount,l_tax = l_tax,l_returnflag = l_returnflag,l_linestatus = l_linestatus,l_shipdate = l_shipdate,l_commitdate = l_commitdate,l_receiptdate = l_receiptdate,l_shipinstruct = l_shipinstruct,l_shipmode = l_shipmode,l_comment = l_comment;
@@ -20,4 +26,4 @@ statement ok
 CHECKPOINT
 
 query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+SELECT used_blocks FROM pragma_database_size();

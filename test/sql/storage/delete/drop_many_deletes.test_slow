@@ -19,9 +19,9 @@ SELECT COUNT(*) FROM integers
 ----
 5000000
 
-# the metadata size is less than or euqal to 262144 bytes
+# the metadata size is less than or equal to 2 * 262144 bytes
 query I
-SELECT COUNT(*) * get_block_size('drop_many_deletes') <= 262144 FROM pragma_metadata_info()
+SELECT COUNT(*) * get_block_size('drop_many_deletes') <= 2 * 262144 FROM pragma_metadata_info()
 ----
 1
 

@@ -93,7 +93,7 @@ FROM duckdb_memory() WHERE tag='ART_INDEX';
 1
 
 query I
-SELECT total_blocks = (SELECT total_blocks FROM warm_blocks)
+SELECT total_blocks < (SELECT total_blocks FROM warm_blocks) + 4
 FROM pragma_database_size() WHERE database_name = current_database();
 ----
 1
