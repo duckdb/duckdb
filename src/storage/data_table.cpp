@@ -912,9 +912,9 @@ void DataTable::VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage>
 	VerifyForeignKeyConstraint(storage, bound_foreign_key, context, chunk, VerifyExistenceType::APPEND_FK);
 }
 
-void DataTable::VerifyAppendedForeignKeys(ClientContext &context, idx_t start, idx_t end,
+void DataTable::VerifyAppendedForeignKeys(ClientContext &context, const vector<pair<idx_t, idx_t>> &ranges,
                                           const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	if (start >= end) {
+	if (ranges.empty()) {
 		return;
 	}
 	vector<reference<BoundForeignKeyConstraint>> append_constraints;
@@ -949,28 +949,35 @@ void DataTable::VerifyAppendedForeignKeys(ClientContext &context, idx_t start, i
 		}
 		// Read the key columns with a vectorized range scan instead of a per-row fetch; the scan starts at the
 		// enclosing vector boundary, so a few rows appended by earlier statements may be verified again
-		TableScanState scan_state;
-		scan_state.Initialize(column_ids);
-		auto local_start = NumericCast<idx_t>(MAX_ROW_ID) + start;
-		auto local_end = NumericCast<idx_t>(MAX_ROW_ID) + end;
-		collection.InitializeScanWithOffset(QueryContext(context), scan_state.table_state, column_ids, local_start,
-		                                    local_end);
 		DataChunk fk_chunk;
 		fk_chunk.Initialize(context, fk_types);
-		while (true) {
-			context.InterruptCheck();
-			fk_chunk.Reset();
-			if (!scan_state.table_state.Scan(transaction, fk_chunk)) {
-				break;
+		for (auto &range : ranges) {
+			auto start = range.first;
+			auto end = range.second;
+			if (start >= end) {
+				continue;
 			}
-			// Build a shell chunk holding the key columns at their physical positions
-			DataChunk shell_chunk;
-			shell_chunk.InitializeEmpty(types);
-			for (idx_t i = 0; i < fk_keys.size(); i++) {
-				shell_chunk.data[fk_keys[i].index].Reference(fk_chunk.data[i]);
+			TableScanState scan_state;
+			scan_state.Initialize(column_ids);
+			auto local_start = NumericCast<idx_t>(MAX_ROW_ID) + start;
+			auto local_end = NumericCast<idx_t>(MAX_ROW_ID) + end;
+			collection.InitializeScanWithOffset(QueryContext(context), scan_state.table_state, column_ids, local_start,
+			                                    local_end);
+			while (true) {
+				context.InterruptCheck();
+				fk_chunk.Reset();
+				if (!scan_state.table_state.Scan(transaction, fk_chunk)) {
+					break;
+				}
+				// Build a shell chunk holding the key columns at their physical positions
+				DataChunk shell_chunk;
+				shell_chunk.InitializeEmpty(types);
+				for (idx_t i = 0; i < fk_keys.size(); i++) {
+					shell_chunk.data[fk_keys[i].index].Reference(fk_chunk.data[i]);
+				}
+				shell_chunk.SetChildCardinality(fk_chunk.size());
+				VerifyAppendForeignKeyConstraint(nullptr, bound_foreign_key, context, shell_chunk);
 			}
-			shell_chunk.SetChildCardinality(fk_chunk.size());
-			VerifyAppendForeignKeyConstraint(nullptr, bound_foreign_key, context, shell_chunk);
 		}
 	}
 }

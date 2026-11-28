@@ -16,6 +16,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -82,10 +83,12 @@ public:
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows (parallel DELETEs update it concurrently)
 	atomic<idx_t> deleted_rows;
-	//! Statement number of the currently tracked append range
-	atomic<transaction_t> append_query_number {MAXIMUM_QUERY_ID};
-	//! Start (local row position) of the append range tracked in append_query_number
-	atomic<idx_t> append_query_start {0};
+	//! The local row ranges appended by each statement, keyed by statement number. A statement of a shared
+	//! transaction can interleave its appends with statements of other connections, producing several
+	//! non-contiguous ranges. RecordAppendRange merges adjacent ranges, so a single-connection statement
+	//! keeps exactly one range.
+	mutex append_ranges_lock;
+	unordered_map<transaction_t, vector<pair<idx_t, idx_t>>> append_ranges;
 
 	//! The optimistic row group collections associated with this table.
 	vector<unique_ptr<OptimisticWriteCollection>> optimistic_collections;
@@ -132,10 +135,10 @@ public:
 	//! Removes the rows of this storage that were appended to the indexes of the table at [row_start, row_end)
 	ErrorData RevertAppendToIndexes(DuckTransaction &transaction, row_t row_start, row_t row_end);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
-	//! Track the start of the append range for the given statement number
-	void TrackAppendForQuery(transaction_t query_number);
-	//! Whether the given statement number appended rows, and if so sets the appended local row range
-	bool GetAppendRange(transaction_t query_number, idx_t &start, idx_t &end);
+	//! Records the local row range [start, end) appended by the given statement
+	void RecordAppendRange(transaction_t query_number, idx_t start, idx_t end);
+	//! Removes and returns the local row ranges appended by the given statement. Returns false if there are none.
+	bool TakeAppendRanges(transaction_t query_number, vector<pair<idx_t, idx_t>> &ranges);
 
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
@@ -194,11 +197,10 @@ public:
 		reference_map_t<DataTable, unique_ptr<TableAppendState>> append_states;
 	};
 
-	//! A table that had rows appended to it in a statement, with the appended local row range
+	//! A table that had rows appended to it in a statement, with the appended local row ranges
 	struct AppendedRows {
 		DuckTableEntry &table_entry;
-		idx_t start;
-		idx_t end;
+		vector<pair<idx_t, idx_t>> ranges;
 	};
 
 public:

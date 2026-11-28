@@ -341,3 +341,42 @@ TEST_CASE("Closing a connection leaves the shared transaction while its results 
 	// the transaction ended: the identifier can no longer be joined
 	REQUIRE_FAIL(joined.Query("JOIN TRANSACTION '" + share_id + "'"));
 }
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("Statement-level FK validation applies to each connection of a shared transaction", "[api][transaction]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	Connection con2(db);
+	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE parent(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE child(i INTEGER REFERENCES parent(i))"));
+	REQUIRE_NO_FAIL(con1.Query("INSERT INTO parent SELECT range FROM range(1000000)"));
+	REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+	auto share_id = ShareTransaction(con1);
+	REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+	// Keep both inserts on the single-threaded append path so their appends interleave by chunk.
+	REQUIRE_NO_FAIL(con1.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con2.Query("SET threads=1"));
+
+	atomic<bool> invalid_insert_rejected {false};
+
+	// Connection 1 appends a long batch with one invalid reference (-1). Its statement-level FK
+	// validation must reject the row, regardless of what connection 2 appends concurrently.
+	thread writer([&]() {
+		auto result =
+		    con1.Query("INSERT INTO child SELECT CASE WHEN i = 500000 THEN -1 ELSE i END FROM range(1000000) t(i)");
+		invalid_insert_rejected = result->HasError();
+	});
+
+	// Connection 2 appends valid rows to the same table while connection 1's statement is running.
+	thread overwriter([&]() {
+		for (idx_t j = 0; j < 1000; j++) {
+			con2.Query("INSERT INTO child SELECT " + to_string(j * 100) + " + range FROM range(100)");
+		}
+	});
+
+	writer.join();
+	overwriter.join();
+
+	REQUIRE(invalid_insert_rejected.load());
+}
+#endif

@@ -517,7 +517,7 @@ void ClientContext::VerifyDeferredForeignKeys() {
 			}
 			auto binder = Binder::CreateBinder(*this);
 			auto bound_constraints = binder->BindConstraints(entry.table_entry);
-			entry.table_entry.GetStorage().VerifyAppendedForeignKeys(*this, entry.start, entry.end, bound_constraints);
+			entry.table_entry.GetStorage().VerifyAppendedForeignKeys(*this, entry.ranges, bound_constraints);
 		}
 	}
 }

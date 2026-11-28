@@ -501,21 +501,30 @@ RowGroupCollection &LocalTableStorage::GetCollection() {
 	return *row_groups->collection;
 }
 
-void LocalTableStorage::TrackAppendForQuery(transaction_t query_number) {
-	if (append_query_number.load() == query_number) {
+void LocalTableStorage::RecordAppendRange(transaction_t query_number, idx_t start, idx_t end) {
+	// appends outside a statement (internal appender, WAL replay) verify their foreign keys eagerly
+	if (start >= end || query_number == MAXIMUM_QUERY_ID) {
 		return;
 	}
-	append_query_start.store(GetCollection().GetNextRowId());
-	append_query_number.store(query_number);
+	lock_guard<mutex> guard(append_ranges_lock);
+	auto &ranges = append_ranges[query_number];
+	if (!ranges.empty() && ranges.back().second == start) {
+		// merge adjacent ranges so a single-connection statement keeps exactly one range
+		ranges.back().second = end;
+	} else {
+		ranges.emplace_back(start, end);
+	}
 }
 
-bool LocalTableStorage::GetAppendRange(transaction_t query_number, idx_t &start, idx_t &end) {
-	if (append_query_number.load() != query_number) {
+bool LocalTableStorage::TakeAppendRanges(transaction_t query_number, vector<pair<idx_t, idx_t>> &ranges) {
+	lock_guard<mutex> guard(append_ranges_lock);
+	auto it = append_ranges.find(query_number);
+	if (it == append_ranges.end()) {
 		return false;
 	}
-	start = append_query_start.load();
-	end = GetCollection().GetNextRowId();
-	return end > start;
+	ranges = std::move(it->second);
+	append_ranges.erase(it);
+	return true;
 }
 
 OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
@@ -594,9 +603,11 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 	auto storage = state.storage;
 	storage->table_entry = &table_entry;
 	D_ASSERT(state.context);
-	storage->TrackAppendForQuery(state.context->TryGetClientContext()->transaction.GetActiveQuery());
-	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetNextRowId();
-	idx_t base_id = offset + state.append_state.total_append_count;
+	auto query_number = state.context->TryGetClientContext()->transaction.GetActiveQuery();
+	auto next_row_id = NumericCast<idx_t>(storage->GetCollection().GetNextRowId());
+	auto local_start = next_row_id + state.append_state.total_append_count;
+	idx_t base_id = NumericCast<idx_t>(MAX_ROW_ID) + local_start;
+	storage->RecordAppendRange(query_number, local_start, local_start + table_chunk.size());
 
 	if (!storage->GetAppendIndexes().Empty()) {
 		auto error =
@@ -624,16 +635,15 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 vector<LocalStorage::AppendedRows> LocalStorage::GetAppendedRows(transaction_t query_number) {
 	vector<AppendedRows> result;
 	for (auto &storage : table_manager.GetEntries()) {
-		idx_t start;
-		idx_t end;
-		if (!storage->GetAppendRange(query_number, start, end)) {
+		vector<pair<idx_t, idx_t>> ranges;
+		if (!storage->TakeAppendRanges(query_number, ranges)) {
 			continue;
 		}
-		// The range and the entry are set together on the append path and refer to the same table version
+		// The ranges and the entry are set together on the append path and refer to the same table version
 		auto table_entry = storage->table_entry.load();
 		D_ASSERT(table_entry);
 		D_ASSERT(&table_entry->GetStorage() == &storage->table_ref.get());
-		result.push_back({*table_entry, start, end});
+		result.push_back({*table_entry, std::move(ranges)});
 	}
 	return result;
 }
@@ -646,7 +656,10 @@ void LocalStorage::LocalMerge(Context &context, DataTable &table, DuckTableEntry
 	storage.table_entry = &table_entry;
 	auto client_context = context.TryGetClientContext();
 	D_ASSERT(client_context);
-	storage.TrackAppendForQuery(client_context->transaction.GetActiveQuery());
+	auto query_number = client_context->transaction.GetActiveQuery();
+	idx_t merged_start = storage.GetCollection().GetNextRowId();
+	idx_t merged_end = merged_start + collection.collection->GetTotalRows();
+	storage.RecordAppendRange(query_number, merged_start, merged_end);
 	if (!storage.GetAppendIndexes().Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetNextRowId());
