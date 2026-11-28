@@ -123,12 +123,12 @@ void StructColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+void StructColumnReader::GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		child->RegisterPrefetch(transport, allow_merge);
+		child->GatherChunkReaders(chunk_readers);
 	}
 }
 

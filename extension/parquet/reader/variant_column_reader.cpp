@@ -214,12 +214,12 @@ void VariantColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void VariantColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+void VariantColumnReader::GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		child->RegisterPrefetch(transport, allow_merge);
+		child->GatherChunkReaders(chunk_readers);
 	}
 }
 
