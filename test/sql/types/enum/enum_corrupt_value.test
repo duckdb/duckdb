@@ -1,0 +1,78 @@
+# name: test/sql/types/enum/enum_corrupt_value.test
+# description: A stored ENUM value that is not a position in the dictionary of its type throws when it is scanned
+# group: [enum]
+
+require vector_size 2048
+
+# t0 (a INTEGER, b VARCHAR, m ENUM('a', 'b'), c DOUBLE, g INTEGER) holds 15 rows
+# the stored value of m in the row a = 6 is 86, m is NULL in the row a = 11
+unzip data/storage/corrupt/enum_corrupt_value.db.gz {TEST_DIR}/enum_corrupt_value.db
+
+load {TEST_DIR}/enum_corrupt_value.db readonly
+
+statement ok
+USE enum_corrupt_value
+
+statement error
+SELECT m::VARCHAR FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT * FROM t0 WHERE a = 6
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT m::ENUM('b', 'a', 'c') FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT enum_range_boundary(NULL, m) FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT enum_code(m) FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT count(*) FROM t0 GROUP BY m
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+COPY (SELECT m FROM t0) TO '{TEST_DIR}/enum_corrupt_value.csv'
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# scans that do not read the column are unaffected
+query II
+SELECT count(*), sum(a) FROM t0
+----
+15	105
+
+query IT
+SELECT a, b IS NOT NULL FROM t0 WHERE a > 12 ORDER BY a
+----
+13	true
+14	true
+
+query I
+SELECT 42
+----
+42
+
+require parquet
+
+statement error
+COPY (SELECT m FROM t0) TO '{TEST_DIR}/enum_corrupt_value.parquet'
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+query I
+SELECT 42
+----
+42
