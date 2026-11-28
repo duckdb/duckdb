@@ -66,6 +66,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"disjunctive_join_rewriter", OptimizerType::DISJUNCTIVE_JOIN_REWRITER},
     {"redundant_order", OptimizerType::REDUNDANT_ORDER},
     {"mark_join_simplifier", OptimizerType::MARK_JOIN_SIMPLIFIER},
+    {"union_aggregate_merge", OptimizerType::UNION_AGGREGATE_MERGE},
     {"self_join_aggregate", OptimizerType::SELF_JOIN_AGGREGATE},
     {"scalar_aggregate_merge", OptimizerType::SCALAR_AGGREGATE_MERGE},
     {"redundant_distinct", OptimizerType::REDUNDANT_DISTINCT},

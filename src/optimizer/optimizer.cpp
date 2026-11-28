@@ -324,6 +324,13 @@ void Optimizer::RunBuiltInOptimizers() {
 		lower_set_operations();
 	}
 
+	// Computes the branches of a UNION ALL that are the same aggregate over the same input, restricted to a different
+	// value of a column each, with one aggregate that groups by the column
+	RunOptimizer(OptimizerType::UNION_AGGREGATE_MERGE, [&]() {
+		UnionAggregateMerger union_aggregate_merger(*this);
+		plan = union_aggregate_merger.Optimize(std::move(plan));
+	});
+
 	// Replaces some window computations with self-joins
 	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {
 		WindowSelfJoinOptimizer window_self_join_optimizer(*this);
