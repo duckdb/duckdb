@@ -89,22 +89,28 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 	auto &iterator = state.token_iterator;
 	auto token = iterator.Current();
 	D_ASSERT(token);
-	if (one.Contains(*token, [&]() { return iterator.CurrentLiteralInfo(*table); })) {
+	bool continues = one.Contains(*token, [&]() { return iterator.CurrentLiteralInfo(*table); });
+	if (!continues) {
+		auto next = iterator.Peek(1);
+		// the autocomplete cursor can stand for any token
+		continues = next && (next->type == TokenType::END_OF_INPUT_AUTOCOMPLETE ||
+		                     second.Contains(*next, [&]() { return iterator.PeekLiteralInfo(*table, 1); }));
+	}
+	if (!continues) {
+		// the matcher would have consumed the current token before failing: keep the error position
+		if (iterator.Position() + 1 > state.context.max_token_index) {
+			state.context.max_token_index = iterator.Position() + 1;
+		}
+		return false;
+	}
+	return MightMatchSequence(state);
+}
+
+bool MatcherFirstSet::MightMatchSequence(MatchState &state) const {
+	if (!sequence_check_index || !state.context.sequence_checks) {
 		return true;
 	}
-	auto next = iterator.Peek(1);
-	// the autocomplete cursor can stand for any token
-	if (next && next->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-		return true;
-	}
-	if (next && second.Contains(*next, [&]() { return iterator.PeekLiteralInfo(*table, 1); })) {
-		return true;
-	}
-	// the matcher would have consumed the current token before failing: keep the error position
-	if (iterator.Position() + 1 > state.context.max_token_index) {
-		state.context.max_token_index = iterator.Position() + 1;
-	}
-	return false;
+	return (*state.context.sequence_checks)[sequence_check_index - 1]->MightMatch(state);
 }
 
 bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
@@ -163,14 +169,14 @@ static bool UpdateFirstSet(Matcher &matcher) {
 		for (idx_t i = 0; i < children.size() && nullable; i++) {
 			auto &child_first = children[i].get().first_set;
 			changed |= first.MergeTokens(child_first);
-			// the element can be followed by the FIRST set of the rest of the sequence
-			MatcherTokenSet suffix_first;
+			// the element can be followed by the FIRST set of the rest of the sequence, up to and including its
+			// first element that is not nullable
+			idx_t suffix_end = i + 1;
 			bool suffix_nullable = true;
-			for (idx_t j = i + 1; j < children.size(); j++) {
-				auto &suffix_child = children[j].get().first_set;
-				suffix_first.MergeTokens(suffix_child);
-				if (!suffix_child.nullable) {
+			for (; suffix_end < children.size(); suffix_end++) {
+				if (!children[suffix_end].get().first_set.nullable) {
 					suffix_nullable = false;
+					suffix_end++;
 					break;
 				}
 			}
@@ -179,7 +185,9 @@ static bool UpdateFirstSet(Matcher &matcher) {
 			}
 			changed |= first.second.MergeTokens(child_first.second);
 			if (!child_first.one.IsEmpty()) {
-				changed |= first.second.MergeTokens(suffix_first);
+				for (idx_t j = i + 1; j < suffix_end; j++) {
+					changed |= first.second.MergeTokens(children[j].get().first_set);
+				}
 			}
 			nullable = child_first.nullable;
 		}
@@ -225,37 +233,63 @@ struct FirstSetTraversalEntry {
 	bool expanded = false;
 };
 
+//! A composite matcher in the fixed point of the FIRST sets
+struct FirstSetComposite {
+	explicit FirstSetComposite(Matcher &matcher) : matcher(matcher) {
+	}
+
+	reference<Matcher> matcher;
+	//! position of the matcher among the reachable matchers
+	idx_t position = 0;
+	//! the positions of its children are child_positions[children_begin, children_end)
+	idx_t children_begin = 0;
+	idx_t children_end = 0;
+	//! sum of the versions of the children at the last update
+	uint64_t children_version = 0;
+	bool updated = false;
+};
+
 void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	// collect the reachable matchers, children before their parents (except for recursive references)
 	vector<reference<Matcher>> matchers;
-	vector<reference<Matcher>> composites;
-	reference_set_t<Matcher> seen;
+	// position of a matcher in matchers, set when the matcher is added
+	reference_map_t<Matcher, idx_t> positions;
 	vector<FirstSetTraversalEntry> pending;
 	pending.emplace_back(root);
-	seen.insert(root);
+	positions.emplace(root, 0);
 	while (!pending.empty()) {
 		auto &entry = pending.back();
 		auto &matcher = entry.matcher.get();
 		if (entry.expanded) {
 			pending.pop_back();
+			positions[matcher] = matchers.size();
 			matchers.push_back(matcher);
 			continue;
 		}
 		entry.expanded = true;
 		// entry is invalidated by the pushes below
 		ForEachChild(matcher, [&](Matcher &child) {
-			if (seen.insert(child).second) {
+			if (positions.emplace(child, 0).second) {
 				pending.emplace_back(child);
 			}
 		});
 	}
+	// the composite matchers with the positions of their children, as ranges of one array
+	vector<FirstSetComposite> composites;
+	vector<idx_t> child_positions;
+	child_positions.reserve(2 * matchers.size());
 	for (auto &entry : matchers) {
 		auto &matcher = entry.get();
 		auto &first = matcher.first_set;
 		first = MatcherFirstSet();
 		first.table = &table;
 		if (IsComposite(matcher)) {
-			composites.push_back(matcher);
+			FirstSetComposite composite(matcher);
+			composite.position = positions[matcher];
+			composite.children_begin = child_positions.size();
+			ForEachChild(matcher, [&](Matcher &child) { child_positions.push_back(positions[child]); });
+			composite.children_end = child_positions.size();
+			composites.push_back(composite);
 		} else if (matcher.IsAtomic()) {
 			// matchers that only describe FIRST may consume any number of tokens
 			first.one.any = true;
@@ -268,11 +302,26 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	}
 	// composite matchers: least fixed point, the grammar is recursive
 	// children are visited before their parents, so only recursive references need another pass
+	// a matcher's version counts the changes of its sets; versions only grow, so a matcher whose children have the
+	// same sum of versions as at its last update has nothing to merge
+	vector<uint64_t> versions(matchers.size(), 0);
 	bool changed = true;
 	while (changed) {
 		changed = false;
-		for (auto &matcher : composites) {
-			changed |= UpdateFirstSet(matcher.get());
+		for (auto &composite : composites) {
+			uint64_t children_version = 0;
+			for (idx_t child_idx = composite.children_begin; child_idx < composite.children_end; child_idx++) {
+				children_version += versions[child_positions[child_idx]];
+			}
+			if (composite.updated && children_version == composite.children_version) {
+				continue;
+			}
+			composite.updated = true;
+			composite.children_version = children_version;
+			if (UpdateFirstSet(composite.matcher.get())) {
+				versions[composite.position]++;
+				changed = true;
+			}
 		}
 	}
 	for (auto &entry : matchers) {

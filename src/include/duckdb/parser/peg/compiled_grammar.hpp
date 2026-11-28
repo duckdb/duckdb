@@ -24,6 +24,9 @@ public:
 	const Matcher &ProgramMatcher() const {
 		return program_matcher;
 	}
+	const vector<unique_ptr<MatcherSequenceCheck>> &GetSequenceChecks() const {
+		return allocator.GetSequenceChecks();
+	}
 	const Matcher &TopLevelStatementMatcher() const {
 		return top_level_statement_matcher;
 	}

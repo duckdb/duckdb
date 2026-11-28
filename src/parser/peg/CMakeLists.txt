@@ -22,7 +22,8 @@ add_library_unity(
   peg_rule_id.cpp
   passthrough_dialect.cpp
   sql_formatter.cpp
-  syntax_error.cpp)
+  syntax_error.cpp
+  matcher_sequence_check.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser_peg>
     PARENT_SCOPE)
