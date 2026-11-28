@@ -1310,3 +1310,163 @@ TEST_CASE("Test C-API Arrow round trip of timestamps below the first midnight of
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_result(&result);
 }
+
+// A UHUGEINT of 2^127 or more does not fit in the decimal128 of Arrow format version 1.0, which is an error. It must
+// reach a C caller as an error or a released array, never as an exception
+TEST_CASE("Test C-API Arrow conversion of UHUGEINT values that do not fit format version 1.0", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET arrow_output_version = '1.0'"));
+
+	SECTION("duckdb_result_arrow_array leaves the array released") {
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT 170141183460469231731687303715884105728::UHUGEINT AS u",
+		                     &result) == DuckDBSuccess);
+		auto chunk = duckdb_fetch_chunk(result);
+		REQUIRE(chunk);
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto out_array = reinterpret_cast<duckdb_arrow_array>(&arrow_array);
+		duckdb_result_arrow_array(result, chunk, &out_array);
+		REQUIRE(arrow_array.release == nullptr);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+	}
+
+	SECTION("duckdb_result_arrow_array converts the largest value that fits") {
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT 170141183460469231731687303715884105727::UHUGEINT AS u",
+		                     &result) == DuckDBSuccess);
+		auto chunk = duckdb_fetch_chunk(result);
+		REQUIRE(chunk);
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto out_array = reinterpret_cast<duckdb_arrow_array>(&arrow_array);
+		duckdb_result_arrow_array(result, chunk, &out_array);
+		REQUIRE(arrow_array.release != nullptr);
+		REQUIRE(arrow_array.length == 1);
+		arrow_array.release(&arrow_array);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+	}
+
+	SECTION("duckdb_data_chunk_to_arrow returns an error") {
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT 170141183460469231731687303715884105728::UHUGEINT AS u",
+		                     &result) == DuckDBSuccess);
+		auto chunk = duckdb_fetch_chunk(result);
+		REQUIRE(chunk);
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &arrow_array);
+		REQUIRE(err != nullptr);
+		REQUIRE(
+		    duckdb::StringUtil::Contains(duckdb_error_data_message(err), "SET arrow_output_version to 1.1 or later"));
+		duckdb_destroy_error_data(&err);
+		duckdb_destroy_arrow_options(&arrow_options);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+	}
+}
+
+// A NULL ARRAY or STRUCT row does not invalidate its child values, which can hold anything. A child value nobody can
+// see must not fail the conversion
+TEST_CASE("Test C-API Arrow conversion of UHUGEINT values hidden under a NULL parent", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET arrow_output_version = '1.0'"));
+	duckdb_arrow_options arrow_options;
+	duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+	// 2^127, the smallest value a decimal128 cannot hold
+	duckdb_uhugeint too_large;
+	too_large.lower = 0;
+	too_large.upper = static_cast<uint64_t>(1) << 63;
+
+	auto child_type = duckdb_create_logical_type(DUCKDB_TYPE_UHUGEINT);
+
+	SECTION("ARRAY") {
+		auto array_type = duckdb_create_array_type(child_type, 2);
+		auto chunk = duckdb_create_data_chunk(&array_type, 1);
+		auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+		auto child = static_cast<duckdb_uhugeint *>(duckdb_vector_get_data(duckdb_array_vector_get_child(vec)));
+		// row 0 is NULL and hides 2^127, row 1 is [1, 2]
+		child[0] = too_large;
+		child[1] = too_large;
+		child[2].lower = 1;
+		child[2].upper = 0;
+		child[3].lower = 2;
+		child[3].upper = 0;
+		duckdb_vector_ensure_validity_writable(vec);
+		duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vec), 0);
+		duckdb_data_chunk_set_size(chunk, 2);
+
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &arrow_array);
+		REQUIRE(err == nullptr);
+		REQUIRE(arrow_array.length == 2);
+		auto &array_column = *arrow_array.children[0];
+		REQUIRE(array_column.null_count == 1);
+		// the hidden values are exported as NULL, the visible ones as they are
+		auto &values = *array_column.children[0];
+		REQUIRE(values.length == 4);
+		REQUIRE(values.null_count == 2);
+		auto value_data = static_cast<const duckdb_uhugeint *>(values.buffers[1]);
+		REQUIRE(value_data[2].lower == 1);
+		REQUIRE(value_data[3].lower == 2);
+		arrow_array.release(&arrow_array);
+
+		// the input is not modified, and the same value in a row that is not NULL is still an error
+		REQUIRE(child[0].upper == too_large.upper);
+		duckdb_validity_set_row_valid(duckdb_vector_get_validity(vec), 0);
+		arrow_array.Init();
+		err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_logical_type(&array_type);
+	}
+
+	SECTION("STRUCT") {
+		const char *member_names[1] = {"u"};
+		auto struct_type = duckdb_create_struct_type(&child_type, member_names, 1);
+		auto chunk = duckdb_create_data_chunk(&struct_type, 1);
+		auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+		auto child = static_cast<duckdb_uhugeint *>(duckdb_vector_get_data(duckdb_struct_vector_get_child(vec, 0)));
+		// row 0 is NULL and hides 2^127, row 1 is a struct with u = 7
+		child[0] = too_large;
+		child[1].lower = 7;
+		child[1].upper = 0;
+		duckdb_vector_ensure_validity_writable(vec);
+		duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vec), 0);
+		duckdb_data_chunk_set_size(chunk, 2);
+
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &arrow_array);
+		REQUIRE(err == nullptr);
+		REQUIRE(arrow_array.length == 2);
+		auto &struct_column = *arrow_array.children[0];
+		REQUIRE(struct_column.null_count == 1);
+		auto &values = *struct_column.children[0];
+		REQUIRE(values.null_count == 1);
+		REQUIRE(static_cast<const duckdb_uhugeint *>(values.buffers[1])[1].lower == 7);
+		arrow_array.release(&arrow_array);
+
+		REQUIRE(child[0].upper == too_large.upper);
+		duckdb_validity_set_row_valid(duckdb_vector_get_validity(vec), 0);
+		arrow_array.Init();
+		err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_logical_type(&struct_type);
+	}
+
+	duckdb_destroy_logical_type(&child_type);
+	duckdb_destroy_arrow_options(&arrow_options);
+}

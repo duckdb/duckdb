@@ -21,10 +21,12 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, const Vector &
 	idx_t size = to - from;
 	append_data.AppendValidity(format, from, to);
 	input.Flatten();
+	// the vector was flattened, so the validity of the rows has to be looked up again
+	input.ToUnifiedFormat(format);
 	auto array_size = ArrayType::GetSize(input.GetType());
 	auto &child_vector = ArrayVector::GetChild(input);
 	auto &child_data = *append_data.child_data[0];
-	child_data.AppendChild(child_vector, from * array_size, to * array_size, size * array_size);
+	child_data.AppendChildOfParent(child_vector, format, from, to, size, array_size);
 	append_data.row_count += size;
 }
 

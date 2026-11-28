@@ -167,11 +167,10 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT MAP(['hello', 'world'||i::VARCHAR],[i + 1, NULL]) as a FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT (1.5 + i)::DECIMAL(4,2) dec4, (1.5 + i)::DECIMAL(9,3) dec9, (1.5 + i)::DECIMAL(18,3) "
 	                   "dec18, (1.5 + i)::DECIMAL(38,3) dec38 FROM range(10) tbl(i)");
-	// wide decimals are exported as decimal256, which needs Arrow format version 1.1
+	// wide decimals are exported as decimal256 by the default Arrow format version (1.1)
 	{
 		DuckDB db;
 		Connection con(db);
-		REQUIRE(!con.Query("SET arrow_output_version = '1.1'")->HasError());
 		string wide_query = "SELECT (1.5 + i)::DECIMAL(39,3) dec39, (-1.5 - i)::DECIMAL(50,10) dec50, "
 		                    "(repeat('9', 69) || '.' || repeat('9', 6))::DECIMAL(75,6) - i dec76, "
 		                    "(CASE WHEN i % 2 = 0 THEN NULL ELSE (i * 1e30)::VARCHAR::DECIMAL(60,2) END) dec_null "
@@ -186,6 +185,134 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	return;
 #endif
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
+}
+
+static string ArrowSchemaFormat(Connection &con, const LogicalType &type) {
+	auto client_properties = con.context->GetClientProperties();
+	ArrowSchema schema;
+	schema.Init();
+	vector<LogicalType> types = {type};
+	vector<string> names = {"col"};
+	ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+	REQUIRE(schema.n_children == 1);
+	string format = schema.children[0]->format;
+	schema.release(&schema);
+	return format;
+}
+
+TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
+	// values of 10^38 and above exceed the 38 digits a HUGEINT declares, so they only round trip with lossless
+	// conversion
+	const string hugeint_query =
+	    "SELECT v::HUGEINT AS v FROM (VALUES ('170141183460469231731687303715884105727'), "
+	    "('-170141183460469231731687303715884105728'), ('100000000000000000000000000000000000000'), "
+	    "('-100000000000000000000000000000000000000'), ('-1'), ('0'), ('42'), (NULL)) t(v)";
+	const string uhugeint_query =
+	    "SELECT v::UHUGEINT AS v FROM (VALUES ('340282366920938463463374607431768211455'), "
+	    "('170141183460469231731687303715884105728'), ('170141183460469231731687303715884105727'), "
+	    "('100000000000000000000000000000000000000'), ('0'), ('42'), (NULL)) t(v)";
+	// values of up to 38 digits, which is what the decimal128 of format version 1.0 declares
+	const string small_hugeint_query =
+	    "SELECT v::HUGEINT AS v FROM (VALUES ('-99999999999999999999999999999999999999'), "
+	    "('99999999999999999999999999999999999999'), ('-1'), ('0'), ('42'), (NULL)) t(v)";
+	const string small_uhugeint_query =
+	    "SELECT v::UHUGEINT AS v FROM (VALUES ('99999999999999999999999999999999999999'), ('0'), ('42'), (NULL)) t(v)";
+
+	SECTION("By default HUGEINT stays a decimal128 and UHUGEINT is a decimal256 with 39 digits") {
+		DuckDB db;
+		Connection con(db);
+		// HUGEINT (e.g. the result of a sum over integers) keeps the type every decimal128 consumer reads
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "d:38,0");
+		// a decimal128 cannot hold a UHUGEINT of 2^127 or more, so the full range needs a decimal256
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "d:39,0,256");
+		// which is read back as an exact DECIMAL(39,0)
+		string format = "d:39,0,256";
+		REQUIRE(ArrowType::GetTypeFromFormat(format)->GetDuckType() == LogicalType::DECIMAL(39, 0));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_hugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, uhugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT sum(i) AS s FROM range(-10, 5) tbl(i)"));
+		// nested, and more than one vector
+		REQUIRE(ArrowTestHelper::RunArrowComparison(
+		    con, "SELECT [i::HUGEINT - 5000, NULL, -99999999999999999999999999999999999999] AS l, "
+		         "{'u': 340282366920938463463374607431768211455 - i::UHUGEINT} AS s FROM range(10000) tbl(i)"));
+	}
+
+	SECTION("Format version 1.0 only has decimal128") {
+		DuckDB db;
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET arrow_output_version = '1.0'"));
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "d:38,0");
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "d:38,0");
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_hugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_uhugeint_query));
+		// the largest UHUGEINT a decimal128 holds is 2^127 - 1, which is exported
+		auto result = con.context->Query("SELECT 170141183460469231731687303715884105727::UHUGEINT AS v",
+		                                 make_shared_ptr<ArrowFormat>(10000));
+		REQUIRE(!result->HasError());
+		// 2^127 would be read as a negative decimal128, so it is an error instead
+		result = con.context->Query("SELECT 170141183460469231731687303715884105728::UHUGEINT AS v",
+		                            make_shared_ptr<ArrowFormat>(10000));
+		REQUIRE(result->HasError());
+		REQUIRE(StringUtil::Contains(result->GetError(), "SET arrow_output_version to 1.1 or later"));
+		result = con.context->Query(uhugeint_query, make_shared_ptr<ArrowFormat>(10000));
+		REQUIRE(result->HasError());
+		// nested types whose NULL rows stand where the 2^127 would be
+		REQUIRE(ArrowTestHelper::RunArrowComparison(
+		    con, "SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE {'u': i::UHUGEINT} END AS s, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE [i::UHUGEINT] END AS l, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE MAP {i: i::UHUGEINT} END AS m, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE [i::UHUGEINT, 7]::UHUGEINT[2] END AS a "
+		         "FROM (SELECT CASE WHEN r % 2 = 0 THEN 170141183460469231731687303715884105728::UHUGEINT ELSE "
+		         "r::UHUGEINT END AS i "
+		         "FROM range(3000) t(r))"));
+		// a sliced vector only exports the rows of its selection, the 2^127 in the row that is not selected is not
+		// looked at
+		DataChunk chunk;
+		chunk.Initialize(*con.context, {LogicalType::UHUGEINT});
+		chunk.SetChildCardinality(2);
+		auto data = FlatVector::GetDataMutable<uhugeint_t>(chunk.data[0]);
+		data[0] = uhugeint_t(uint64_t(1) << 63, 0);
+		data[1] = uhugeint_t(0, 42);
+		SelectionVector sel(1);
+		sel.set_index(0, 1);
+		chunk.Slice(sel, 1);
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		ArrowConverter::ToArrowArray(chunk, &arrow_array, con.context->GetClientProperties(), {});
+		REQUIRE(arrow_array.length == 1);
+		REQUIRE(static_cast<const uhugeint_t *>(arrow_array.children[0]->buffers[1])[0] == uhugeint_t(0, 42));
+		arrow_array.release(&arrow_array);
+	}
+
+	SECTION("Lossless conversion keeps the extension types") {
+		DuckDB db;
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET arrow_lossless_conversion = true"));
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "w:16");
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "w:16");
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, hugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, uhugeint_query));
+	}
+}
+
+TEST_CASE("Test Arrow wide DECIMAL export by format version", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+	// the default format version exports decimals of up to 76 digits as decimal256
+	REQUIRE(ArrowSchemaFormat(con, LogicalType::DECIMAL(39, 3)) == "d:39,3,256");
+	REQUIRE(ArrowSchemaFormat(con, LogicalType::DECIMAL(76, 10)) == "d:76,10,256");
+	REQUIRE(ArrowSchemaFormat(con, LogicalType::DECIMAL(38, 3)) == "d:38,3,128");
+	REQUIRE(ArrowTestHelper::RunArrowComparison(
+	    con, "SELECT (1.5 + i)::DECIMAL(38,3) + (1.5 + i)::DECIMAL(38,3) AS d FROM range(10) tbl(i)"));
+	// Arrow has no decimal wider than 76 digits
+	auto result = con.context->Query("SELECT 1::DECIMAL(77,0) AS d", make_shared_ptr<ArrowFormat>(10000));
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Arrow decimals support at most 76 digits"));
+	// format version 1.0 has no decimal256
+	REQUIRE_NO_FAIL(con.Query("SET arrow_output_version = '1.0'"));
+	result = con.context->Query("SELECT 1::DECIMAL(39,0) AS d", make_shared_ptr<ArrowFormat>(10000));
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "SET arrow_output_version to 1.1 or later"));
 }
 
 TEST_CASE("Test arrow NULL value roundtrip", "[arrow]") {
@@ -362,7 +489,7 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)", false,
 	                   true);
 
-	// UHUGEINT (lossy - should export as Decimal(38,0), not extension type)
+	// UHUGEINT (lossy - should export as Decimal256(39,0), not extension type)
 	{
 		DuckDB db;
 		Connection con(db);
@@ -373,7 +500,7 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 		vector<string> names = {"col"};
 		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
 		REQUIRE(schema.n_children == 1);
-		REQUIRE(string(schema.children[0]->format) == "d:38,0");
+		REQUIRE(string(schema.children[0]->format) == "d:39,0,256");
 		schema.release(&schema);
 	}
 

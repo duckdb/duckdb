@@ -31,7 +31,7 @@ struct ClientProperties {
 	bool arrow_use_list_view = false;
 	bool produce_arrow_string_view = false;
 	bool arrow_lossless_conversion = false;
-	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_0;
+	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_1;
 	optional_ptr<ClientContext> client_context;
 };
 } // namespace duckdb

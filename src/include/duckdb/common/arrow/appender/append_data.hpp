@@ -100,6 +100,11 @@ public:
 	//! conversion the top-level appender applies, keeping the data layout in sync with
 	//! the schema declared by SetArrowFormat.
 	void AppendChild(const Vector &input, idx_t from, idx_t to, idx_t input_size);
+	//! Appends the child of a STRUCT or ARRAY parent for the parent rows [from, to), where every parent row has
+	//! child_count child values. A NULL parent row does not invalidate its child values, so they can hold anything.
+	//! When appending the child can reject values, the child values of NULL parent rows are appended as NULL instead
+	void AppendChildOfParent(const Vector &child, const UnifiedVectorFormat &parent_format, idx_t from, idx_t to,
+	                         idx_t input_size, idx_t child_count = 1);
 
 	//! The bytes appended so far: this column's buffers plus those of its children
 	idx_t ByteSize() const {

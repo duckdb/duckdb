@@ -505,11 +505,13 @@ struct ArrowOutputVersionSetting {
 	using RETURN_TYPE = ArrowFormatVersion;
 	static constexpr const char *Name = "arrow_output_version";
 	static constexpr const char *Description =
-	    "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8.";
+	    "The Arrow format version (1.0 to 1.5) that the export to the Arrow format targets. It determines which Arrow "
+	    "types can be produced: 1.1 adds decimal256 (DECIMAL wider than 38 digits and UHUGEINT), 1.4 adds the view "
+	    "types (BLOB as BinaryView, and Utf8View / ListView when enabled), 1.5 adds 32-bit and 64-bit decimals.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "1.0";
+	static constexpr const char *DefaultValue = "1.1";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

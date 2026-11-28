@@ -1,5 +1,9 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+
 namespace duckdb {
 
 void ArrowAppendData::AppendValidity(UnifiedVectorFormat &format, idx_t from, idx_t to) {
@@ -38,6 +42,42 @@ void ArrowAppendData::AppendChild(const Vector &input, idx_t from, idx_t to, idx
 	} else {
 		append_vector(*this, input, from, to, input_size);
 	}
+}
+
+//! Whether appending a value of this type can throw, which must not happen for a value nobody can see. This is the case
+//! for a UHUGEINT exported as the decimal128 of format version 1.0, which cannot hold values of 2^127 and above
+static bool AppendRejectsValues(const LogicalType &type, const ClientProperties &options) {
+	if (options.arrow_lossless_conversion || options.arrow_output_version >= ArrowFormatVersion::V1_1) {
+		return false;
+	}
+	return TypeVisitor::Contains(type, LogicalTypeId::UHUGEINT);
+}
+
+void ArrowAppendData::AppendChildOfParent(const Vector &child, const UnifiedVectorFormat &parent_format, idx_t from,
+                                          idx_t to, idx_t input_size, idx_t child_count) {
+	bool has_null_parent = false;
+	if (!parent_format.validity.CannotHaveNull() && AppendRejectsValues(child.GetType(), options)) {
+		for (idx_t i = from; i < to && !has_null_parent; i++) {
+			has_null_parent = !parent_format.validity.RowIsValid(parent_format.sel->get_index(i));
+		}
+	}
+	if (!has_null_parent) {
+		AppendChild(child, from * child_count, to * child_count, input_size * child_count);
+		return;
+	}
+	// copy the child values of these rows, so the input stays as it is, and hide the ones under a NULL parent
+	const auto size = (to - from) * child_count;
+	Vector hidden(child.GetType(), MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
+	VectorOperations::Copy(child, hidden, to * child_count, from * child_count, 0);
+	for (idx_t i = from; i < to; i++) {
+		if (parent_format.validity.RowIsValid(parent_format.sel->get_index(i))) {
+			continue;
+		}
+		for (idx_t k = 0; k < child_count; k++) {
+			FlatVector::SetNull(hidden, (i - from) * child_count + k, true);
+		}
+	}
+	AppendChild(hidden, 0, size, size);
 }
 
 } // namespace duckdb
