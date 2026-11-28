@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -155,11 +154,11 @@ TEST_CASE("Bound lambda function copies share bind data until mutation", "[optim
 	REQUIRE(original.GetChildren()[1].get() != copy.GetChildren()[1].get());
 
 	const bool shared_until_write = original.BindInfo().shares_with(copy.BindInfo());
-	const auto &original_data = original.BindInfo()->Cast<ListLambdaBindData>();
-	const bool original_has_index = original_data.has_index;
-	copy.BindInfoMutable().write().Cast<ListLambdaBindData>().has_index = !original_has_index;
+	const auto &original_data = original.BindInfo().read();
+	const auto &copy_data = copy.BindInfoMutable().write();
 	CHECK_FALSE(original.BindInfo().shares_with(copy.BindInfo()));
-	CHECK(original_data.has_index == original_has_index);
+	CHECK(RefersToSameObject(original_data, original.BindInfo().read()));
+	CHECK(copy_data.Equals(original_data));
 	CHECK(shared_until_write);
 	con.Rollback();
 }
