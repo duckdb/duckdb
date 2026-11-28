@@ -9,8 +9,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::MARK);
 	right_bindings.insert(join.mark_index);
-	FilterPushdown left_pushdown(optimizer, projection_mode);
-	FilterPushdown right_pushdown(optimizer, projection_mode);
+	FilterPushdown left_pushdown(optimizer, projection_mode, inside_secure_view);
+	FilterPushdown right_pushdown(optimizer, projection_mode, inside_secure_view);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		if (JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings) == JoinSide::LEFT) {
 			left_pushdown.filters.push_back(std::move(filters[i]));

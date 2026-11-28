@@ -59,34 +59,28 @@ void FilterPushdown::PushdownBarrierFilters(LogicalGet &get, vector<unique_ptr<F
 	if (!table || !table->IsDuckTable()) {
 		return;
 	}
-	for (idx_t i = 0; i < barrier_filters.size(); i++) {
-		auto &expr = *barrier_filters[i]->filter;
-		if (expr.IsVolatile()) {
-			continue;
-		}
-		// restrict this to single-column expressions - a multi-column expression is only pushed down partially, and
-		// is then also used for zone map pruning
-		vector<ColumnBinding> bindings;
-		ExtractFilterBindings(expr, bindings);
-		if (bindings.empty()) {
-			continue;
-		}
-		bool single_column = true;
-		for (idx_t binding_idx = 1; binding_idx < bindings.size(); binding_idx++) {
-			if (bindings[binding_idx] != bindings[0]) {
-				single_column = false;
-				break;
-			}
-		}
-		if (!single_column) {
-			continue;
-		}
-		if (combiner.TryPushdownGenericExpression(get, expr) != FilterPushdownResult::PUSHED_DOWN_FULLY) {
-			continue;
-		}
-		barrier_filters.erase_at(i);
-		i--;
+	// the scan orders its filters by cost, so it cannot keep the order of two barrier filters: only the first, from
+	// the deepest secure view, may go in
+	auto &expr = *barrier_filters[0]->filter;
+	if (expr.IsVolatile()) {
+		return;
 	}
+	// restrict this to single-column expressions - a multi-column expression is only pushed down partially, and
+	// is then also used for zone map pruning
+	vector<ColumnBinding> bindings;
+	ExtractFilterBindings(expr, bindings);
+	if (bindings.empty()) {
+		return;
+	}
+	for (idx_t binding_idx = 1; binding_idx < bindings.size(); binding_idx++) {
+		if (bindings[binding_idx] != bindings[0]) {
+			return;
+		}
+	}
+	if (combiner.TryPushdownGenericExpression(get, expr) != FilterPushdownResult::PUSHED_DOWN_FULLY) {
+		return;
+	}
+	barrier_filters.erase_at(0);
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {

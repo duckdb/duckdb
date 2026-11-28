@@ -25,12 +25,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		RewriteChild(*op, 0);
 		return AddLogicalFilter(std::move(op), std::move(remain_expressions));
 	}
-	// filter: gather the filters and remove the filter from the set of operations
+	// filter: gather the filters and remove the filter from the set of operations. its own expressions go before the
+	// filters pushed down from above: those come from at most as deep a secure view, so barred ones keep that order
+	auto pushed_filters = std::move(filters);
+	filters.clear();
 	for (auto &expression : filter.expressions) {
 		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
 			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
+	}
+	filters = std::move(pushed_filters);
+	if (PushFilters() == FilterResult::UNSATISFIABLE) {
+		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 	GenerateFilters();
 	return Rewrite(std::move(filter.children[0]));
