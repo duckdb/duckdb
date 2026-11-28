@@ -10,33 +10,28 @@
 
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/common/types/variant/variant_builder.hpp"
-#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 
 namespace duckdb {
 
-//! The rows collected by a VectorWriter<VectorVariantType>
-struct VariantWriterState {
-	VariantWriterState() : keys_arena(Allocator::DefaultAllocator()), builder(dictionary, keys_arena) {
-	}
+//! The state shared by the VARIANT writers of a vector. It is kept with the string heap of the keys vector, so every
+//! writer of the vector (e.g. one per list for LIST(STRUCT(VARIANT))) reuses its allocations and its dictionary.
+struct VariantWriterState final : public AuxiliaryDataHolder {
+	explicit VariantWriterState(ArenaAllocator &keys_arena);
 
-	//! owns the keys of the dictionary, they are copied into the keys vector when the rows are written
-	ArenaAllocator keys_arena;
+	idx_t GetAllocationSize() const override;
+
+	//! the keys written so far, allocated in the string heap of the keys vector
 	OrderedOwningStringMap<uint32_t> dictionary;
+	//! the key of every dictionary entry, at the index of the entry
+	vector<string_t> dictionary_keys;
+	//! emits one row at a time, its arrays keep their capacity between rows
 	VariantBuilder builder;
-	//! per row: its keys, children and values in the builder, and its encoded value (owned by the data vector)
-	vector<list_entry_t> keys;
-	vector<list_entry_t> children;
-	vector<list_entry_t> values;
-	vector<string_t> blobs;
-	//! the rows written as SQL NULL, relative to the first row of the writer
-	vector<idx_t> null_rows;
-	//! the heap of the data vector, looked up when the first blob that is not inlined is written
-	optional_ptr<StringHeap> blob_heap;
 };
 
 //! Specialization of VectorWriter for VectorVariantType.
-//! The rows are collected in a single VariantBuilder and written to the vector when the writer is destroyed. The
-//! keys, children and values of the rows are appended to the ones already in the vector.
+//! Every row is emitted into a VariantBuilder and then written to the vector. The keys, children and values of the
+//! rows are appended to the ones already in the vector.
 template <>
 struct VectorWriter<VectorVariantType> {
 	DUCKDB_API VectorWriter(Vector &vector, idx_t count, idx_t offset);
@@ -46,23 +41,16 @@ struct VectorWriter<VectorVariantType> {
 	//! Write a SQL NULL
 	void WriteNull() {
 		D_ASSERT(current_idx < count);
-		auto &writer_state = GetState();
-		auto &builder = writer_state.builder;
-		writer_state.null_rows.push_back(current_idx - start_idx);
-		writer_state.keys.emplace_back(builder.key_slots.size(), 0);
-		writer_state.children.emplace_back(builder.child_value_ids.size(), 0);
-		writer_state.values.emplace_back(builder.type_ids.size(), 0);
-		writer_state.blobs.emplace_back(0U);
-		current_idx++;
+		if (!state) {
+			Initialize();
+		}
+		WriteNullRow();
 	}
 
 	//! Write a copy of the value 'node' points at. A NULL or missing node is written as a VARIANT null value.
 	void WriteValue(const VariantNode &node) {
 		if (node.IsNull() || node.IsMissing()) {
-			D_ASSERT(current_idx < count);
-			auto &builder = GetState().builder;
-			builder.BeginRow();
-			builder.EmitNull();
+			BeginRow().EmitNull();
 			FinishRow();
 			return;
 		}
@@ -89,17 +77,8 @@ private:
 		count += n;
 	}
 
-	VariantWriterState &GetState() {
-		if (!state) {
-			InitializeState();
-		}
-		return *state;
-	}
-
 	void WriteNode(const VariantNode &node, VariantLogicalType type_id) {
-		D_ASSERT(current_idx < count);
-		auto &builder = GetState().builder;
-		builder.BeginRow();
+		auto &builder = BeginRow();
 		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
 			EmitContainer(node, builder);
 		} else {
@@ -108,38 +87,105 @@ private:
 		FinishRow();
 	}
 
-	//! Records the row the builder just emitted
+	VariantBuilder &BeginRow() {
+		D_ASSERT(current_idx < count);
+		if (!state) {
+			Initialize();
+		}
+		auto &builder = state->builder;
+		//! a row that threw while it was emitted leaves its entries behind
+		builder.type_ids.clear();
+		builder.byte_offsets.clear();
+		builder.child_key_ids.clear();
+		builder.child_value_ids.clear();
+		builder.key_slots.clear();
+		builder.BeginRow();
+		return builder;
+	}
+
+	//! Writes the row the builder just emitted to the vector
 	void FinishRow() {
-		auto &writer_state = *state;
-		auto &builder = writer_state.builder;
+		auto &builder = state->builder;
 		const auto blob_size = builder.blob.size();
 		if (blob_size > NumericLimits<uint32_t>::Maximum()) {
 			ThrowRowTooLarge();
 		}
-		writer_state.keys.emplace_back(builder.row_keys, builder.key_slots.size() - builder.row_keys);
-		writer_state.children.emplace_back(builder.row_children, builder.child_value_ids.size() - builder.row_children);
-		writer_state.values.emplace_back(builder.row_values, builder.type_ids.size() - builder.row_values);
+		const auto value_count = builder.type_ids.size();
+		const auto child_count = builder.child_value_ids.size();
+		//! only objects have keys, so a row without children has no keys either
+		if (child_count &&
+		    (children_size + child_count > children_capacity || keys_size + builder.key_slots.size() > keys_capacity)) {
+			ReserveChildren(child_count, builder.key_slots.size());
+		}
+		if (values_size + value_count > values_capacity) {
+			ReserveValues(values_size + value_count);
+		}
 		string_t blob(builder.blob.data(), static_cast<uint32_t>(blob_size));
 		if (!blob.IsInlined()) {
-			auto &heap = writer_state.blob_heap ? *writer_state.blob_heap : InitializeBlobHeap();
-			blob = heap.AddBlob(blob);
+			blob = (blob_heap ? *blob_heap : InitializeBlobHeap()).AddBlob(blob);
 		}
-		writer_state.blobs.push_back(blob);
+
+		blob_data[current_idx] = blob;
+		values_data[current_idx] = list_entry_t(values_size, value_count);
+		if (value_count == 1) {
+			type_ids_data[values_size] = builder.type_ids.data()[0];
+			byte_offset_data[values_size] = builder.byte_offsets.data()[0];
+		} else {
+			memcpy(type_ids_data + values_size, builder.type_ids.data(), value_count * sizeof(uint8_t));
+			memcpy(byte_offset_data + values_size, builder.byte_offsets.data(), value_count * sizeof(uint32_t));
+		}
+		values_size += value_count;
+		if (child_count) {
+			WriteChildren();
+		} else {
+			children_data[current_idx] = list_entry_t(children_size, 0);
+			keys_data[current_idx] = list_entry_t(keys_size, 0);
+		}
 		current_idx++;
 	}
 
-	DUCKDB_API void InitializeState();
+	DUCKDB_API void Initialize();
+	//! Reads the row arrays of the vector again, after a parent list moved them
+	DUCKDB_API void RefreshRows();
+	void RefreshValues();
+	void RefreshChildren();
+	DUCKDB_API void ReserveValues(idx_t required);
+	//! Makes room for 'child_count' more children and 'key_count' more keys
+	DUCKDB_API void ReserveChildren(idx_t child_count, idx_t key_count);
+	DUCKDB_API void WriteChildren();
+	DUCKDB_API void WriteNullRow();
 	DUCKDB_API StringHeap &InitializeBlobHeap();
 	DUCKDB_API static void ThrowRowTooLarge();
 	DUCKDB_API static void EmitContainer(const VariantNode &node, VariantBuilder &builder);
-	void Finalize();
 
 private:
 	Vector &variant;
-	unique_ptr<VariantWriterState> state;
-	idx_t start_idx;
+	//! set by the first write, owned by the keys vector
+	optional_ptr<VariantWriterState> state;
 	idx_t count;
 	idx_t current_idx;
+
+	//! rows
+	list_entry_t *keys_data = nullptr;
+	list_entry_t *children_data = nullptr;
+	list_entry_t *values_data = nullptr;
+	string_t *blob_data = nullptr;
+	optional_ptr<StringHeap> blob_heap;
+	//! values
+	uint8_t *type_ids_data = nullptr;
+	uint32_t *byte_offset_data = nullptr;
+	idx_t values_size = 0;
+	idx_t values_capacity = 0;
+	//! children
+	uint32_t *keys_index_data = nullptr;
+	uint32_t *values_index_data = nullptr;
+	optional_ptr<ValidityMask> keys_index_validity;
+	idx_t children_size = 0;
+	idx_t children_capacity = 0;
+	//! keys
+	string_t *keys_entry_data = nullptr;
+	idx_t keys_size = 0;
+	idx_t keys_capacity = 0;
 };
 
 //! Specialization of VectorWriter for VectorListType<VectorVariantType>.
@@ -187,12 +233,13 @@ public:
 public:
 	VectorWriter(Vector &vector, idx_t count, idx_t offset)
 	    : list_data(FlatVector::GetDataMutable<list_entry_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
-	      list_vec(vector), count(offset + count), current_idx(offset), child_offset(VectorWriterGetListSize(vector)),
-	      child_writer(VectorWriterGetListChild(vector), 0, child_offset) {
+	      list_vec(vector), count(offset + count), current_idx(offset), child_offset(ListVector::GetListSize(vector)),
+	      child_capacity(ListVector::GetListCapacity(vector)),
+	      child_writer(ListVector::GetChildMutable(vector), 0, child_offset) {
 	}
 	VectorWriter(VectorWriter &&other) noexcept
 	    : list_data(other.list_data), validity(other.validity), list_vec(other.list_vec), count(other.count),
-	      current_idx(other.current_idx), child_offset(other.child_offset),
+	      current_idx(other.current_idx), child_offset(other.child_offset), child_capacity(other.child_capacity),
 	      child_writer(std::move(other.child_writer)) {
 		other.count = other.current_idx;
 	}
@@ -216,7 +263,7 @@ public:
 		D_ASSERT(current_idx < count);
 		// the elements of the previous list must all have been written
 		D_ASSERT(child_writer.current_idx == child_offset);
-		VectorWriterReserveList(list_vec, child_offset + n);
+		ReserveElements(child_offset + n);
 		VectorWriterSetListSize(list_vec, child_offset + n);
 		list_data[current_idx] = {child_offset, n};
 		current_idx++;
@@ -232,12 +279,22 @@ public:
 private:
 	friend class DynamicListWriter<VectorVariantType>;
 
+	void ReserveElements(idx_t required) {
+		if (required <= child_capacity) {
+			return;
+		}
+		VectorWriterReserveList(list_vec, required);
+		child_capacity = ListVector::GetListCapacity(list_vec);
+		child_writer.RefreshRows();
+	}
+
 	list_entry_t *list_data;
 	ValidityMask &validity;
 	Vector &list_vec;
 	idx_t count;
 	idx_t current_idx;
 	idx_t child_offset;
+	idx_t child_capacity;
 	//! Writes the elements of all lists, its rows start at the list size of the vector when this writer was created
 	VectorWriter<VectorVariantType> child_writer;
 };
@@ -264,7 +321,7 @@ public:
 		// the previous element must have been written
 		D_ASSERT(parent.child_writer.current_idx == parent.child_offset + length);
 		length++;
-		VectorWriterReserveList(parent.list_vec, parent.child_offset + length);
+		parent.ReserveElements(parent.child_offset + length);
 		parent.child_writer.Extend(1);
 		return parent.child_writer;
 	}

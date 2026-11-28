@@ -13,9 +13,41 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 class VariantIterator;
+
+//! The positions of the single-key paths in a list of paths, looked up by key
+class VariantPathKeyIndex {
+public:
+	explicit VariantPathKeyIndex(const vector<optional<string_t>> &keys);
+
+	//! The positions of the paths that look up 'key', as an entry into GetPositions(). Empty if no path does.
+	list_entry_t Find(const string_t &key) const {
+		const auto slot_data = slots.data();
+		for (auto slot_idx = Hash(key) & mask;; slot_idx = (slot_idx + 1) & mask) {
+			auto &slot = slot_data[slot_idx];
+			if (slot.positions.length == 0 || slot.key == key) {
+				return slot.positions;
+			}
+		}
+	}
+	const idx_t *GetPositions() const {
+		return positions.data();
+	}
+
+private:
+	struct Slot {
+		string_t key;
+		//! empty for an unused slot
+		list_entry_t positions;
+	};
+	vector<Slot> slots;
+	idx_t mask;
+	vector<idx_t> positions;
+};
 
 struct VariantPathBindData : public FunctionData {
 public:
@@ -23,14 +55,25 @@ public:
 	explicit VariantPathBindData(const string &input_path);
 	explicit VariantPathBindData(const vector<string> &input_paths);
 	explicit VariantPathBindData(int64_t index);
-	VariantPathBindData(const VariantPathBindData &other) = default;
+	VariantPathBindData(const VariantPathBindData &other);
 
 public:
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other) const override;
 
+	//! The number of single-key paths from which on they are looked up through the key index
+	static constexpr idx_t KEY_INDEX_THRESHOLD = 8;
+
 public:
 	vector<vector<VariantPathComponent>> paths;
+	//! The key of every path that is a single key lookup, and an empty optional for the other paths. Points into
+	//! 'paths'.
+	vector<optional<string_t>> single_keys;
+	//! Only built when there are at least KEY_INDEX_THRESHOLD single-key paths
+	unique_ptr<VariantPathKeyIndex> key_index;
+
+private:
+	void IndexPaths();
 };
 
 struct VariantExtractBindData : public FunctionData {

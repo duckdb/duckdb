@@ -947,6 +947,24 @@ AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const 
 	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAuxiliaryDataTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AuxiliaryDataType::GENERIC), "GENERIC" },
+		{ static_cast<uint32_t>(AuxiliaryDataType::VARIANT_WRITER_STATE), "VARIANT_WRITER_STATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AuxiliaryDataType>(AuxiliaryDataType value) {
+	return StringUtil::EnumToString(GetAuxiliaryDataTypeValues(), 2, "AuxiliaryDataType", static_cast<uint32_t>(value));
+}
+
+template<>
+AuxiliaryDataType EnumUtil::FromString<AuxiliaryDataType>(const char *value) {
+	return static_cast<AuxiliaryDataType>(StringUtil::StringToEnum(GetAuxiliaryDataTypeValues(), 2, "AuxiliaryDataType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetBaseColumnPrunerModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BaseColumnPrunerMode::DEFAULT), "DEFAULT" },

@@ -1,9 +1,33 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
 
+VariantPathKeyIndex::VariantPathKeyIndex(const vector<optional<string_t>> &keys) {
+	string_map_t<vector<idx_t>> positions_by_key;
+	for (idx_t path_idx = 0; path_idx < keys.size(); path_idx++) {
+		const auto &key = keys[path_idx];
+		if (key) {
+			positions_by_key[*key].push_back(path_idx);
+		}
+	}
+	//! at most half of the slots are used, so a lookup ends at an unused slot
+	const auto slot_count = NextPowerOfTwo(positions_by_key.size() * 2);
+	mask = slot_count - 1;
+	slots.resize(slot_count, Slot {string_t(), list_entry_t(0, 0)});
+	for (auto &entry : positions_by_key) {
+		auto slot_idx = Hash(entry.first) & mask;
+		while (slots[slot_idx].positions.length != 0) {
+			slot_idx = (slot_idx + 1) & mask;
+		}
+		slots[slot_idx] = Slot {entry.first, list_entry_t(positions.size(), entry.second.size())};
+		positions.insert(positions.end(), entry.second.begin(), entry.second.end());
+	}
+}
+
 VariantPathBindData::VariantPathBindData() : FunctionData() {
+	IndexPaths();
 }
 VariantPathBindData::VariantPathBindData(const string &input_path) : FunctionData() {
 	if (input_path.empty()) {
@@ -11,6 +35,7 @@ VariantPathBindData::VariantPathBindData(const string &input_path) : FunctionDat
 	} else {
 		paths.push_back({VariantPathComponent(input_path)});
 	}
+	IndexPaths();
 }
 VariantPathBindData::VariantPathBindData(const vector<string> &input_paths) : FunctionData() {
 	for (const auto &path : input_paths) {
@@ -20,9 +45,30 @@ VariantPathBindData::VariantPathBindData(const vector<string> &input_paths) : Fu
 			paths.push_back({VariantPathComponent(path)});
 		}
 	}
+	IndexPaths();
 }
 VariantPathBindData::VariantPathBindData(int64_t index) : FunctionData() {
 	paths.push_back({VariantPathComponent(index)});
+	IndexPaths();
+}
+VariantPathBindData::VariantPathBindData(const VariantPathBindData &other) : FunctionData(other), paths(other.paths) {
+	//! the keys point into the paths, so they are taken from the copied paths
+	IndexPaths();
+}
+
+void VariantPathBindData::IndexPaths() {
+	single_keys.resize(paths.size());
+	idx_t single_key_count = 0;
+	for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
+		const auto &path = paths[path_idx];
+		if (path.size() == 1 && path[0].lookup_mode == VariantChildLookupMode::BY_KEY) {
+			single_keys[path_idx] = string_t(path[0].key.c_str(), NumericCast<uint32_t>(path[0].key.size()));
+			single_key_count++;
+		}
+	}
+	if (single_key_count >= KEY_INDEX_THRESHOLD) {
+		key_index = make_uniq<VariantPathKeyIndex>(single_keys);
+	}
 }
 
 unique_ptr<FunctionData> VariantPathBindData::Copy() const {
