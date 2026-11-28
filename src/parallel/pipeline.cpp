@@ -467,6 +467,7 @@ void Pipeline::InvalidateOperatorStateForReschedule(ClientContext &client, Physi
 
 void Pipeline::ResetSourceForReschedule() {
 	NotifyProgressReset();
+	finished_operator = nullptr;
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}

@@ -83,3 +83,29 @@ query I
 SELECT currval('seq')
 ----
 1
+
+# in-memory tables: storage I/O can block a task and resume it out of order
+statement ok
+ATTACH ':memory:' AS mem
+
+statement ok
+USE mem
+
+# 40 row groups with scattered keys; only the first 3 row groups have a matching key
+statement ok
+CREATE TABLE events AS SELECT i, (i * 2654435761) % 4294967296 AS k FROM range(40 * 122880) t(i);
+
+statement ok
+CREATE TABLE chosen AS SELECT (i * 122880 * 2654435761) % 4294967296 AS k FROM range(3) t(i);
+
+# a reached parallel STREAMING_LIMIT stops the scan in every task, also in tasks without a match
+query II
+EXPLAIN ANALYZE SELECT i FROM events SEMI JOIN chosen USING (k) LIMIT 1;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: [0-9] / 40.*
+
+# the LIMIT that finishes the recursive step must not stop the next iteration
+query I
+WITH RECURSIVE r(n) AS (SELECT i FROM range(1000) t(i) UNION ALL SELECT n + 1000 FROM (SELECT n FROM r WHERE n < 50000 LIMIT 500)) SELECT count(*) FROM r
+----
+26000

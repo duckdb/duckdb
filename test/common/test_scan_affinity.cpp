@@ -498,7 +498,7 @@ TEST_CASE("Read-ahead keeps ordered jobs in batch order", "[api][storage]") {
 }
 
 #ifndef DUCKDB_NO_THREADS
-TEST_CASE("Scan affinity wakes every parked consumer after the final ready job", "[api][storage]") {
+TEST_CASE("Scan affinity wakes every parked consumer without another fetch", "[api][storage]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -542,7 +542,7 @@ TEST_CASE("Scan affinity wakes every parked consumer after the final ready job",
 		}
 	}
 	gate.Release();
-	const bool publication_wakes = parked_all && rescheduled.Wait(2);
+	const bool publication_wakes = parked_all && rescheduled.Wait(tasks.size());
 	const auto before_final_claim = rescheduled.Count();
 	duckdb::unique_ptr<ScanReadAheadJob> cold;
 	const auto last = scan->AcquireReadyJob(*con.context, synchronous, produce, cold, 0);
@@ -559,8 +559,8 @@ TEST_CASE("Scan affinity wakes every parked consumer after the final ready job",
 	REQUIRE(entered);
 	REQUIRE(parked_all);
 	REQUIRE(publication_wakes);
-	// Publication and the last read's exit wake one each. The final claim/EOF must wake the other two.
-	REQUIRE(before_final_claim == 2);
+	// A resumed consumer may stop early, so every waiter must wake before any consumer fetches again.
+	REQUIRE(before_final_claim == tasks.size());
 	REQUIRE(cold_last);
 	REQUIRE(eof == ScanReadAheadAcquire::EXHAUSTED);
 	REQUIRE_FALSE(exhausted);
