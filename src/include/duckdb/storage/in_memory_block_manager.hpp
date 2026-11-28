@@ -53,19 +53,19 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - GetMetaBlock!");
 	}
 
-	void Read(QueryContext context, Block &block) override {
+	void Read(Context &context, Block &block) override {
 		throw InternalException("Cannot perform IO in in-memory database - Read!");
 	}
-	void ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) override {
+	void ReadBlocks(Context &context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) override {
 		throw InternalException("Cannot perform IO in in-memory database - ReadBlocks!");
 	}
 	void Write(FileBuffer &block, block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - Write!");
 	}
-	void Write(QueryContext context, FileBuffer &block, block_id_t block_id) override {
+	void Write(Context &context, FileBuffer &block, block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - Write with client context!");
 	}
-	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
+	void WriteHeader(Context &context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
 	                 transaction_t lowest_active_start) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
 	}

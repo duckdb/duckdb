@@ -98,7 +98,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 LocalTableStorage::~LocalTableStorage() {
 }
 
-void LocalTableStorage::InitializeScan(const QueryContext &scan_context, CollectionScanState &state,
+void LocalTableStorage::InitializeScan(Context &scan_context, CollectionScanState &state,
                                        optional_ptr<TableFilterSet> table_filters) {
 	auto &collection = *row_groups->collection;
 	if (collection.GetTotalRows() == 0) {
@@ -466,7 +466,7 @@ LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
 	return LocalStorage::Get(context, catalog.GetAttached());
 }
 
-void LocalStorage::InitializeScan(const QueryContext &context, DataTable &table, CollectionScanState &state,
+void LocalStorage::InitializeScan(Context &context, DataTable &table, CollectionScanState &state,
                                   optional_ptr<TableFilterSet> table_filters) {
 	auto storage = table_manager.GetStorage(table);
 	if (storage == nullptr) {

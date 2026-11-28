@@ -680,7 +680,8 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	// Extensions that are loaded directly have no install info: those are verified against the core keys
 	unique_ptr<ExtensionInstallInfo> install_info;
 	if (!direct_load) {
-		install_info = ExtensionInstallInfo::TryReadInfoFile(fs, filename + ".info", lowercase_extension_name);
+		install_info =
+		    ExtensionInstallInfo::TryReadInfoFile(db.GetContext(), fs, filename + ".info", lowercase_extension_name);
 	}
 
 	// a load with an explicit FROM (LOAD x FROM core, LOAD x FROM myrepo) asserts that the extension really came from

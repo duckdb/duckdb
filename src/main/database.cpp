@@ -23,7 +23,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/main/connection_manager.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
@@ -358,6 +358,9 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	}
 
 	Configure(*config_ptr, database_path);
+	// the log manager comes first: opening a file (e.g. from an extension callback) logs through it
+	log_manager = make_uniq<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
 	// publish what this binary links, unless the config already carries a set handed to us
 	ExtensionHelper::RegisterLinkedExtensions(config);
 	for (auto &linked : config.linked_extensions) {
@@ -381,9 +384,6 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
 
-	log_manager = make_uniq<LogManager>(*this, LogConfig());
-	log_manager->Initialize();
-
 	metrics_manager = make_uniq<MetricsManager>();
 
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
@@ -404,7 +404,7 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
-	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
+	DBPathAndType::ResolveDatabaseType(GetContext(), fs, config.options.database_path, config.options.database_type);
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
@@ -485,7 +485,7 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : file_system(VirtualFileSystem::Get(db_p)), database_opener(db_p) {
+    : file_system(VirtualFileSystem::Get(db_p)), context(db_p.GetContext()) {
 	if (!file_system.GetDefaultFileSystem().IsLocalFileSystem()) {
 		owned_file_system = make_uniq<LocalFileSystem>();
 	}
@@ -565,9 +565,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
-		config.AddAllowedDatabasePath(database_path);
+		config.AddAllowedDatabasePath(GetContext(), database_path);
 		if (!config.options.temporary_directory.empty()) {
-			config.AddAllowedDirectory(config.options.temporary_directory);
+			config.AddAllowedDirectory(GetContext(), config.options.temporary_directory);
 		}
 	}
 	if (new_config.secret_manager) {

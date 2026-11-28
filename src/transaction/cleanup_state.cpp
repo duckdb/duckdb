@@ -12,13 +12,16 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
 CleanupState::CleanupState(DuckTransaction &transaction, VisibilityBound lowest_visibility_bound,
                            ActiveTransactionState transaction_state)
     : lowest_visibility_bound(lowest_visibility_bound), transaction_state(transaction_state),
-      index_data_remover(transaction, QueryContext(), IndexRemovalType::DELETED_ROWS_IN_USE) {
+      index_data_remover(transaction, transaction.manager.GetDB().GetContext(), IndexRemovalType::DELETED_ROWS_IN_USE) {
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {

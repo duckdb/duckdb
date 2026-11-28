@@ -1,0 +1,2935 @@
+diff --git a/src/hffs.cpp b/src/hffs.cpp
+index e3b3aec..12dc359 100644
+--- a/src/hffs.cpp
++++ b/src/hffs.cpp
+@@ -1,7 +1,9 @@
+ #include "hffs.hpp"
+ 
+ #include "duckdb/common/exception/http_exception.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
++#include "duckdb/main/database.hpp"
+ #include "duckdb/common/path.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/function/scalar/string_common.hpp"
+@@ -230,7 +232,7 @@ void HuggingFaceFileSystem::ParseListResult(const string &input, vector<string>
+ // - hf://datasets/lhoestq/demo1/**/train/*.parquet
+ // - hf://buckets/my-user/my-bucket/train-00000-of-00002.parquet
+ // - hf://buckets/my-user/my-bucket/train-*.parquet
+-vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
++vector<OpenFileInfo> HuggingFaceFileSystem::Glob(Context &context, const string &path) {
+ 	// Ensure the glob pattern is a valid HF url
+ 	auto parsed_glob_url = HFUrlParse(path);
+ 	auto first_wildcard_pos = parsed_glob_url.path.find_first_of("*[\\");
+@@ -250,12 +252,12 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+ 		shared_path = shared_path.substr(0, last_path_slash);
+ 	}
+ 
+-	FileOpenerInfo info;
++	FileLookupInfo info;
+ 	info.file.path = path;
+-	auto request_session = HTTPRequestSession::Create(opener, info);
++	auto request_session = HTTPRequestSession::Create(context, info);
+ 	auto captured = request_session->Capture();
+ 	auto http_params = captured.snapshot->Params();
+-	SetParams(http_params, path, opener);
++	SetParams(http_params, path, context);
+ 	request_session->TryPublish(captured.snapshot, make_shared_ptr<HTTPRequestSnapshot>(http_params));
+ 	ParsedHFUrl curr_hf_path = parsed_glob_url;
+ 	curr_hf_path.path = shared_path;
+@@ -323,35 +325,32 @@ unique_ptr<HTTPResponse> HuggingFaceFileSystem::GetRangeRequest(FileHandle &hand
+ }
+ 
+ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-                                                               optional_ptr<FileOpener> opener) {
++                                                               Context &context) {
+ 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+ 	auto parsed_url = HFUrlParse(file.path);
+ 
+-	FileOpenerInfo info;
++	FileLookupInfo info;
+ 	info.file.path = file.path;
+ 
+-	auto request_session = HTTPRequestSession::Create(opener, info);
++	auto request_session = HTTPRequestSession::Create(context, info);
+ 	auto captured = request_session->Capture();
+ 	auto params = captured.snapshot->Params();
+-	SetParams(params, file.path, opener);
++	SetParams(params, file.path, context);
+ 	request_session->TryPublish(captured.snapshot, make_shared_ptr<HTTPRequestSnapshot>(params));
+ 
+ 	return make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(request_session));
+ }
+ 
+-void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
++void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, Context &context) {
+ 	// the file access settings apply to the hf path, not to the HTTP url it is sent to
+ 	params.access_path = path;
+-	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+-	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+-	if (secret_manager && transaction) {
+-		auto secret_match = secret_manager->LookupSecret(*transaction, path, "huggingface");
+-
+-		if (secret_match.HasMatch()) {
+-			const auto &kv_secret = secret_match.secret_entry->secret->Cast<KeyValueSecret>();
+-			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+-		}
++	auto &secret_manager = context.GetDatabase().GetSecretManager();
++	auto transaction = context.GetSystemCatalogTransaction();
++	auto secret_match = secret_manager.LookupSecret(transaction, path, "huggingface");
++	if (secret_match.HasMatch()) {
++		const auto &kv_secret = secret_match.secret_entry->secret->Cast<KeyValueSecret>();
++		params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+ 	}
+ }
+ 
+diff --git a/src/http/http_request_session.cpp b/src/http/http_request_session.cpp
+index 666eddb..997c43a 100644
+--- a/src/http/http_request_session.cpp
++++ b/src/http/http_request_session.cpp
+@@ -1,6 +1,7 @@
+ #include "http/http_request_session.hpp"
+ 
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "http/http_state.hpp"
+ 
+@@ -47,18 +48,11 @@ HTTPRequestSession::HTTPRequestSession(HTTPTransportManager::Session transport_s
+ 	D_ASSERT(current_snapshot);
+ }
+ 
+-shared_ptr<HTTPRequestSession> HTTPRequestSession::Create(optional_ptr<FileOpener> opener,
+-                                                          optional_ptr<FileOpenerInfo> info) {
+-	auto database = FileOpener::TryGetDatabase(opener);
+-	if (database) {
+-		auto transport_session = DBConfig::GetConfig(*database).GetHTTPTransportManager().CreateSession(opener, info);
+-		auto snapshot = make_shared_ptr<HTTPRequestSnapshot>(transport_session.Parameters().Cast<HTTPFSParams>());
+-		return make_shared_ptr<HTTPRequestSession>(std::move(transport_session), std::move(snapshot));
+-	}
+-	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util.InitializeParameters(opener, info);
+-	auto snapshot = make_shared_ptr<HTTPRequestSnapshot>(params->Cast<HTTPFSParams>());
+-	return make_shared_ptr<HTTPRequestSession>(std::move(snapshot));
++shared_ptr<HTTPRequestSession> HTTPRequestSession::Create(Context &context, optional_ptr<FileLookupInfo> info) {
++	auto transport_session =
++	    DBConfig::GetConfig(context.GetDatabase()).GetHTTPTransportManager().CreateSession(context, info);
++	auto snapshot = make_shared_ptr<HTTPRequestSnapshot>(transport_session.Parameters().Cast<HTTPFSParams>());
++	return make_shared_ptr<HTTPRequestSession>(std::move(transport_session), std::move(snapshot));
+ }
+ 
+ CapturedHTTPRequestSnapshot HTTPRequestSession::Capture() const {
+diff --git a/src/http/http_settings.cpp b/src/http/http_settings.cpp
+index 8afe152..389ffb7 100644
+--- a/src/http/http_settings.cpp
++++ b/src/http/http_settings.cpp
+@@ -3,7 +3,6 @@
+ #include "http/httpfs_client.hpp"
+ #include "duckdb/common/local_file_system.hpp"
+ #include "duckdb/main/client_context.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/logging/logger.hpp"
+ 
+diff --git a/src/http/http_state.cpp b/src/http/http_state.cpp
+index 6e5a880..2659396 100644
+--- a/src/http/http_state.cpp
++++ b/src/http/http_state.cpp
+@@ -198,13 +198,8 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context) {
+ }
+ 
+ shared_ptr<HTTPState> HTTPState::TryGetState(Context &context) {
+-	return context.GetRegisteredState().GetOrCreate<HTTPState>("http_state");
+-}
+-
+-shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener) {
+-	auto context = FileOpener::TryGetContext(opener);
+-	if (context && context->IsClient()) {
+-		return TryGetState(*context);
++	if (context.IsClient()) {
++		return context.GetRegisteredState().GetOrCreate<HTTPState>("http_state");
+ 	}
+ 	return nullptr;
+ }
+diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
+index a7fca9a..18ad5f4 100644
+--- a/src/http/httpfs.cpp
++++ b/src/http/httpfs.cpp
+@@ -6,7 +6,8 @@
+ 
+ #include "duckdb/common/atomic.hpp"
+ #include "duckdb/common/exception/http_exception.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "duckdb/main/http/http_util.hpp"
+ #include "duckdb/common/operator/add.hpp"
+@@ -36,11 +37,8 @@ void RangeRequestNotSupportedException::Throw() {
+ 	throw HTTPException(MESSAGE);
+ }
+ 
+-HTTPUtil &HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
+-	if (opener) {
+-		return opener->GetHTTPUtil();
+-	}
+-	throw InternalException("FileOpener not provided, can't get HTTPUtil");
++HTTPUtil &HTTPFSUtil::GetHTTPUtil(Context &context) {
++	return HTTPUtil::Get(context.GetDatabase());
+ }
+ 
+ void HTTPFSUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
+@@ -64,25 +62,20 @@ bool HTTPFSUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &res
+ 
+ struct HTTPParametersInitializer {
+ private:
+-	HTTPParametersInitializer(HTTPUtil &http_util, optional_ptr<FileOpener> opener_p,
+-	                          optional_ptr<FileOpenerInfo> info_p)
+-	    : opener(opener_p), info(info_p), result(make_uniq<HTTPFSParams>(http_util)) {
++	HTTPParametersInitializer(HTTPUtil &http_util, Context &context_p, optional_ptr<FileLookupInfo> info_p)
++	    : context(context_p), info(info_p), result(make_uniq<HTTPFSParams>(http_util)) {
+ 	}
+ 
+ public:
+-	static unique_ptr<HTTPFSParams> Create(HTTPUtil &http_util, optional_ptr<FileOpener> opener,
+-	                                       optional_ptr<FileOpenerInfo> info) {
+-		HTTPParametersInitializer initializer(http_util, opener, info);
++	static unique_ptr<HTTPFSParams> Create(HTTPUtil &http_util, Context &context, optional_ptr<FileLookupInfo> info) {
++		HTTPParametersInitializer initializer(http_util, context, info);
+ 		return initializer.Initialize();
+ 	}
+ 
+ private:
+ 	unique_ptr<HTTPFSParams> Initialize() {
+-		result->Initialize(opener);
+-		result->state = HTTPState::TryGetState(opener);
+-		if (!opener) {
+-			return std::move(result);
+-		}
++		result->Initialize(context);
++		result->state = HTTPState::TryGetState(context);
+ 		ReadSettings();
+ 		SetUserAgent();
+ 		auto settings_reader = CreateSettingsReader();
+@@ -91,28 +84,24 @@ private:
+ 	}
+ 
+ 	void ReadSettings() {
+-		FileOpener::TryGetCurrentSetting(opener, "http_timeout", result->timeout, info);
+-		FileOpener::TryGetCurrentSetting(opener, "force_download", result->force_download, info);
+-		FileOpener::TryGetCurrentSetting(opener, "force_download_threshold", result->force_download_threshold, info);
+-		FileOpener::TryGetCurrentSetting(opener, "auto_fallback_to_full_download",
+-		                                 result->auto_fallback_to_full_download, info);
+-		FileOpener::TryGetCurrentSetting(opener, "http_retries", result->retries, info);
+-		FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result->retry_wait_ms, info);
+-		FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result->retry_backoff, info);
+-		FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result->keep_alive, info);
+-		FileOpener::TryGetCurrentSetting(opener, "enable_curl_server_cert_verification",
+-		                                 result->enable_curl_server_cert_verification, info);
+-		FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification",
+-		                                 result->enable_server_cert_verification, info);
+-		FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result->ca_cert_file, info);
+-		FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result->hf_max_per_page, info);
+-		FileOpener::TryGetCurrentSetting(opener, "unsafe_disable_etag_checks", result->unsafe_disable_etag_checks,
+-		                                 info);
+-		FileOpener::TryGetCurrentSetting(opener, "s3_version_id_pinning", result->s3_version_id_pinning, info);
+-		auto context = FileOpener::TryGetContext(opener);
++		context.TryGetCurrentSetting("http_timeout", result->timeout);
++		context.TryGetCurrentSetting("force_download", result->force_download);
++		context.TryGetCurrentSetting("force_download_threshold", result->force_download_threshold);
++		context.TryGetCurrentSetting("auto_fallback_to_full_download", result->auto_fallback_to_full_download);
++		context.TryGetCurrentSetting("http_retries", result->retries);
++		context.TryGetCurrentSetting("http_retry_wait_ms", result->retry_wait_ms);
++		context.TryGetCurrentSetting("http_retry_backoff", result->retry_backoff);
++		context.TryGetCurrentSetting("http_keep_alive", result->keep_alive);
++		context.TryGetCurrentSetting("enable_curl_server_cert_verification",
++		                             result->enable_curl_server_cert_verification);
++		context.TryGetCurrentSetting("enable_server_cert_verification", result->enable_server_cert_verification);
++		context.TryGetCurrentSetting("ca_cert_file", result->ca_cert_file);
++		context.TryGetCurrentSetting("hf_max_per_page", result->hf_max_per_page);
++		context.TryGetCurrentSetting("unsafe_disable_etag_checks", result->unsafe_disable_etag_checks);
++		context.TryGetCurrentSetting("s3_version_id_pinning", result->s3_version_id_pinning);
+ 		Value external_cache_enabled;
+-		if (context && context->IsClient() &&
+-		    context->TryGetCurrentUserSetting(EnableExternalFileCacheSetting::SettingIndex, external_cache_enabled) &&
++		if (context.IsClient() &&
++		    context.TryGetCurrentUserSetting(EnableExternalFileCacheSetting::SettingIndex, external_cache_enabled) &&
+ 		    external_cache_enabled.GetValue<bool>()) {
+ 			result->override_response_cache_policy = true;
+ 		}
+@@ -126,9 +115,9 @@ private:
+ 
+ 	SettingLookupResult TryGetSetting(const Identifier &key, Value &value) {
+ 		if (info) {
+-			return FileOpener::TryGetCurrentSetting(opener, key, value, *info);
++			return context.TryGetCurrentSetting(key, value);
+ 		}
+-		return FileOpener::TryGetCurrentSetting(opener, key, value);
++		return context.TryGetCurrentSetting(key, value);
+ 	}
+ 
+ 	void MergeExtraHeaders(const Value &headers) {
+@@ -150,7 +139,7 @@ private:
+ 	}
+ 
+ 	void SetUserAgent() {
+-		auto db = FileOpener::TryGetDatabase(opener);
++		auto db = &context.GetDatabase();
+ 		if (db) {
+ 			result->user_agent = StringUtil::Format("%s %s", db->config.UserAgent(), DuckDB::SourceID());
+ 		}
+@@ -160,7 +149,7 @@ private:
+ 		if (!info) {
+ 			return false;
+ 		}
+-		auto db = FileOpener::TryGetDatabase(opener);
++		auto db = &context.GetDatabase();
+ 		auto aliases = db ? S3UrlScheme::GetAliasPrefixes(db->config) : vector<string>();
+ 		return S3UrlScheme::TryMatch(info->file.path, aliases).has_value();
+ 	}
+@@ -172,14 +161,13 @@ private:
+ 			s3_secret_types.push_back("http");
+ 			idx_t secret_type_count = s3_secret_types.size();
+ 			Value merge_http_secret_into_s3_request;
+-			FileOpener::TryGetCurrentSetting(opener, "merge_http_secret_into_s3_request",
+-			                                 merge_http_secret_into_s3_request);
++			context.TryGetCurrentSetting("merge_http_secret_into_s3_request", merge_http_secret_into_s3_request);
+ 			if (!merge_http_secret_into_s3_request.IsNull() && !merge_http_secret_into_s3_request.GetValue<bool>()) {
+ 				secret_type_count = provider_secret_types.size();
+ 			}
+-			return make_uniq<KeyValueSecretReader>(*opener, info, s3_secret_types.data(), secret_type_count);
++			return make_uniq<KeyValueSecretReader>(context, info, s3_secret_types.data(), secret_type_count);
+ 		}
+-		return make_uniq<KeyValueSecretReader>(*opener, info, "http");
++		return make_uniq<KeyValueSecretReader>(context, info, "http");
+ 	}
+ 
+ 	void ReadSecrets(KeyValueSecretReader &settings_reader) {
+@@ -203,23 +191,22 @@ private:
+ 	}
+ 
+ private:
+-	optional_ptr<FileOpener> opener;
+-	optional_ptr<FileOpenerInfo> info;
++	Context &context;
++	optional_ptr<FileLookupInfo> info;
+ 	unique_ptr<HTTPFSParams> result;
+ };
+ 
+-unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener> opener,
+-                                                        optional_ptr<FileOpenerInfo> info) {
+-	auto result = InitializeRawParameters(*this, opener, info);
++unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(Context &context, optional_ptr<FileLookupInfo> info) {
++	auto result = InitializeRawParameters(*this, context, info);
+ 	result->RefreshTransportReuseDomain();
+ 	// Explicit move: returning the derived type as the base type relies on the implicit move rules of C++20 (P1825),
+ 	// which GCC 12 does not apply in C++17 mode
+ 	return std::move(result);
+ }
+ 
+-unique_ptr<HTTPFSParams> HTTPFSUtil::InitializeRawParameters(HTTPFSUtil &http_util, optional_ptr<FileOpener> opener,
+-                                                             optional_ptr<FileOpenerInfo> info) {
+-	return HTTPParametersInitializer::Create(http_util, opener, info);
++unique_ptr<HTTPFSParams> HTTPFSUtil::InitializeRawParameters(HTTPFSUtil &http_util, Context &context,
++                                                             optional_ptr<FileLookupInfo> info) {
++	return HTTPParametersInitializer::Create(http_util, context, info);
+ }
+ 
+ unique_ptr<HTTPParams> HTTPFSParams::Clone() const {
+@@ -310,18 +297,18 @@ HTTPObjectVersion HTTPFileHandle::ReadObjectVersion(const HTTPHeaders &headers)
+ }
+ 
+ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-                                                        optional_ptr<FileOpener> opener) {
++                                                        Context &context) {
+ 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+-	FileOpenerInfo info(file);
++	FileLookupInfo info(file);
+ 
+-	auto request_session = HTTPRequestSession::Create(opener, info);
++	auto request_session = HTTPRequestSession::Create(context, info);
+ 
+-	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+-	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
++	auto &secret_manager = context.GetDatabase().GetSecretManager();
++	auto transaction = context.GetSystemCatalogTransaction();
+ 	string secret_name;
+-	if (secret_manager && transaction && !(file.extended_info && file.extended_info->TryGetSecretName(secret_name))) {
+-		auto secret_match = secret_manager->LookupSecret(*transaction, file.path, "bearer");
++	if (!(file.extended_info && file.extended_info->TryGetSecretName(secret_name))) {
++		auto secret_match = secret_manager.LookupSecret(transaction, file.path, "bearer");
+ 
+ 		if (secret_match.HasMatch()) {
+ 			const auto &kv_secret = secret_match.secret_entry->secret->Cast<KeyValueSecret>();
+@@ -334,17 +321,17 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+ 	return make_uniq<HTTPFileHandle>(*this, file, flags, std::move(request_session));
+ }
+ 
+-unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+-                                                        optional_ptr<FileOpener> opener) {
++unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(Context &context, const OpenFileInfo &file,
++                                                        FileOpenFlags flags) {
+ 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+-	auto handle = CreateHandle(file, flags, opener);
++	auto handle = CreateHandle(file, flags, context);
+ 
+ 	if (flags.OpenForWriting() && !flags.OpenForAppending() && !flags.OpenForReading()) {
+ 		handle->write_overwrite_mode = true;
+ 	}
+ 
+-	handle->Initialize(file, opener);
++	handle->Initialize(file, context);
+ 	if (handle->file_not_found) {
+ 		return nullptr;
+ 	}
+@@ -570,9 +557,9 @@ FileMetadata HTTPFileSystem::Stats(FileHandle &handle) {
+ 	return metadata;
+ }
+ 
+-bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
++bool HTTPFileSystem::FileExists(Context &context, const string &filename) {
+ 	try {
+-		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
++		auto handle = OpenFile(context, filename, FileFlags::FILE_FLAGS_READ);
+ 		(void)handle; // suppress warning
+ 		return true;
+ 	} catch (...) {
+@@ -584,10 +571,10 @@ bool HTTPFileSystem::CanHandleFile(const string &fpath) {
+ 	return fpath.rfind("https://", 0) == 0 || fpath.rfind("http://", 0) == 0;
+ }
+ 
+-vector<OpenFileInfo> HTTPFileSystem::Glob(const string &path, FileOpener *opener) {
+-	if (path.find('*') != string::npos && opener) {
++vector<OpenFileInfo> HTTPFileSystem::Glob(Context &context, const string &path) {
++	if (path.find('*') != string::npos) {
+ 		Value setting_val;
+-		if (FileOpener::TryGetCurrentSetting(opener, "allow_asterisks_in_http_paths", setting_val) &&
++		if (context.TryGetCurrentSetting("allow_asterisks_in_http_paths", setting_val) &&
+ 		    !setting_val.GetValue<bool>()) {
+ 			throw InvalidInputException("Globs (`*`) for generic HTTP file is are not supported.\nConsider `SET "
+ 			                            "allow_asterisks_in_http_paths = true;` to allow this behaviour");
+@@ -608,7 +595,7 @@ bool HTTPFileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThroughp
+ 	return handle.Cast<HTTPFileHandle>().GetNetworkThroughputEstimate(result);
+ }
+ 
+-bool HTTPFileSystem::IsPipe(const string &, optional_ptr<FileOpener>) {
++bool HTTPFileSystem::IsPipe(Context &context, const string &) {
+ 	return false;
+ }
+ 
+@@ -648,25 +635,19 @@ void HTTPFileSystem::EraseGlobalCacheEntry(const string &path) {
+ }
+ 
+ // Get either the local, global, or no cache depending on settings
+-static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
+-	auto db = FileOpener::TryGetDatabase(opener);
+-	auto context = FileOpener::TryGetContext(opener);
+-	if (!db) {
+-		return nullptr;
+-	}
+-
++static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(Context &context, HTTPFileSystem &httpfs) {
+ 	Value use_shared_cache_val;
+ 	bool use_shared_cache = false;
+-	FileOpener::TryGetCurrentSetting(opener, "enable_http_metadata_cache", use_shared_cache_val);
++	context.TryGetCurrentSetting("enable_http_metadata_cache", use_shared_cache_val);
+ 	if (!use_shared_cache_val.IsNull()) {
+ 		use_shared_cache = use_shared_cache_val.GetValue<bool>();
+ 	}
+ 
+ 	if (use_shared_cache) {
+ 		return httpfs.GetGlobalCache();
+-	} else if (context && context->IsClient()) {
+-		return context->GetRegisteredState().GetOrCreate<HTTPMetadataCache>("http_cache",
+-		                                                                     HTTPMetadataCacheMode::QUERY_LOCAL);
++	} else if (context.IsClient()) {
++		return context.GetRegisteredState().GetOrCreate<HTTPMetadataCache>("http_cache",
++		                                                                   HTTPMetadataCacheMode::QUERY_LOCAL);
+ 	}
+ 	return nullptr;
+ }
+@@ -1113,16 +1094,12 @@ void HTTPFileHandle::LoadFileInfo() {
+ 	}
+ }
+ 
+-void HTTPFileHandle::InitializeLogger(FileOpener &opener) {
+-	auto &context = opener.TryGetContext();
++void HTTPFileHandle::InitializeLogger(Context &context) {
+ 	if (context.IsClient()) {
+ 		logger = context.GetLoggerPtr();
+ 		return;
+ 	}
+-	auto database = opener.TryGetDatabase();
+-	if (database) {
+-		logger = database->GetLogManager().GlobalLoggerReference();
+-	}
++	logger = context.GetDatabase().GetLogManager().GlobalLoggerReference();
+ }
+ 
+ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cache_entry) {
+@@ -1152,26 +1129,21 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+ 	return result;
+ }
+ 
+-void HTTPFileHandle::InitializeRequestState(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+-	auto context = FileOpener::TryGetContext(opener);
+-	auto database = FileOpener::TryGetDatabase(opener);
+-	if (context) {
+-		buffer_allocator = BufferAllocator::Get(*context);
+-	} else {
+-		buffer_allocator = database ? BufferAllocator::Get(*database) : Allocator::DefaultAllocator();
+-	}
++void HTTPFileHandle::InitializeRequestState(const OpenFileInfo &file, Context &context) {
++	auto &database = context.GetDatabase();
++	buffer_allocator = BufferAllocator::Get(context);
+ 	auto captured = request_session->Capture();
+ 	auto snapshot_params = captured.snapshot->Params();
+-	if (database) {
++	{
+ 		optional_ptr<Context> cache_context;
+-		if (context && context->IsClient()) {
+-			cache_context = context;
++		if (context.IsClient()) {
++			cache_context = &context;
+ 		}
+-		const auto validation = ExternalFileCacheUtil::GetCacheValidationMode(file, cache_context, *database);
++		const auto validation = ExternalFileCacheUtil::GetCacheValidationMode(file, cache_context, database);
+ 		snapshot_params.override_response_cache_policy =
+ 		    snapshot_params.override_response_cache_policy || validation == CacheValidationMode::NO_VALIDATION;
+ 	}
+-	snapshot_params.state = HTTPState::TryGetState(opener);
++	snapshot_params.state = HTTPState::TryGetState(context);
+ 	if (!snapshot_params.state) {
+ 		snapshot_params.state = make_shared_ptr<HTTPState>();
+ 	}
+@@ -1179,9 +1151,7 @@ void HTTPFileHandle::InitializeRequestState(const OpenFileInfo &file, optional_p
+ 	auto &http_state = *publication.current.snapshot->Params().state;
+ 	file_state = http_state.GetFileState(path);
+ 
+-	if (opener) {
+-		InitializeLogger(*opener);
+-	}
++	InitializeLogger(context);
+ }
+ 
+ bool HTTPFileHandle::TryInitializeRead(HTTPFileSystem &hfs, optional_ptr<HTTPMetadataCache> cache,
+@@ -1241,10 +1211,10 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+ 	}
+ }
+ 
+-void HTTPFileHandle::Initialize(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
++void HTTPFileHandle::Initialize(const OpenFileInfo &file, Context &context) {
+ 	auto &hfs = file_system.Cast<HTTPFileSystem>();
+-	InitializeRequestState(file, opener);
+-	auto current_cache = TryGetMetadataCache(opener, hfs);
++	InitializeRequestState(file, context);
++	auto current_cache = TryGetMetadataCache(context, hfs);
+ 	bool should_write_cache = false;
+ 	if (TryInitializeRead(hfs, current_cache, should_write_cache)) {
+ 		return;
+diff --git a/src/include/hffs.hpp b/src/include/hffs.hpp
+index 11b1e91..6b9f0f4 100644
+--- a/src/include/hffs.hpp
++++ b/src/include/hffs.hpp
+@@ -26,7 +26,7 @@ public:
+ 
+ public:
+ 	//! FileSystem overrides
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
++	vector<OpenFileInfo> Glob(Context &context, const string &path) override;
+ 	bool CanHandleFile(const string &fpath) override {
+ 		return fpath.rfind("hf://", 0) == 0;
+ 	}
+@@ -46,8 +46,7 @@ public:
+ 	static void ParseListResult(const string &input, vector<string> &files, vector<string> &directories);
+ 
+ protected:
+-	unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-	                                        optional_ptr<FileOpener> opener) override;
++	unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags, Context &context) override;
+ 
+ 	static string ListHFRequest(const ParsedHFUrl &url, HTTPRequestSession &session, string &next_page_url);
+ 
+@@ -56,7 +55,7 @@ private:
+ 	static string GetHFUrl(const ParsedHFUrl &url);
+ 	static string GetTreeUrl(const ParsedHFUrl &url, idx_t limit);
+ 	static string GetFileUrl(const ParsedHFUrl &url);
+-	static void SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener);
++	static void SetParams(HTTPFSParams &params, const string &path, Context &context);
+ };
+ 
+ class HFFileHandle : public HTTPFileHandle {
+diff --git a/src/include/http/http_request_session.hpp b/src/include/http/http_request_session.hpp
+index a662b85..7edc8d3 100644
+--- a/src/include/http/http_request_session.hpp
++++ b/src/include/http/http_request_session.hpp
+@@ -77,7 +77,7 @@ public:
+ 	                   shared_ptr<const HTTPRequestSnapshot> snapshot_p);
+ 
+ public:
+-	static shared_ptr<HTTPRequestSession> Create(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
++	static shared_ptr<HTTPRequestSession> Create(Context &context, optional_ptr<FileLookupInfo> info);
+ 
+ public:
+ 	CapturedHTTPRequestSnapshot Capture() const DUCKDB_EXCLUDES(lock);
+diff --git a/src/include/http/http_state.hpp b/src/include/http/http_state.hpp
+index 9f71e29..26e563b 100644
+--- a/src/include/http/http_state.hpp
++++ b/src/include/http/http_state.hpp
+@@ -3,7 +3,8 @@
+ #include "http/http_metadata_cache.hpp"
+ 
+ #include "duckdb/common/allocator.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/mutex.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/client_data.hpp"
+@@ -255,7 +256,6 @@ public:
+ 	//! Helper functions to get the HTTP state
+ 	static shared_ptr<HTTPState> TryGetState(ClientContext &context);
+ 	static shared_ptr<HTTPState> TryGetState(Context &context);
+-	static shared_ptr<HTTPState> TryGetState(optional_ptr<FileOpener> opener);
+ 
+ 	//! Called by the ClientContext when the current query ends
+ 	void QueryEnd(ClientContext &context) override {
+diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
+index 57cc9d6..abcc6bf 100644
+--- a/src/include/http/httpfs.hpp
++++ b/src/include/http/httpfs.hpp
+@@ -61,7 +61,7 @@ public:
+ 
+ public:
+ 	//! Two-phase construction allows subclasses to customize setup
+-	virtual void Initialize(const OpenFileInfo &file, optional_ptr<FileOpener> opener);
++	virtual void Initialize(const OpenFileInfo &file, Context &context);
+ 	const HTTPReadConfig &GetReadConfig() const;
+ 	const HTTPObjectVersion &GetObjectVersion() const;
+ 
+@@ -82,7 +82,7 @@ protected:
+ 	virtual HTTPObjectVersion ReadObjectVersion(const HTTPHeaders &headers) const;
+ 	//! Perform a HEAD request to get the file info (if not yet loaded)
+ 	void LoadFileInfo();
+-	void InitializeLogger(FileOpener &opener);
++	void InitializeLogger(Context &context);
+ 
+ 	virtual void InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cache_entry) DUCKDB_EXCLUDES(cache_policy_lock);
+ 	virtual HTTPMetadataCacheEntry GetCacheEntry() const;
+@@ -96,7 +96,7 @@ private:
+ 	                                                timestamp_t &response_time);
+ 	HTTPMetadataCacheEntry ReadFileInfo(const HTTPResponse &response, timestamp_t request_time,
+ 	                                    timestamp_t response_time);
+-	void InitializeRequestState(const OpenFileInfo &file, optional_ptr<FileOpener> opener);
++	void InitializeRequestState(const OpenFileInfo &file, Context &context);
+ 	bool TryInitializeRead(HTTPFileSystem &file_system, optional_ptr<HTTPMetadataCache> cache,
+ 	                       bool &should_write_cache);
+ 	void InitializeFileInfo(HTTPFileSystem &file_system, optional_ptr<HTTPMetadataCache> cache,
+@@ -155,7 +155,7 @@ public:
+ 	                                                    timestamp_t response_time);
+ 
+ 	//! FileSystem overrides.
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
++	vector<OpenFileInfo> Glob(Context &context, const string &path) override;
+ 
+ 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+@@ -167,14 +167,14 @@ public:
+ 	string GetVersionTag(FileHandle &handle) override;
+ 	optional<timestamp_t> GetCacheValidUntil(FileHandle &handle) override;
+ 	FileMetadata Stats(FileHandle &handle) override;
+-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
++	bool FileExists(Context &context, const string &filename) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
+ 	idx_t SeekPosition(FileHandle &handle) override;
+ 	bool CanHandleFile(const string &fpath) override;
+ 	bool CanSeek() override;
+ 	bool OnDiskFile(FileHandle &handle) override;
+ 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;
+-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
++	bool IsPipe(Context &context, const string &filename) override;
+ 	string GetName() const override;
+ 	string PathSeparator(const string &path) override;
+ 
+@@ -201,11 +201,9 @@ protected:
+ 	using HTTPErrorCallback = std::function<HTTPException(const HTTPResponse &)>;
+ 
+ 	//! FileSystem extension points used by HTTP handle setup.
+-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+-	                                        optional_ptr<FileOpener> opener) override;
++	unique_ptr<FileHandle> OpenFileExtended(Context &context, const OpenFileInfo &file, FileOpenFlags flags) override;
+ 	bool SupportsOpenFileExtended() const override;
+-	virtual unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-	                                                optional_ptr<FileOpener> opener);
++	virtual unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags, Context &context);
+ 
+ 	//! Internal read helpers.
+ 	bool TryRangeRequest(FileHandle &handle, const string &url, const HTTPHeaders &header_map,
+diff --git a/src/include/http/httpfs_client.hpp b/src/include/http/httpfs_client.hpp
+index 5de576d..afc04b0 100644
+--- a/src/include/http/httpfs_client.hpp
++++ b/src/include/http/httpfs_client.hpp
+@@ -26,8 +26,8 @@ public:
+ 	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+ };
+ class HTTPLogger;
+-class FileOpener;
+-struct FileOpenerInfo;
++class Context;
++struct FileLookupInfo;
+ class HTTPState;
+ class HTTPFSUtil;
+ class HTTPException;
+@@ -100,18 +100,17 @@ public:
+ 	explicit HTTPFSUtil(optional_ptr<DatabaseInstance> db = nullptr);
+ 
+ public:
+-	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
+-	                                            optional_ptr<FileOpenerInfo> info) override;
++	unique_ptr<HTTPParams> InitializeParameters(Context &context, optional_ptr<FileLookupInfo> info) override;
+ 	//! Read HTTPFS settings without publishing a transport reuse domain.
+-	static unique_ptr<HTTPFSParams> InitializeRawParameters(HTTPFSUtil &http_util, optional_ptr<FileOpener> opener,
+-	                                                        optional_ptr<FileOpenerInfo> info);
++	static unique_ptr<HTTPFSParams> InitializeRawParameters(HTTPFSUtil &http_util, Context &context,
++	                                                        optional_ptr<FileLookupInfo> info);
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+ 	void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) override;
+ 	//! S3's 400 RequestTimeout is retryable; core only knows the generic statuses.
+ 	bool ShouldRetry(const BaseRequest &request, const HTTPResponse &response) override;
+ 	HTTPTransportReusePolicy GetTransportReusePolicy() const override;
+ 
+-	static HTTPUtil &GetHTTPUtil(optional_ptr<FileOpener> opener);
++	static HTTPUtil &GetHTTPUtil(Context &context);
+ 	static const char *GetRequestMethod(RequestType request_type);
+ 	static HTTPException GetHTTPStatusError(const HTTPResponse &response, RequestType request_type,
+ 	                                        const string &operation, const string &display_url,
+diff --git a/src/include/http/httpfs_curl_client.hpp b/src/include/http/httpfs_curl_client.hpp
+index 4ed5d33..9387565 100644
+--- a/src/include/http/httpfs_curl_client.hpp
++++ b/src/include/http/httpfs_curl_client.hpp
+@@ -8,8 +8,8 @@
+ 
+ namespace duckdb {
+ class HTTPLogger;
+-class FileOpener;
+-struct FileOpenerInfo;
++class Context;
++struct FileLookupInfo;
+ class HTTPState;
+ class HTTPFSCurlClient;
+ 
+diff --git a/src/include/s3/s3_auth.hpp b/src/include/s3/s3_auth.hpp
+index e8f5227..cb2c667 100644
+--- a/src/include/s3/s3_auth.hpp
++++ b/src/include/s3/s3_auth.hpp
+@@ -3,7 +3,8 @@
+ #include "s3/s3_endpoint.hpp"
+ #include "s3/s3_provider.hpp"
+ 
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ 
+@@ -113,7 +114,7 @@ struct S3AuthConfig {
+ 
+ class S3KeyValueReader {
+ public:
+-	S3KeyValueReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
++	S3KeyValueReader(Context &context_p, optional_ptr<FileLookupInfo> info, const char **secret_types,
+ 	                 idx_t secret_types_len);
+ 	explicit S3KeyValueReader(const KeyValueSecretReader &reader);
+ 
+@@ -195,15 +196,14 @@ struct S3AuthResolveOptions {
+ 	//! Absent: resolve compatibility mode from the per-path configuration.
+ 	optional<bool> compatibility_mode;
+ 
+-	static S3AuthResolveOptions ForOperation(optional_ptr<FileOpener> opener);
++	static S3AuthResolveOptions ForOperation(Context &context);
+ 	static S3AuthResolveOptions ForRefresh(const S3AuthURLParams &previous_url);
+ 	void ApplyTo(S3AuthConfig &config) const;
+ };
+ 
+ struct S3AuthResolver {
+-	static S3AuthParams Resolve(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
+-	static S3AuthParams Resolve(optional_ptr<FileOpener> opener, FileOpenerInfo &info,
+-	                            const S3AuthResolveOptions &options);
++	static S3AuthParams Resolve(Context &context, FileLookupInfo &info);
++	static S3AuthParams Resolve(Context &context, FileLookupInfo &info, const S3AuthResolveOptions &options);
+ 	static S3AuthParams Resolve(S3KeyValueReader &secret_reader, const string &file_path,
+ 	                            const S3AuthResolveOptions &options = {});
+ 	static S3AuthParams Resolve(S3AuthConfig config, const string &file_path);
+diff --git a/src/include/s3/s3_request.hpp b/src/include/s3/s3_request.hpp
+index 7f35bf4..b136251 100644
+--- a/src/include/s3/s3_request.hpp
++++ b/src/include/s3/s3_request.hpp
+@@ -206,10 +206,10 @@ struct S3RequestExecutor {
+ 	                                 const RequestCallback &request);
+ 
+ 	static bool SetSessionRegion(HTTPRequestSession &session, const string &correct_region, string &previous_region);
+-	static bool CredentialRefreshEnabled(optional_ptr<FileOpener> opener);
+-	static S3RefreshableHTTPParams ReadRefreshableHTTPParams(HTTPFSUtil &http_util, optional_ptr<FileOpener> opener,
++	static bool CredentialRefreshEnabled(Context &context);
++	static S3RefreshableHTTPParams ReadRefreshableHTTPParams(HTTPFSUtil &http_util, Context &context,
+ 	                                                         const OpenFileInfo &file);
+-	static shared_ptr<HTTPRequestSession> CreateSession(optional_ptr<FileOpener> opener, const OpenFileInfo &file,
++	static shared_ptr<HTTPRequestSession> CreateSession(Context &context, const OpenFileInfo &file,
+ 	                                                    const S3AuthParams &auth_params);
+ 	static unique_ptr<HTTPResponse> SendSessionRequest(HTTPRequestSession &session, S3RequestData &request_data,
+ 	                                                   BaseRequest &request);
+diff --git a/src/include/s3/s3_settings.hpp b/src/include/s3/s3_settings.hpp
+index 62e2c4e..e0cae81 100644
+--- a/src/include/s3/s3_settings.hpp
++++ b/src/include/s3/s3_settings.hpp
+@@ -8,12 +8,12 @@
+ namespace duckdb {
+ 
+ struct DBConfig;
+-class FileOpener;
++class Context;
+ 
+ struct S3UploadConfig {
+ public:
+ 	static S3UploadConfig Create(uint64_t max_file_size, uint64_t max_parts, const S3MultipartUploadPolicy &policy);
+-	static S3UploadConfig ReadFrom(optional_ptr<FileOpener> opener, const S3MultipartUploadPolicy &policy);
++	static S3UploadConfig ReadFrom(Context &context, const S3MultipartUploadPolicy &policy);
+ 
+ 	idx_t TargetPartSize(idx_t reserved_parts) const;
+ 	idx_t DirectPartSize(idx_t reserved_parts, idx_t remaining) const;
+@@ -38,7 +38,7 @@ struct S3Settings {
+ 
+ 	static void Register(DBConfig &config);
+ 	static void Initialize(DBConfig &config);
+-	static bool URLParametersEnabled(optional_ptr<FileOpener> opener);
++	static bool URLParametersEnabled(Context &context);
+ 	//! Migration advice for errors where the disabled legacy URL behavior is relevant.
+ 	static string LegacyURLBehaviorHint();
+ };
+diff --git a/src/include/s3/s3fs.hpp b/src/include/s3/s3fs.hpp
+index 2b4bdd6..a5504dd 100644
+--- a/src/include/s3/s3fs.hpp
++++ b/src/include/s3/s3fs.hpp
+@@ -1,7 +1,8 @@
+ #pragma once
+ 
+ #include "duckdb/common/chrono.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/mutex.hpp"
+ #include "duckdb/common/serializer/deserializer.hpp"
+ #include "duckdb/main/config.hpp"
+@@ -65,7 +66,7 @@ public:
+ 
+ public:
+ 	void Close() override;
+-	void Initialize(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
++	void Initialize(const OpenFileInfo &file, Context &context) override;
+ 	void FinalizeUpload();
+ 	void AbortUpload();
+ 
+@@ -103,16 +104,16 @@ public:
+ 	string GetVersionTag(FileHandle &handle) override;
+ 	bool CanHandleFile(const string &fpath) override;
+ 	bool OnDiskFile(FileHandle &handle) override;
+-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+-	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr) override;
+-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
++	void RemoveFile(Context &context, const string &filename) override;
++	void RemoveFiles(Context &context, const vector<string> &filenames) override;
++	void RemoveDirectory(Context &context, const string &directory) override;
+ 	void FileSync(FileHandle &handle) override;
+ 	void AbortFileWrite(FileHandle &handle) override;
+ 	FileWriteMode GetWriteMode(FileHandle &) override;
+ 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 
+ 	//! S3 is object storage so directories effectively always exist
+-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
++	bool DirectoryExists(Context &context, const string &directory) override;
+ 
+ 	//! HTTP request overrides.
+ 	unique_ptr<HTTPResponse> HeadRequest(FileHandle &handle, const string &s3_url, HTTPHeaders header_map) override;
+@@ -141,19 +142,18 @@ protected:
+ 	//! FileSystem extension points for S3 reads, open/list/glob.
+ 	void ValidateResponseVersion(HTTPFileHandle &handle, const HTTPReadConfig &read_config,
+ 	                             const HTTPResponse &response) override;
+-	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+-	                       optional_ptr<FileOpener> opener) override;
++	bool ListFilesExtended(Context &context, const string &directory,
++	                       const std::function<void(OpenFileInfo &info)> &callback) override;
+ 	bool SupportsListFilesExtended() const override;
+-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+-	                                            optional_ptr<FileOpener> opener) override;
++	unique_ptr<MultiFileList> GlobFilesExtended(Context &context, const string &path,
++	                                            const FileGlobInput &input) override;
+ 	bool SupportsGlobExtended() const override;
+-	unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-	                                        optional_ptr<FileOpener> opener) override;
++	unique_ptr<HTTPFileHandle> CreateHandle(const OpenFileInfo &file, FileOpenFlags flags, Context &context) override;
+ 
+ private:
+-	void RemoveFiles(const vector<string> &paths, optional_ptr<FileOpener> opener, const S3AuthResolveOptions &options);
++	void RemoveFiles(const vector<string> &paths, Context &context, const S3AuthResolveOptions &options);
+ 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+-	                       optional_ptr<FileOpener> opener, const S3AuthResolveOptions &options);
++	                       Context &context, const S3AuthResolveOptions &options);
+ 	S3RequestResult RunS3BulkDeleteRequest(HTTPRequestSession &session, const string &secret_lookup_url,
+ 	                                       const string &body, idx_t key_count, string &result);
+ 
+diff --git a/src/s3/s3_auth.cpp b/src/s3/s3_auth.cpp
+index bc72f9b..00b0a70 100644
+--- a/src/s3/s3_auth.cpp
++++ b/src/s3/s3_auth.cpp
+@@ -83,9 +83,9 @@ bool S3AuthRequestOptions::operator==(const S3AuthRequestOptions &other) const {
+ 	       requester_pays == other.requester_pays && user_project == other.user_project;
+ }
+ 
+-S3AuthResolveOptions S3AuthResolveOptions::ForOperation(optional_ptr<FileOpener> opener) {
++S3AuthResolveOptions S3AuthResolveOptions::ForOperation(Context &context) {
+ 	S3AuthResolveOptions options;
+-	options.enable_deprecated_url_parameters = S3Settings::URLParametersEnabled(opener);
++	options.enable_deprecated_url_parameters = S3Settings::URLParametersEnabled(context);
+ 	return options;
+ }
+ 
+@@ -103,29 +103,14 @@ void S3AuthResolveOptions::ApplyTo(S3AuthConfig &config) const {
+ 	}
+ }
+ 
+-S3AuthParams S3AuthResolver::Resolve(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
++S3AuthParams S3AuthResolver::Resolve(Context &context, FileLookupInfo &info) {
+ 	// Capture the database policy before looking up per-path configuration.
+-	return Resolve(opener, info, S3AuthResolveOptions::ForOperation(opener));
++	return Resolve(context, info, S3AuthResolveOptions::ForOperation(context));
+ }
+ 
+-S3AuthParams S3AuthResolver::Resolve(optional_ptr<FileOpener> opener, FileOpenerInfo &info,
+-                                     const S3AuthResolveOptions &options) {
+-	// Without a FileOpener we cannot access settings or secrets.
+-	if (!opener) {
+-		string secret_name;
+-		if (info.file.extended_info && info.file.extended_info->TryGetSecretName(secret_name)) {
+-			// rather than signing with whatever credentials the environment has
+-			throw InvalidConfigurationException("The named secret for '%s' cannot be used without a file opener",
+-			                                    info.file.path);
+-		}
+-		S3AuthConfig config;
+-		config.route = S3UrlScheme::MatchRoutedUrl(info.file.path);
+-		options.ApplyTo(config);
+-		return Resolve(std::move(config), info.file.path);
+-	}
+-
++S3AuthParams S3AuthResolver::Resolve(Context &context, FileLookupInfo &info, const S3AuthResolveOptions &options) {
+ 	auto secret_types = S3SecretConfig::SecretTypes();
+-	S3KeyValueReader secret_reader(*opener, info, secret_types.data(), secret_types.size());
++	S3KeyValueReader secret_reader(context, info, secret_types.data(), secret_types.size());
+ 	return Resolve(secret_reader, info.file.path, options);
+ }
+ 
+@@ -322,9 +307,9 @@ bool S3AuthParams::operator==(const S3AuthParams &other) const {
+ 	       request_options == other.request_options;
+ }
+ 
+-S3KeyValueReader::S3KeyValueReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
++S3KeyValueReader::S3KeyValueReader(Context &context_p, optional_ptr<FileLookupInfo> info, const char **secret_types,
+                                    const idx_t secret_types_len)
+-    : S3KeyValueReader(KeyValueSecretReader {opener_p, info, secret_types, secret_types_len}) {
++    : S3KeyValueReader(KeyValueSecretReader {context_p, info, secret_types, secret_types_len}) {
+ }
+ 
+ S3KeyValueReader::S3KeyValueReader(const KeyValueSecretReader &_reader) : reader(_reader) {
+diff --git a/src/s3/s3_delete.cpp b/src/s3/s3_delete.cpp
+index 8c86722..caadbf8 100644
+--- a/src/s3/s3_delete.cpp
++++ b/src/s3/s3_delete.cpp
+@@ -8,6 +8,7 @@
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/common/types/blob.hpp"
+ #include "duckdb/common/unordered_map.hpp"
++#include "duckdb/main/database.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ 
+ #include <functional>
+@@ -87,10 +88,10 @@ static void AddDeleteHTTPHash(hash_t &result, const S3RefreshableHTTPParams &htt
+ 	CombineDeleteHash(result, headers_hash);
+ }
+ 
+-void S3FileSystem::RemoveFile(const string &path, optional_ptr<FileOpener> opener) {
+-	FileOpenerInfo info = {path};
+-	auto auth_params = S3AuthResolver::Resolve(opener, info);
+-	auto session = S3RequestExecutor::CreateSession(opener, info.file, auth_params);
++void S3FileSystem::RemoveFile(Context &context, const string &path) {
++	FileLookupInfo info = {path};
++	auto auth_params = S3AuthResolver::Resolve(context, info);
++	auto session = S3RequestExecutor::CreateSession(context, info.file, auth_params);
+ 	auto request_result = DeleteRequest(*session, S3RequestOperation::DELETE_OBJECT, path, {});
+ 	auto &res = request_result.response;
+ 	if (res->HasRequestError()) {
+@@ -203,16 +204,13 @@ static S3DeleteSecretIdentity GetDeleteSecretIdentity(const string &lookup_type,
+ 	        score};
+ }
+ 
+-static vector<S3DeleteSecretIdentity> GetSelectedSecretIdentities(optional_ptr<FileOpener> opener, const string &path) {
++static vector<S3DeleteSecretIdentity> GetSelectedSecretIdentities(Context &context, const string &path) {
+ 	vector<S3DeleteSecretIdentity> result;
+-	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+-	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+-	if (!secret_manager || !transaction) {
+-		return result;
+-	}
++	auto &secret_manager = context.GetDatabase().GetSecretManager();
++	auto transaction = context.GetSystemCatalogTransaction();
+ 
+ 	for (const auto type : S3SecretConfig::SecretTypes()) {
+-		auto match = secret_manager->LookupSecret(*transaction, path, type);
++		auto match = secret_manager.LookupSecret(transaction, path, type);
+ 		if (!match.HasMatch()) {
+ 			result.push_back({type, {}});
+ 			continue;
+@@ -230,23 +228,20 @@ static string GetDeleteBatchLookupDirectory(const string &path) {
+ 	return path.substr(0, slash_pos + 1);
+ }
+ 
+-static bool HasRefreshableS3Secret(optional_ptr<FileOpener> opener, const string &path) {
+-	if (!opener) {
+-		return false;
+-	}
++static bool HasRefreshableS3Secret(Context &context, const string &path) {
+ 	auto secret_types = S3SecretConfig::SecretTypes();
+-	FileOpenerInfo info = {path};
+-	KeyValueSecretReader secret_reader(*opener, info, secret_types.data(), secret_types.size());
++	FileLookupInfo info = {path};
++	KeyValueSecretReader secret_reader(context, info, secret_types.data(), secret_types.size());
+ 	Value refresh_info;
+ 	return secret_reader.TryGetSecretKey("refresh_info", refresh_info);
+ }
+ 
+ static S3DeleteBatchIdentity CreateDeleteBatchIdentity(S3DeleteBatchUrlInfo url_info,
+-                                                       S3RefreshableHTTPParams http_params,
+-                                                       optional_ptr<FileOpener> opener, const string &path) {
+-	auto selected_secrets = GetSelectedSecretIdentities(opener, path);
+-	auto credential_refresh_enabled = S3RequestExecutor::CredentialRefreshEnabled(opener);
+-	auto has_refreshable_secret = HasRefreshableS3Secret(opener, path);
++                                                       S3RefreshableHTTPParams http_params, Context &context,
++                                                       const string &path) {
++	auto selected_secrets = GetSelectedSecretIdentities(context, path);
++	auto credential_refresh_enabled = S3RequestExecutor::CredentialRefreshEnabled(context);
++	auto has_refreshable_secret = HasRefreshableS3Secret(context, path);
+ 	string refresh_lookup_directory;
+ 	optional<S3AuthRefreshIdentity> refresh_identity;
+ 	if (credential_refresh_enabled && has_refreshable_secret) {
+@@ -299,12 +294,11 @@ S3RequestResult S3FileSystem::RunS3BulkDeleteRequest(HTTPRequestSession &session
+ 	    });
+ }
+ 
+-void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpener> opener) {
+-	RemoveFiles(paths, opener, S3AuthResolveOptions::ForOperation(opener));
++void S3FileSystem::RemoveFiles(Context &context, const vector<string> &paths) {
++	RemoveFiles(paths, context, S3AuthResolveOptions::ForOperation(context));
+ }
+ 
+-void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpener> opener,
+-                               const S3AuthResolveOptions &options) {
++void S3FileSystem::RemoveFiles(const vector<string> &paths, Context &context, const S3AuthResolveOptions &options) {
+ 	if (paths.empty()) {
+ 		return;
+ 	}
+@@ -312,8 +306,8 @@ void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpe
+ 	unordered_map<S3DeleteBatchIdentity, vector<S3DeleteBatchEntry>, S3DeleteBatchIdentityHash> delete_batches;
+ 
+ 	for (auto &path : paths) {
+-		FileOpenerInfo info = {path};
+-		auto auth_params = S3AuthResolver::Resolve(opener, info, options);
++		FileLookupInfo info = {path};
++		auto auth_params = S3AuthResolver::Resolve(context, info, options);
+ 		auto parsed_url = S3Url::Parse(path, auth_params);
+ 		if (parsed_url.GetObjectVersion().IsSet()) {
+ 			throw NotImplementedException("%s is only supported for reading",
+@@ -322,9 +316,9 @@ void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpe
+ 
+ 		S3DeleteBatchUrlInfo url_info = {parsed_url.GetPrefix(), parsed_url.GetBucketHTTPUrl(), auth_params};
+ 		auto refreshable_http_params = S3RequestExecutor::ReadRefreshableHTTPParams(
+-		    HTTPFSUtil::GetHTTPUtil(opener).Cast<HTTPFSUtil>(), opener, info.file);
++		    HTTPFSUtil::GetHTTPUtil(context).Cast<HTTPFSUtil>(), context, info.file);
+ 		auto identity =
+-		    CreateDeleteBatchIdentity(std::move(url_info), std::move(refreshable_http_params), opener, path);
++		    CreateDeleteBatchIdentity(std::move(url_info), std::move(refreshable_http_params), context, path);
+ 		auto entry = delete_batches.find(identity);
+ 		if (entry == delete_batches.end()) {
+ 			entry = delete_batches.emplace(std::move(identity), vector<S3DeleteBatchEntry>()).first;
+@@ -337,7 +331,7 @@ void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpe
+ 		auto &entries = batch.second;
+ 		auto maximum_key_count = url_info.auth_params.GetProvider().GetBulkDeleteMaxBatchSize();
+ 		auto delete_session =
+-		    S3RequestExecutor::CreateSession(opener, entries.front().secret_lookup_path, url_info.auth_params);
++		    S3RequestExecutor::CreateSession(context, entries.front().secret_lookup_path, url_info.auth_params);
+ 		vector<string> keys;
+ 		keys.reserve(entries.size());
+ 		for (auto &entry : entries) {
+@@ -381,13 +375,13 @@ void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpe
+ 	}
+ }
+ 
+-void S3FileSystem::RemoveDirectory(const string &path, optional_ptr<FileOpener> opener) {
+-	const auto options = S3AuthResolveOptions::ForOperation(opener);
++void S3FileSystem::RemoveDirectory(Context &context, const string &path) {
++	const auto options = S3AuthResolveOptions::ForOperation(context);
+ 	vector<string> files_to_remove;
+ 	ListFilesExtended(
+-	    path, [&](OpenFileInfo &file) { files_to_remove.push_back(JoinPath(path, file.path)); }, opener, options);
++	    path, [&](OpenFileInfo &file) { files_to_remove.push_back(JoinPath(path, file.path)); }, context, options);
+ 
+-	RemoveFiles(files_to_remove, opener, options);
++	RemoveFiles(files_to_remove, context, options);
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/s3/s3_list.cpp b/src/s3/s3_list.cpp
+index 317a8b3..5a9191e 100644
+--- a/src/s3/s3_list.cpp
++++ b/src/s3/s3_list.cpp
+@@ -61,8 +61,7 @@ enum GlobType { HIERARCHICAL, LISTING, UNKNOWN };
+ 
+ struct S3GlobResult : public LazyMultiFileList {
+ public:
+-	S3GlobResult(S3FileSystem &fs_p, const string &path, optional_ptr<FileOpener> opener,
+-	             const S3AuthResolveOptions &options);
++	S3GlobResult(S3FileSystem &fs_p, const string &path, Context &context, const S3AuthResolveOptions &options);
+ 
+ protected:
+ 	bool ExpandNextPath() const override;
+@@ -100,11 +99,11 @@ private:
+ 	void AppendMatchingFiles(idx_t count) const;
+ 
+ private:
+-	//! The client of the opener (if any): used to schedule the listing tasks and to log
+-	optional_ptr<ClientContext> context;
++	//! The client of the context (if any): used to schedule the listing tasks
++	optional_ptr<ClientContext> client_context;
+ 	S3FileSystem &fs;
+ 	string glob_pattern;
+-	optional_ptr<FileOpener> opener;
++	Context &context;
+ 	mutable bool finished = false;
+ 	shared_ptr<HTTPRequestSession> request_session;
+ 	string shared_path;
+@@ -139,22 +138,18 @@ private:
+ 	PrefixResult &result;
+ };
+ 
+-S3GlobResult::S3GlobResult(S3FileSystem &fs_p, const string &glob_pattern_p, optional_ptr<FileOpener> opener,
++S3GlobResult::S3GlobResult(S3FileSystem &fs_p, const string &glob_pattern_p, Context &context,
+                            const S3AuthResolveOptions &options)
+-    : LazyMultiFileList(FileOpener::TryGetContext(opener)),
+-      context(Context::TryGetClientContext(FileOpener::TryGetContext(opener))), fs(fs_p),
+-      glob_pattern(glob_pattern_p), opener(opener) {
+-	if (!opener) {
+-		throw InternalException("Cannot S3 Glob without FileOpener");
+-	}
++    : LazyMultiFileList(&context), client_context(context.TryGetClientContext()), fs(fs_p),
++      glob_pattern(glob_pattern_p), context(context) {
+ 	Value list_concurrency;
+-	if (FileOpener::TryGetCurrentSetting(opener, "s3_list_concurrency", list_concurrency)) {
++	if (context.TryGetCurrentSetting("s3_list_concurrency", list_concurrency)) {
+ 		max_list_concurrency = MaxValue<idx_t>(list_concurrency.GetValue<idx_t>(), 1);
+ 	}
+-	FileOpenerInfo info(glob_pattern);
++	FileLookupInfo info(glob_pattern);
+ 
+ 	// Trim any query parameters from the string
+-	auto s3_auth_params = S3AuthResolver::Resolve(opener, info, options);
++	auto s3_auth_params = S3AuthResolver::Resolve(context, info, options);
+ 
+ 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
+ 	if (s3_auth_params.GetURLParams().compatibility_mode) {
+@@ -180,7 +175,7 @@ S3GlobResult::S3GlobResult(S3FileSystem &fs_p, const string &glob_pattern_p, opt
+ 
+ 	shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
+ 
+-	request_session = S3RequestExecutor::CreateSession(opener, info.file, s3_auth_params);
++	request_session = S3RequestExecutor::CreateSession(context, info.file, s3_auth_params);
+ }
+ 
+ bool S3GlobResult::ExpandNextPath() const {
+@@ -209,7 +204,7 @@ bool S3GlobResult::ExpandNextPath() const {
+ 
+ S3ListObjectsV2Result S3GlobResult::Request(const string &path, const string &continuation_token, S3ListMode mode,
+                                             optional_ptr<const string> prefix) const {
+-	if (context && context->IsInterrupted()) {
++	if (context.IsInterrupted()) {
+ 		throw InterruptException();
+ 	}
+ 	return AWSListObjectV2::Request(fs.GetEncryptionUtil(), *request_session, path, continuation_token, mode, {},
+@@ -247,8 +242,7 @@ vector<S3GlobResult::Entry> S3GlobResult::ConvertPage(const S3ListObjectsV2Resul
+ }
+ 
+ idx_t S3GlobResult::GetConcurrency() const {
+-	auto client_context = context;
+-	const auto threads = client_context ? TaskScheduler::GetScheduler(*client_context).NumberOfAsyncThreads() + 1 : 1;
++	const auto threads = client_context ? context.GetTaskScheduler().NumberOfAsyncThreads() + 1 : 1;
+ 	return MinValue<idx_t>(threads, max_list_concurrency);
+ }
+ 
+@@ -273,8 +267,8 @@ void S3GlobResult::AdaptListWindow(const vector<PrefixResult> &results) const {
+ 	} else {
+ 		list_window = MinValue<idx_t>(list_window + 1, GetConcurrency());
+ 	}
+-	if (list_window < previous_window && context) {
+-		DUCKDB_LOG_WARNING(*context,
++	if (list_window < previous_window) {
++		DUCKDB_LOG_WARNING(context,
+ 		                   "S3 throttled listing requests for glob \"%s\" - reducing concurrent list requests from "
+ 		                   "%llu to %llu",
+ 		                   glob_pattern, static_cast<unsigned long long>(previous_window),
+@@ -301,7 +295,6 @@ void S3GlobResult::PrefetchPrefixes(idx_t limit) const {
+ 	if (count == 1) {
+ 		results[0].response = ListPrefix(entries[pending[0]]);
+ 	} else {
+-		auto client_context = context;
+ 		TaskExecutor executor(*client_context, TaskSchedulerType::ASYNC);
+ 		for (idx_t i = 0; i < count; i++) {
+ 			executor.ScheduleTask(make_uniq<ListPrefixTask>(executor, *this, entries[pending[i]], results[i]));
+@@ -383,7 +376,7 @@ bool S3GlobResult::ShouldInvestigateRecursiveGlob() const {
+ 		return false;
+ 	}
+ 	Value value;
+-	if (!FileOpener::TryGetCurrentSetting(opener, "s3_allow_recursive_globbing", value)) {
++	if (!context.TryGetCurrentSetting("s3_allow_recursive_globbing", value)) {
+ 		return true;
+ 	}
+ 	return value.GetValue<bool>();
+@@ -442,18 +435,18 @@ void S3GlobResult::AppendMatchingFiles(idx_t count) const {
+ 	                      std::make_move_iterator(matched.end()));
+ }
+ 
+-unique_ptr<MultiFileList> S3FileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+-                                                          optional_ptr<FileOpener> opener) {
+-	return make_uniq<S3GlobResult>(*this, path, opener, S3AuthResolveOptions::ForOperation(opener));
++unique_ptr<MultiFileList> S3FileSystem::GlobFilesExtended(Context &context, const string &path,
++                                                          const FileGlobInput &input) {
++	return make_uniq<S3GlobResult>(*this, path, context, S3AuthResolveOptions::ForOperation(context));
+ }
+ 
+-bool S3FileSystem::ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+-                                     optional_ptr<FileOpener> opener) {
+-	return ListFilesExtended(directory, callback, opener, S3AuthResolveOptions::ForOperation(opener));
++bool S3FileSystem::ListFilesExtended(Context &context, const string &directory,
++                                     const std::function<void(OpenFileInfo &info)> &callback) {
++	return ListFilesExtended(directory, callback, context, S3AuthResolveOptions::ForOperation(context));
+ }
+ 
+ bool S3FileSystem::ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+-                                     optional_ptr<FileOpener> opener, const S3AuthResolveOptions &options) {
++                                     Context &context, const S3AuthResolveOptions &options) {
+ 	string trimmed_dir = directory;
+ 	auto sep = PathSeparator(trimmed_dir);
+ 	StringUtil::RTrim(trimmed_dir, sep);
+@@ -464,7 +457,7 @@ bool S3FileSystem::ListFilesExtended(const string &directory, const std::functio
+ 		                  "use a directory without '?' or path normalization%s",
+ 		                  hint);
+ 	}
+-	auto glob_res = make_uniq<S3GlobResult>(*this, glob_path, opener, options);
++	auto glob_res = make_uniq<S3GlobResult>(*this, glob_path, context, options);
+ 
+ 	if (glob_res->GetExpandResult() == FileExpandResult::NO_FILES) {
+ 		return false;
+diff --git a/src/s3/s3_request.cpp b/src/s3/s3_request.cpp
+index 2b6fff6..ac73aef 100644
+--- a/src/s3/s3_request.cpp
++++ b/src/s3/s3_request.cpp
+@@ -16,7 +16,6 @@
+ #include "duckdb/function/scalar/strftime_format.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/logging/logger.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/main/settings.hpp"
+@@ -384,7 +383,7 @@ static void VerifyCopySourceAccess(optional_ptr<DatabaseInstance> database, cons
+ 			continue;
+ 		}
+ 		auto source_path = S3Url::GetCopySourcePath(headers.GetHeaderValue(header_name), auth_params);
+-		if (!database->config.CanAccessFile(source_path, FileType::FILE_TYPE_REGULAR)) {
++		if (!database->config.CanAccessFile(database->GetContext(), source_path, FileType::FILE_TYPE_REGULAR)) {
+ 			throw PermissionException(
+ 			    "Cannot access S3 copy source \"%s\" - file system operations are disabled by configuration",
+ 			    source_path);
+@@ -475,11 +474,10 @@ static bool IsAuthRefreshStatus(const HTTPResponse &response) {
+ 	return response.status == HTTPStatusCode::BadRequest_400 && IsAuthRefreshErrorBody(response.body);
+ }
+ 
+-S3RefreshableHTTPParams S3RequestExecutor::ReadRefreshableHTTPParams(HTTPFSUtil &http_util,
+-                                                                     optional_ptr<FileOpener> opener,
++S3RefreshableHTTPParams S3RequestExecutor::ReadRefreshableHTTPParams(HTTPFSUtil &http_util, Context &context,
+                                                                      const OpenFileInfo &file) {
+-	FileOpenerInfo info(file);
+-	auto params = HTTPFSUtil::InitializeRawParameters(http_util, opener, info);
++	FileLookupInfo info(file);
++	auto params = HTTPFSUtil::InitializeRawParameters(http_util, context, info);
+ 	return S3RefreshableHTTPParams(*params);
+ }
+ 
+@@ -495,30 +493,26 @@ static bool TryRefreshS3SecretForPath(ClientContext &context, const string &path
+ 	return refreshed_secret;
+ }
+ 
+-bool S3RequestExecutor::CredentialRefreshEnabled(optional_ptr<FileOpener> opener) {
++bool S3RequestExecutor::CredentialRefreshEnabled(Context &context) {
+ 	Value value;
+-	if (FileOpener::TryGetCurrentSetting(opener, "httpfs_enable_credential_refresh", value)) {
++	if (context.TryGetCurrentSetting("httpfs_enable_credential_refresh", value)) {
+ 		return value.GetValue<bool>();
+ 	}
+ 	return true;
+ }
+ 
+-static bool ReloadS3AuthMaterial(optional_ptr<FileOpener> opener, const OpenFileInfo &file, S3AuthParams &auth_params,
++static bool ReloadS3AuthMaterial(Context &context, const OpenFileInfo &file, S3AuthParams &auth_params,
+                                  HTTPFSParams &http_params, bool preserve_region) {
+-	if (!opener) {
+-		return false;
+-	}
+-
+ 	auto previous_region = auth_params.GetCredentials().region;
+-	FileOpenerInfo info(file);
++	FileLookupInfo info(file);
+ 	auto reloaded_auth_params =
+-	    S3AuthResolver::Resolve(opener, info, S3AuthResolveOptions::ForRefresh(auth_params.GetURLParams()));
++	    S3AuthResolver::Resolve(context, info, S3AuthResolveOptions::ForRefresh(auth_params.GetURLParams()));
+ 	if (preserve_region && !previous_region.empty() &&
+ 	    reloaded_auth_params.GetCredentials().region != previous_region) {
+ 		reloaded_auth_params = reloaded_auth_params.WithRegion(std::move(previous_region));
+ 	}
+ 	auto reloaded_http_params =
+-	    S3RequestExecutor::ReadRefreshableHTTPParams(http_params.http_util.Cast<HTTPFSUtil>(), opener, file);
++	    S3RequestExecutor::ReadRefreshableHTTPParams(http_params.http_util.Cast<HTTPFSUtil>(), context, file);
+ 
+ 	if (reloaded_auth_params == auth_params && reloaded_http_params == S3RefreshableHTTPParams(http_params)) {
+ 		return false;
+@@ -529,35 +523,35 @@ static bool ReloadS3AuthMaterial(optional_ptr<FileOpener> opener, const OpenFile
+ 	return true;
+ }
+ 
+-static bool TryRefreshS3AuthMaterial(optional_ptr<ClientContext> context, optional_ptr<FileOpener> opener,
++static bool TryRefreshS3AuthMaterial(optional_ptr<ClientContext> client_context, Context &context,
+                                      const OpenFileInfo &file, S3AuthParams &auth_params, HTTPFSParams &http_params,
+                                      bool credential_refresh_enabled, bool preserve_region = false) {
+ 	if (!credential_refresh_enabled) {
+ 		return false;
+ 	}
+-	if (!context) {
++	if (!client_context) {
+ 		return false;
+ 	}
+-	if (ReloadS3AuthMaterial(opener, file, auth_params, http_params, preserve_region)) {
++	if (ReloadS3AuthMaterial(context, file, auth_params, http_params, preserve_region)) {
+ 		return true;
+ 	}
+ 
+-	auto http_state = HTTPState::TryGetState(*context);
++	auto http_state = HTTPState::TryGetState(*client_context);
+ 	return http_state->RunCredentialRefresh([&]() {
+-		if (ReloadS3AuthMaterial(opener, file, auth_params, http_params, preserve_region)) {
++		if (ReloadS3AuthMaterial(context, file, auth_params, http_params, preserve_region)) {
+ 			return true;
+ 		}
+ 		string secret_name;
+ 		if (file.extended_info && file.extended_info->TryGetSecretName(secret_name)) {
+-			auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+-			auto secret = SecretManager::Get(*context).GetSecretByName(transaction, secret_name);
+-			if (!secret || !CreateS3SecretFunctions::TryRefreshS3Secret(*context, *secret)) {
++			auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*client_context);
++			auto secret = SecretManager::Get(*client_context).GetSecretByName(transaction, secret_name);
++			if (!secret || !CreateS3SecretFunctions::TryRefreshS3Secret(*client_context, *secret)) {
+ 				return false;
+ 			}
+-		} else if (!TryRefreshS3SecretForPath(*context, file.path)) {
++		} else if (!TryRefreshS3SecretForPath(*client_context, file.path)) {
+ 			return false;
+ 		}
+-		return ReloadS3AuthMaterial(opener, file, auth_params, http_params, preserve_region);
++		return ReloadS3AuthMaterial(context, file, auth_params, http_params, preserve_region);
+ 	});
+ }
+ 
+@@ -821,15 +815,16 @@ bool S3RequestExecutor::TryRefreshSession(HTTPRequestSession &session, const S3R
+ 		return false;
+ 	}
+ 
+-	auto context = current_snapshot.client_context.lock();
+-	if (!context) {
++	auto client_context = current_snapshot.client_context.lock();
++	if (!client_context) {
+ 		return false;
+ 	}
+-	ClientContextFileOpener opener(context->GetContext());
++	Context &context = client_context->GetContext();
+ 	auto refreshed_auth_params = current_snapshot.auth_params;
+ 	auto refreshed_http_params = current_snapshot.Params();
+-	if (!TryRefreshS3AuthMaterial(context, opener, current_snapshot.file, refreshed_auth_params, refreshed_http_params,
+-	                              current_snapshot.credential_refresh_enabled, current_snapshot.region_redirected)) {
++	if (!TryRefreshS3AuthMaterial(client_context, context, current_snapshot.file, refreshed_auth_params,
++	                              refreshed_http_params, current_snapshot.credential_refresh_enabled,
++	                              current_snapshot.region_redirected)) {
+ 		return session.Capture().snapshot->Cast<S3RequestSnapshot>().credential_generation !=
+ 		       failed_snapshot.credential_generation;
+ 	}
+@@ -1221,16 +1216,15 @@ HTTPException S3FileSystem::GetHTTPError(FileHandle &handle, const HTTPResponse
+ 	                               S3Url::GetDisplayUrl(url, auth_params));
+ }
+ 
+-shared_ptr<HTTPRequestSession> S3RequestExecutor::CreateSession(optional_ptr<FileOpener> opener,
+-                                                                const OpenFileInfo &file,
++shared_ptr<HTTPRequestSession> S3RequestExecutor::CreateSession(Context &context, const OpenFileInfo &file,
+                                                                 const S3AuthParams &auth_params) {
+-	FileOpenerInfo info(file);
+-	auto request_session = HTTPRequestSession::Create(opener, info);
++	FileLookupInfo info(file);
++	auto request_session = HTTPRequestSession::Create(context, info);
+ 	weak_ptr<ClientContext> weak_context;
+-	auto context = Context::TryGetClientContext(FileOpener::TryGetContext(opener));
+-	auto refresh_enabled = CredentialRefreshEnabled(opener);
+-	if (context && refresh_enabled) {
+-		weak_context = context->shared_from_this();
++	auto client_context = context.TryGetClientContext();
++	auto refresh_enabled = CredentialRefreshEnabled(context);
++	if (client_context && refresh_enabled) {
++		weak_context = client_context->shared_from_this();
+ 	}
+ 	auto captured = request_session->Capture();
+ 	request_session->TryPublish(captured.snapshot,
+diff --git a/src/s3/s3_settings.cpp b/src/s3/s3_settings.cpp
+index 8843603..80770e4 100644
+--- a/src/s3/s3_settings.cpp
++++ b/src/s3/s3_settings.cpp
+@@ -184,18 +184,18 @@ S3UploadConfig S3UploadConfig::Create(uint64_t max_file_size, uint64_t max_parts
+ 	return result;
+ }
+ 
+-S3UploadConfig S3UploadConfig::ReadFrom(optional_ptr<FileOpener> opener, const S3MultipartUploadPolicy &policy) {
++S3UploadConfig S3UploadConfig::ReadFrom(Context &context, const S3MultipartUploadPolicy &policy) {
+ 	uint64_t uploader_max_filesize;
+ 	uint64_t max_parts_per_file;
+ 	Value value;
+ 
+-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value)) {
++	if (context.TryGetCurrentSetting("s3_uploader_max_filesize", value)) {
+ 		uploader_max_filesize =
+ 		    S3UploadSizing::ResolveMemoryLimit(DBConfig::ParseMemoryLimit(value.GetValue<string>()));
+ 	} else {
+ 		uploader_max_filesize = S3UploadConfig::DEFAULT_MAX_FILESIZE;
+ 	}
+-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value)) {
++	if (context.TryGetCurrentSetting("s3_uploader_max_parts_per_file", value)) {
+ 		max_parts_per_file = value.GetValue<uint64_t>();
+ 	} else {
+ 		max_parts_per_file = S3UploadConfig::DEFAULT_MAX_PARTS_PER_FILE;
+@@ -319,13 +319,9 @@ void S3Settings::Initialize(DBConfig &config) {
+ 	provider->SetAll();
+ }
+ 
+-bool S3Settings::URLParametersEnabled(optional_ptr<FileOpener> opener) {
+-	auto db = FileOpener::TryGetDatabase(opener);
+-	if (!db) {
+-		return false;
+-	}
++bool S3Settings::URLParametersEnabled(Context &context) {
+ 	ExtensionOption option;
+-	if (!DBConfig::GetConfig(*db).TryGetExtensionOption(S3URLParametersOption::NAME, option)) {
++	if (!DBConfig::GetConfig(context.GetDatabase()).TryGetExtensionOption(S3URLParametersOption::NAME, option)) {
+ 		return false;
+ 	}
+ 	return option.info->Cast<S3URLParametersOption>().Enabled();
+diff --git a/src/s3/s3fs.cpp b/src/s3/s3fs.cpp
+index d55c6c9..80729fb 100644
+--- a/src/s3/s3fs.cpp
++++ b/src/s3/s3fs.cpp
+@@ -209,17 +209,16 @@ BufferManager &S3FileSystem::GetBufferManager() {
+ 	return buffer_manager;
+ }
+ 
+-unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file, FileOpenFlags flags,
+-                                                      optional_ptr<FileOpener> opener) {
+-	FileOpenerInfo info(file);
+-	auto auth_params = S3AuthResolver::Resolve(opener, info);
++unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file, FileOpenFlags flags, Context &context) {
++	FileLookupInfo info(file);
++	auto auth_params = S3AuthResolver::Resolve(context, info);
+ 
+-	auto request_session = HTTPRequestSession::Create(opener, info);
++	auto request_session = HTTPRequestSession::Create(context, info);
+ 	S3UploadConfig upload_config;
+ 	optional<S3MultipartUploadPolicy> multipart_upload_policy;
+ 	if (flags.OpenForWriting()) {
+ 		multipart_upload_policy = auth_params.GetProvider().GetMultipartUploadPolicy();
+-		upload_config = S3UploadConfig::ReadFrom(opener, *multipart_upload_policy);
++		upload_config = S3UploadConfig::ReadFrom(context, *multipart_upload_policy);
+ 	}
+ 
+ 	return make_uniq<S3FileHandle>(*this, file, flags, std::move(request_session), auth_params, upload_config,
+@@ -245,22 +244,22 @@ HTTPMetadataCacheEntry S3FileHandle::GetCacheEntry() const {
+ 	return result;
+ }
+ 
+-void S3FileHandle::Initialize(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+-	auto context = Context::TryGetClientContext(FileOpener::TryGetContext(opener));
+-	auto refresh_enabled = S3RequestExecutor::CredentialRefreshEnabled(opener);
++void S3FileHandle::Initialize(const OpenFileInfo &file, Context &context) {
++	auto client_context = context.TryGetClientContext();
++	auto refresh_enabled = S3RequestExecutor::CredentialRefreshEnabled(context);
+ 	{
+ 		auto captured = request_session->Capture();
+ 		auto &snapshot = captured.snapshot->Cast<S3RequestSnapshot>();
+ 		weak_ptr<ClientContext> weak_context;
+-		if (context && refresh_enabled) {
+-			weak_context = context->shared_from_this();
++		if (client_context && refresh_enabled) {
++			weak_context = client_context->shared_from_this();
+ 		}
+ 		auto replacement = snapshot.Copy();
+ 		replacement->client_context = std::move(weak_context);
+ 		replacement->credential_refresh_enabled = refresh_enabled;
+ 		request_session->TryPublish(captured.snapshot, std::move(replacement));
+ 	}
+-	HTTPFileHandle::Initialize(file, opener);
++	HTTPFileHandle::Initialize(file, context);
+ }
+ 
+ bool S3FileSystem::CanHandleFile(const string &fpath) {
+@@ -284,7 +283,7 @@ FileWriteMode S3FileSystem::GetWriteMode(FileHandle &) {
+ 	return FileWriteMode::CONCURRENT_SEQUENTIAL;
+ }
+ 
+-bool S3FileSystem::DirectoryExists(const string &, optional_ptr<FileOpener>) {
++bool S3FileSystem::DirectoryExists(Context &context, const string &) {
+ 	return true;
+ }
+ 
+diff --git a/test/unittest/http/browser_adapter_test.cpp b/test/unittest/http/browser_adapter_test.cpp
+index deeef39..8b90bb5 100644
+--- a/test/unittest/http/browser_adapter_test.cpp
++++ b/test/unittest/http/browser_adapter_test.cpp
+@@ -5,7 +5,7 @@
+ #include "http/http_test_helper.hpp"
+ #include "http/httpfs_client.hpp"
+ #include "s3/s3_test_helper.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
+ #include "duckdb/main/config.hpp"
+ 
+ namespace duckdb {
+@@ -31,10 +31,9 @@ public:
+ 		return "WasmHTTPUtils";
+ 	}
+ 
+-	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
+-	                                            optional_ptr<FileOpenerInfo> info) override {
++	unique_ptr<HTTPParams> InitializeParameters(Context &context, optional_ptr<FileLookupInfo> info) override {
+ 		observations.parameter_initializations++;
+-		return HTTPUtil::InitializeParameters(opener, info);
++		return HTTPUtil::InitializeParameters(context, info);
+ 	}
+ 
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &params, const string &proto_host_port) override {
+@@ -79,10 +78,10 @@ TEST_CASE("HTTPFS owns browser parameters and preserves its provider", "[httpfs]
+ 		HTTPTestHelper::RequireQueryOk(
+ 		    con, "CREATE SECRET browser_headers (TYPE HTTP, EXTRA_HTTP_HEADERS MAP {'X-Secret': 'secret'})");
+ 		HTTPTestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-		ClientContextFileOpener opener(con.context->GetContext());
+-		FileOpenerInfo info;
++		Context &context = con.context->GetContext();
++		FileLookupInfo info;
+ 		info.file.path = server.HTTPPath();
+-		auto session = HTTPRequestSession::Create(&opener, &info);
++		auto session = HTTPRequestSession::Create(context, &info);
+ 		auto snapshot = session->Capture().snapshot;
+ 		REQUIRE(&snapshot->Params().http_util == &adapter);
+ 		REQUIRE(snapshot->Params().force_download_threshold == 123);
+diff --git a/test/unittest/http/connection_reuse_test.cpp b/test/unittest/http/connection_reuse_test.cpp
+index 5a0f329..2d62573 100644
+--- a/test/unittest/http/connection_reuse_test.cpp
++++ b/test/unittest/http/connection_reuse_test.cpp
+@@ -302,8 +302,10 @@ static void RunTransportReuseDomainBoundScenario() {
+ 
+ static void RunRawParametersScenario() {
+ 	HTTPFSUtil http_util;
++	DuckDB db(nullptr);
++	Context &context = db.instance->GetContext();
+ 	for (idx_t domain = 0; domain < 300; domain++) {
+-		auto params = HTTPFSUtil::InitializeRawParameters(http_util, nullptr, nullptr);
++		auto params = HTTPFSUtil::InitializeRawParameters(http_util, context, nullptr);
+ 		params->http_proxy = "unused-proxy" + to_string(domain) + ".test";
+ 		REQUIRE(params->GetTransportReuseDomain() == 0);
+ 	}
+diff --git a/test/unittest/http/hffs_test.cpp b/test/unittest/http/hffs_test.cpp
+index 8e8990a..a87e2e2 100644
+--- a/test/unittest/http/hffs_test.cpp
++++ b/test/unittest/http/hffs_test.cpp
+@@ -4,6 +4,7 @@
+ #include "http/httpfs_client.hpp"
+ #include "s3/mock_s3_server.hpp"
+ 
++#include "duckdb.hpp"
+ #include "duckdb/common/error_data.hpp"
+ 
+ namespace duckdb {
+@@ -51,7 +52,8 @@ TEST_CASE("Hugging Face list status errors preserve HTTP metadata", "[httpfs][hf
+ 	config.failures.transient_get_failures = 1;
+ 	MockS3Server server(std::move(config));
+ 	HTTPFSUtil http_util;
+-	auto params = http_util.InitializeParameters(nullptr, nullptr);
++	DuckDB db(nullptr);
++	auto params = http_util.InitializeParameters(db.instance->GetContext(), nullptr);
+ 	auto &httpfs_params = params->Cast<HTTPFSParams>();
+ 	httpfs_params.retries = 0;
+ 	httpfs_params.user_agent = "hf-list-test";
+diff --git a/test/unittest/http/http_test_helper.cpp b/test/unittest/http/http_test_helper.cpp
+index 639ca00..b1f50d9 100644
+--- a/test/unittest/http/http_test_helper.cpp
++++ b/test/unittest/http/http_test_helper.cpp
+@@ -80,7 +80,7 @@ HTTPReadOutcome HTTPTestHelper::TryReadHandle(Connection &con, FileHandle &handl
+ 	HTTPReadOutcome outcome;
+ 	try {
+ 		string buffer(length, '?');
+-		handle.Read(QueryContext(*con.context), &buffer[0], length, offset);
++		handle.Read(*con.context, &buffer[0], length, offset);
+ 		outcome.data = std::move(buffer);
+ 	} catch (std::exception &ex) {
+ 		outcome.failed = true;
+@@ -104,13 +104,13 @@ string HTTPTestHelper::ReadRange(Connection &con, const string &path, idx_t offs
+ 	auto &fs = FileSystem::GetFileSystem(*con.context);
+ 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 	string buffer(length, '?');
+-	handle->Read(QueryContext(*con.context), &buffer[0], length, offset);
++	handle->Read(*con.context, &buffer[0], length, offset);
+ 	return buffer;
+ }
+ 
+ string HTTPTestHelper::ReadSequential(Connection &con, FileHandle &handle, idx_t length) {
+ 	string buffer(length, '?');
+-	auto read_count = handle.Read(QueryContext(*con.context), buffer.data(), length);
++	auto read_count = handle.Read(*con.context, buffer.data(), length);
+ 	buffer.resize(NumericCast<idx_t>(read_count));
+ 	return buffer;
+ }
+diff --git a/test/unittest/http/positional_read_test.cpp b/test/unittest/http/positional_read_test.cpp
+index 3e3c15f..f83d635 100644
+--- a/test/unittest/http/positional_read_test.cpp
++++ b/test/unittest/http/positional_read_test.cpp
+@@ -76,7 +76,7 @@ static ReadOutcome TryReadHandle(Connection &con, FileHandle &handle, idx_t offs
+ 	ReadOutcome result;
+ 	try {
+ 		result.data.resize(length, '?');
+-		handle.Read(QueryContext(*con.context), result.data.data(), length, offset);
++		handle.Read(*con.context, result.data.data(), length, offset);
+ 	} catch (std::exception &ex) {
+ 		result.failed = true;
+ 		result.error = ex.what();
+@@ -88,7 +88,7 @@ static ReadOutcome TryReadHandle(Connection &con, FileHandle &handle, idx_t offs
+ 
+ static string ReadSequential(Connection &con, FileHandle &handle, idx_t length) {
+ 	string result(length, '?');
+-	auto read_count = handle.Read(QueryContext(*con.context), result.data(), length);
++	auto read_count = handle.Read(*con.context, result.data(), length);
+ 	result.resize(NumericCast<idx_t>(read_count));
+ 	return result;
+ }
+@@ -620,11 +620,10 @@ TEST_CASE("explicit S3 versions reject writes deletes and wildcard globs before
+ 	REQUIRE_THROWS_WITH(fs.RemoveFile(path), Catch::Contains("s3_version_id is only supported for reading"));
+ 	REQUIRE_THROWS_WITH(fs.RemoveFiles({server.S3Path(), path}),
+ 	                    Catch::Contains("s3_version_id is only supported for reading"));
+-	REQUIRE_THROWS_WITH(
+-	    fs.Glob("s3://refresh-bucket/*.bin?s3_version_id=user-version", FileGlobOptions::ALLOW_EMPTY, nullptr),
+-	    Catch::Contains("s3_version_id parameter cannot be used with glob patterns"));
++	REQUIRE_THROWS_WITH(fs.Glob("s3://refresh-bucket/*.bin?s3_version_id=user-version", FileGlobOptions::ALLOW_EMPTY),
++	                    Catch::Contains("s3_version_id parameter cannot be used with glob patterns"));
+ 	REQUIRE(server.Observations().empty());
+-	auto files = fs.Glob(path, FileGlobOptions::ALLOW_EMPTY, nullptr)->GetAllFiles();
++	auto files = fs.Glob(path, FileGlobOptions::ALLOW_EMPTY)->GetAllFiles();
+ 	REQUIRE(files.size() == 1);
+ 	REQUIRE(files[0].path == path);
+ 	REQUIRE(server.Observations().empty());
+diff --git a/test/unittest/http/range_read_test.cpp b/test/unittest/http/range_read_test.cpp
+index 6c9b4d6..3e7c90f 100644
+--- a/test/unittest/http/range_read_test.cpp
++++ b/test/unittest/http/range_read_test.cpp
+@@ -295,11 +295,11 @@ TEST_CASE("HTTP cached downloads retain an existing handle's ETag condition", "[
+ 		bool write_cache = false;
+ 		new_handle->file_system.Cast<HTTPFileSystem>().FullDownload(new_http, new_http.GetReadConfig(), write_cache);
+ 		string data(5, '?');
+-		REQUIRE_THROWS_WITH(old_handle->Read(QueryContext(*con.context), &data[0], data.size(), 0),
++		REQUIRE_THROWS_WITH(old_handle->Read(*con.context, &data[0], data.size(), 0),
+ 		                    Catch::Contains("do not match the version"));
+ 		REQUIRE(data == "?????");
+ 		REQUIRE(old_handle->Cast<HTTPFileHandle>().etag == "\"older-etag\"");
+-		new_handle->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++		new_handle->Read(*con.context, &data[0], data.size(), 0);
+ 		REQUIRE(data == server.ObjectData().substr(0, data.size()));
+ 		HTTPTestHelper::RequireQueryOk(con, "COMMIT");
+ 	}
+diff --git a/test/unittest/s3/gcs_generation_test.cpp b/test/unittest/s3/gcs_generation_test.cpp
+index ebc98ed..a84d9be 100644
+--- a/test/unittest/s3/gcs_generation_test.cpp
++++ b/test/unittest/s3/gcs_generation_test.cpp
+@@ -65,7 +65,7 @@ TEST_CASE("GCS generation checks reject replacement between reads", "[httpfs][s3
+ 					REQUIRE(cached->Cast<HTTPFileHandle>().GetReadConfig().condition.value == "123");
+ 					REQUIRE(server.Observations().size() == 1);
+ 					string data(5, '?');
+-					handle->Read(QueryContext(*con.context), &data[0], 5, 0);
++					handle->Read(*con.context, &data[0], 5, 0);
+ 					REQUIRE(data == "aaaaa");
+ 					server.SetObjectGeneration("456");
+ 					if (full_download) {
+@@ -74,7 +74,7 @@ TEST_CASE("GCS generation checks reject replacement between reads", "[httpfs][s3
+ 						    http_handle, http_handle.GetReadConfig(), write_cache));
+ 					} else {
+ 						data = "?????";
+-						REQUIRE_THROWS(handle->Read(QueryContext(*con.context), &data[0], 5, 5));
++						REQUIRE_THROWS(handle->Read(*con.context, &data[0], 5, 5));
+ 						REQUIRE(data == "?????");
+ 					}
+ 					REQUIRE(http_handle.GetReadConfig().condition.value == "123");
+@@ -115,7 +115,7 @@ TEST_CASE("GCS automatic checks can be disabled without disabling explicit selec
+ 		    fs.OpenFile("gs://refresh-bucket/object.bin", FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 		server.SetObjectGeneration("456");
+ 		string data(9, '?');
+-		handle->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++		handle->Read(*con.context, &data[0], data.size(), 0);
+ 		REQUIRE(data == "new bytes");
+ 		REQUIRE(ReadObject(con, "gs://refresh-bucket/object.bin?gcs_generation=123") == "old bytes");
+ 		for (auto &observation : server.Observations()) {
+@@ -170,7 +170,7 @@ TEST_CASE("GCS full downloads preserve metadata when reopened without extra HEAD
+ 				REQUIRE(reopened->Stats().version_tag == handle->Stats().version_tag);
+ 				REQUIRE(reopened->GetFileSize() == handle->GetFileSize());
+ 				string data(9, '?');
+-				reopened->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++				reopened->Read(*con.context, &data[0], data.size(), 0);
+ 				REQUIRE(data == "old bytes");
+ 				REQUIRE(server.Observations().size() == request_count);
+ 				S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -232,7 +232,7 @@ TEST_CASE("GCS concurrent forced downloads publish bytes and metadata together",
+ 			REQUIRE(http.GetCacheValidUntil());
+ 			REQUIRE(*http.GetCacheValidUntil() == timestamp_t::ninfinity());
+ 			string data(9, '?');
+-			http.Read(QueryContext(*con.context), &data[0], data.size(), 0);
++			http.Read(*con.context, &data[0], data.size(), 0);
+ 			REQUIRE(data == "old bytes");
+ 		}
+ 		const auto observations = server.Observations();
+@@ -274,8 +274,8 @@ TEST_CASE("GCS explicit generations select historical objects on every read", "[
+ 						                                                    FileFlags::FILE_FLAGS_DIRECT_IO);
+ 						REQUIRE(handle->GetFileSize() == 17);
+ 						string data(10, '?');
+-						handle->Read(QueryContext(*con.context), &data[0], 5, 0);
+-						handle->Read(QueryContext(*con.context), &data[5], 5, 5);
++						handle->Read(*con.context, &data[0], 5, 0);
++						handle->Read(*con.context, &data[5], 5, 5);
+ 						REQUIRE(data == "historical");
+ 					}
+ 					auto observations = server.Observations();
+@@ -346,7 +346,7 @@ CREATE OR REPLACE SECRET generation_test (
+ 				auto handle = fs.OpenFile("gcs://refresh-bucket/object.bin" + selector,
+ 				                          FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 				string data(10, '?');
+-				handle->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++				handle->Read(*con.context, &data[0], data.size(), 0);
+ 				REQUIRE(data == "historical");
+ 				S3TestHelper::AssertSingleRefresh(test_id);
+ 				for (auto &observation : server.Observations()) {
+@@ -432,7 +432,7 @@ TEST_CASE("GCS invalid GET generation metadata fails before publishing data", "[
+ 					                                                                       write_cache));
+ 				} else {
+ 					string data(9, '?');
+-					REQUIRE_THROWS(handle->Read(QueryContext(*con.context), &data[0], data.size(), 0));
++					REQUIRE_THROWS(handle->Read(*con.context, &data[0], data.size(), 0));
+ 					REQUIRE(data == string(9, '?'));
+ 				}
+ 				server.SetObjectGeneration("456");
+@@ -470,7 +470,7 @@ TEST_CASE("GCS generation metadata roundtrips through extended file information"
+ 	REQUIRE(restored->Stats().version_tag == initial->Stats().version_tag);
+ 	REQUIRE(server.Observations().size() == 1);
+ 	string data(9, '?');
+-	restored->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++	restored->Read(*con.context, &data[0], data.size(), 0);
+ 	REQUIRE(data == "old bytes");
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+ }
+@@ -496,7 +496,7 @@ TEST_CASE("GCS cached metadata remains stable during full downloads", "[httpfs][
+ 		bool write_cache = false;
+ 		cached->file_system.Cast<HTTPFileSystem>().FullDownload(http, http.GetReadConfig(), write_cache);
+ 		string data(5, '?');
+-		cached->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++		cached->Read(*con.context, &data[0], data.size(), 0);
+ 		REQUIRE(data == server.ObjectData().substr(0, data.size()));
+ 		REQUIRE(fs.GetVersionTag(*cached) == "gcs-generation:123");
+ 		REQUIRE(cached->Stats().version_tag == fs.GetVersionTag(*cached));
+@@ -535,7 +535,7 @@ TEST_CASE("GCS cached full downloads cannot bypass another handle's generation c
+ 			const auto flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO;
+ 			auto old_handle = fs.OpenFile("gcs://refresh-bucket/object.bin", flags);
+ 			string data(5, '?');
+-			old_handle->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++			old_handle->Read(*con.context, &data[0], data.size(), 0);
+ 			REQUIRE(data == "aaaaa");
+ 			server.SetObjectGeneration("456");
+ 			auto new_handle = fs.OpenFile("gcs://refresh-bucket/object.bin", flags);
+@@ -552,17 +552,17 @@ TEST_CASE("GCS cached full downloads cannot bypass another handle's generation c
+ 			};
+ 			data.assign(5, '?');
+ 			if (unsafe) {
+-				old_handle->Read(QueryContext(*con.context), &data[0], data.size(), 5);
++				old_handle->Read(*con.context, &data[0], data.size(), 5);
+ 				REQUIRE(data == "bbbbb");
+ 				REQUIRE(reuse_download()->GetMetadata().object_version.GetValue() == "456");
+ 			} else {
+-				REQUIRE_THROWS_WITH(old_handle->Read(QueryContext(*con.context), &data[0], data.size(), 5),
++				REQUIRE_THROWS_WITH(old_handle->Read(*con.context, &data[0], data.size(), 5),
+ 				                    Catch::Contains("do not match the version"));
+ 				REQUIRE(data == "?????");
+ 				REQUIRE_THROWS_WITH(reuse_download(), Catch::Contains("do not match the version"));
+ 			}
+ 			REQUIRE(fs.GetVersionTag(*old_handle) == "gcs-generation:123");
+-			new_handle->Read(QueryContext(*con.context), &data[0], data.size(), 5);
++			new_handle->Read(*con.context, &data[0], data.size(), 5);
+ 			REQUIRE(data == "bbbbb");
+ 			REQUIRE(server.Observations().size() == request_count);
+ 			S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -619,7 +619,8 @@ TEST_CASE("GCS external data cache distinguishes generations with the same ETag
+ 			S3TestHelper::RequireQueryOk(con, "BEGIN");
+ 			{
+ 				auto fs = CachingFileSystem::Get(*con.context);
+-				auto handle = fs.OpenFile(OpenFileInfo("gcs://refresh-bucket/object.bin"), FileFlags::FILE_FLAGS_READ);
++				auto handle = fs.OpenFile(*con.context, OpenFileInfo("gcs://refresh-bucket/object.bin"),
++				                          FileFlags::FILE_FLAGS_READ);
+ 				string data(16, '?');
+ 				auto buffer = handle->Read(16, 0);
+ 				buffer.CopyTo(data_ptr_cast(&data[0]), data.size());
+diff --git a/test/unittest/s3/s3_file_credentials_test.cpp b/test/unittest/s3/s3_file_credentials_test.cpp
+index c4be336..6ef575e 100644
+--- a/test/unittest/s3/s3_file_credentials_test.cpp
++++ b/test/unittest/s3/s3_file_credentials_test.cpp
+@@ -21,7 +21,6 @@
+ #include "duckdb/common/open_file_info.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/main/client_context.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/main/secret/secret.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+@@ -280,7 +279,7 @@ public:
+ 		                                        : make_shared_ptr<ExtendedOpenFileInfo>();
+ 		file.extended_info->options[ExtendedOpenFileInfo::SECRET_OPTION] = Value(attachment);
+ 	}
+-	void Apply(const Attachment &attachment, FileOpenerInfo &info) {
++	void Apply(const Attachment &attachment, FileLookupInfo &info) {
+ 		Apply(attachment, info.file);
+ 	}
+ 	vector<Attachment> Attachments() {
+@@ -924,9 +923,9 @@ TEST_CASE("Named S3 files retain metadata through credential refresh and region
+ 				unique_ptr<FileHandle> handle;
+ 				shared_ptr<HTTPRequestSession> session;
+ 				if (standalone_session) {
+-					ClientContextFileOpener opener(f.con.context->GetContext());
+-					FileOpenerInfo info(file);
+-					session = S3RequestExecutor::CreateSession(opener, file, S3AuthResolver::Resolve(opener, info));
++					Context &context = f.con.context->GetContext();
++					FileLookupInfo info(file);
++					session = S3RequestExecutor::CreateSession(context, file, S3AuthResolver::Resolve(context, info));
+ 				} else {
+ 					handle = fs.OpenFile(file, flags);
+ 					session = handle->Cast<S3FileHandle>().request_session;
+@@ -962,7 +961,7 @@ TEST_CASE("Named S3 files retain metadata through credential refresh and region
+ 
+ 				// Reusing the retained file must still select its secret and skip the metadata HEAD.
+ 				auto reopened = fs.OpenFile(snapshot.file, flags);
+-				reopened->Read(QueryContext(*f.con.context), &buffer[0], buffer.size(), 0);
++				reopened->Read(*f.con.context, &buffer[0], buffer.size(), 0);
+ 				REQUIRE(buffer == bytes.substr(0, 1024));
+ 				auto observations = f.server.Observations();
+ 				INFO(MockS3DescribeObservations(observations));
+@@ -1003,7 +1002,7 @@ TEST_CASE("Reads of two files refused at once refresh the table's credentials on
+ 		readers.emplace_back([&, i]() {
+ 			try {
+ 				string buffer(1024, '\0');
+-				handles[i]->Read(QueryContext(*f.con.context), &buffer[0], buffer.size(), 0);
++				handles[i]->Read(*f.con.context, &buffer[0], buffer.size(), 0);
+ 			} catch (std::exception &ex) {
+ 				errors[i] = ex.what();
+ 			}
+@@ -1192,11 +1191,11 @@ TEST_CASE("Settings fill keys a named secret leaves unset",
+ 	GovernedHost::Get().SetOmittedKeys({"region", "url_style", "use_ssl", "endpoint", "session_token"});
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().Attach(*f.con.context, "orders");
+-	ClientContextFileOpener opener(f.con.context->GetContext());
+-	FileOpenerInfo info;
++	Context &context = f.con.context->GetContext();
++	FileLookupInfo info;
+ 	info.file.path = OrdersFile(0);
+ 	GovernedHost::Get().Apply(table_credentials, info);
+-	auto params = S3AuthResolver::Resolve(&opener, info);
++	auto params = S3AuthResolver::Resolve(context, info);
+ 	f.con.Rollback();
+ 
+ 	auto &url = params.GetURLParams();
+@@ -1224,11 +1223,11 @@ TEST_CASE("Settings supply credential fields a named secret leaves unset",
+ 	GovernedHost::Get().SetOmittedKeys({"key_id", "secret", "session_token"});
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().Attach(*f.con.context, "orders");
+-	ClientContextFileOpener opener(f.con.context->GetContext());
+-	FileOpenerInfo info;
++	Context &context = f.con.context->GetContext();
++	FileLookupInfo info;
+ 	info.file.path = OrdersFile(0);
+ 	GovernedHost::Get().Apply(table_credentials, info);
+-	auto params = S3AuthResolver::Resolve(&opener, info);
++	auto params = S3AuthResolver::Resolve(context, info);
+ 	f.con.Rollback();
+ 	auto &credentials = params.GetCredentials();
+ 	REQUIRE(credentials.access_key_id == SETTING_KEY);
+@@ -1266,11 +1265,11 @@ namespace {
+ S3AuthParams ResolveWithHandle(Fixture &f, const string &table, const string &scope, const string &path) {
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().AttachWithScope(*f.con.context, table, scope);
+-	ClientContextFileOpener opener(f.con.context->GetContext());
+-	FileOpenerInfo info;
++	Context &context = f.con.context->GetContext();
++	FileLookupInfo info;
+ 	info.file.path = path;
+ 	GovernedHost::Get().Apply(table_credentials, info);
+-	auto params = S3AuthResolver::Resolve(&opener, info);
++	auto params = S3AuthResolver::Resolve(context, info);
+ 	f.con.Rollback();
+ 	return params;
+ }
+@@ -1287,29 +1286,6 @@ TEST_CASE("gcs_user_project fills the user project a named secret leaves unset",
+ 	REQUIRE(params.GetCredentials().access_key_id == ORDERS_KEY);
+ }
+ 
+-TEST_CASE("A request with credentials and no file opener fails",
+-          "[httpfs][s3][file_credentials][file_credentials_attack]") {
+-	Fixture f;
+-	f.con.BeginTransaction();
+-	auto table_credentials = GovernedHost::Get().Attach(*f.con.context, "orders");
+-	FileOpenerInfo info;
+-	info.file.path = OrdersFile(0);
+-	GovernedHost::Get().Apply(table_credentials, info);
+-	string error;
+-	try {
+-		S3AuthResolver::Resolve(nullptr, info);
+-	} catch (InvalidConfigurationException &ex) {
+-		error = ex.what();
+-	}
+-	INFO(error);
+-	REQUIRE(StringUtil::Contains(error, "without a file opener"));
+-	// the same call without them resolves, with no credentials
+-	FileOpenerInfo plain;
+-	plain.file.path = OrdersFile(0);
+-	REQUIRE(S3AuthResolver::Resolve(nullptr, plain).GetCredentials().access_key_id.empty());
+-	f.con.Rollback();
+-}
+-
+ //===--------------------------------------------------------------------===//
+ // Transaction secrets also participate in ordinary scope matching.
+ //===--------------------------------------------------------------------===//
+@@ -1407,12 +1383,12 @@ TEST_CASE("The table's credentials serve only the transaction that loaded the ta
+ 	// Another connection, explicitly given the same secret name.
+ 	other.BeginTransaction();
+ 	{
+-		ClientContextFileOpener opener(other.context->GetContext());
++		Context &context = other.context->GetContext();
+ 		REQUIRE_FALSE(GetNamedSecret(*other.context, table_credentials));
+-		FileOpenerInfo info;
++		FileLookupInfo info;
+ 		info.file.path = OrdersFile(0);
+ 		GovernedHost::Get().Apply(table_credentials, info);
+-		REQUIRE_THROWS(S3AuthResolver::Resolve(&opener, info));
++		REQUIRE_THROWS(S3AuthResolver::Resolve(context, info));
+ 		OpenFileInfo file(OrdersFile(0));
+ 		GovernedHost::Get().Apply(table_credentials, file);
+ 		REQUIRE_THROWS(FileSystem::GetFileSystem(*other.context).OpenFile(file, FileFlags::FILE_FLAGS_READ));
+diff --git a/test/unittest/s3/s3_refresh_test.cpp b/test/unittest/s3/s3_refresh_test.cpp
+index 864ca42..a22587a 100644
+--- a/test/unittest/s3/s3_refresh_test.cpp
++++ b/test/unittest/s3/s3_refresh_test.cpp
+@@ -13,7 +13,6 @@
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/main/client_context.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ 
+ #include <atomic>
+@@ -74,7 +73,7 @@ static void RunFullGetRefreshScenario(const string &client_implementation, bool
+ 		                                       auto handle =
+ 		                                           fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_READ);
+ 		                                       string buffer(8, '\0');
+-		                                       handle->Read(QueryContext(*con.context), &buffer[0], buffer.size(), 0);
++		                                       handle->Read(*con.context, &buffer[0], buffer.size(), 0);
+ 		                                       REQUIRE(buffer == object_data.substr(0, buffer.size()));
+ 	                                       });
+ 	REQUIRE(MockS3HasObservation(observations, "GET", S3TestHelper::STALE_KEY_ID, 403));
+@@ -92,13 +91,13 @@ static void RunRangeRefreshScenario(const string &client_implementation, bool co
+ 		    const idx_t first_offset = 7;
+ 		    const idx_t first_read_size = 9;
+ 		    string first_buffer(first_read_size, '\0');
+-		    handle->Read(QueryContext(*con.context), &first_buffer[0], first_read_size, first_offset);
++		    handle->Read(*con.context, &first_buffer[0], first_read_size, first_offset);
+ 		    REQUIRE(first_buffer == object_data.substr(first_offset, first_read_size));
+ 
+ 		    const idx_t second_offset = 20;
+ 		    const idx_t second_read_size = 5;
+ 		    string second_buffer(second_read_size, '\0');
+-		    handle->Read(QueryContext(*con.context), &second_buffer[0], second_read_size, second_offset);
++		    handle->Read(*con.context, &second_buffer[0], second_read_size, second_offset);
+ 		    REQUIRE(second_buffer == object_data.substr(second_offset, second_read_size));
+ 	    });
+ 	REQUIRE(MockS3HasObservation(observations, "GET", S3TestHelper::STALE_KEY_ID, 403, "bytes=7-15"));
+@@ -114,7 +113,7 @@ static void RunPutRefreshScenario(const string &client_implementation, bool conn
+ 		    auto handle =
+ 		        fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+ 		    string payload = "hello from httpfs refresh";
+-		    handle->Write(QueryContext(*con.context), &payload[0], payload.size());
++		    handle->Write(*con.context, &payload[0], payload.size());
+ 		    handle->Close();
+ 	    });
+ 	REQUIRE(MockS3HasObservation(observations, "PUT", S3TestHelper::STALE_KEY_ID, 403));
+@@ -364,7 +363,7 @@ static void RunRangeRefreshDisabledScenario() {
+ 	const idx_t offset = 7;
+ 	const idx_t read_size = 9;
+ 	string buffer(read_size, '\0');
+-	REQUIRE_THROWS(handle->Read(QueryContext(*con.context), &buffer[0], read_size, offset));
++	REQUIRE_THROWS(handle->Read(*con.context, &buffer[0], read_size, offset));
+ 	S3TestHelper::RequireQueryOk(con, "ROLLBACK");
+ 
+ 	auto observations = server.Observations();
+@@ -425,7 +424,7 @@ static void RunMultipleStaleHandlesSingleRefreshScenario() {
+ 	const idx_t read_size = 9;
+ 	for (auto &handle : handles) {
+ 		string buffer(read_size, '\0');
+-		handle->Read(QueryContext(*con.context), &buffer[0], read_size, offset);
++		handle->Read(*con.context, &buffer[0], read_size, offset);
+ 		REQUIRE(buffer == object_data.substr(offset, read_size));
+ 	}
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -483,7 +482,7 @@ static void RunRefreshPublicationScenario(const string &client_implementation, b
+ 	const idx_t offset = 7;
+ 	const idx_t read_size = 9;
+ 	string buffer(read_size, '\0');
+-	handle->Read(QueryContext(*con.context), &buffer[0], read_size, offset);
++	handle->Read(*con.context, &buffer[0], read_size, offset);
+ 	REQUIRE(buffer == object_data.substr(offset, read_size));
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+ 
+@@ -545,11 +544,11 @@ CREATE SECRET refresh_s3_endpoint_mode (
+ 	                                                     refreshed_endpoint, test_id));
+ 
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-	ClientContextFileOpener opener(con.context->GetContext());
+-	FileOpenerInfo info = {S3TestHelper::S3_PATH};
+-	auto auth_params = S3AuthResolver::Resolve(opener, info);
++	Context &context = con.context->GetContext();
++	FileLookupInfo info = {S3TestHelper::S3_PATH};
++	auto auth_params = S3AuthResolver::Resolve(context, info);
+ 	REQUIRE(auth_params.GetURLParams().endpoint_mode == initial_mode);
+-	auto session = S3RequestExecutor::CreateSession(opener, info.file, auth_params);
++	auto session = S3RequestExecutor::CreateSession(context, info.file, auth_params);
+ 	if (!published_region.empty()) {
+ 		string previous_region;
+ 		REQUIRE(S3RequestExecutor::SetSessionRegion(*session, published_region, previous_region));
+@@ -690,7 +689,7 @@ TEST_CASE("Explicit S3 versions survive credential refresh", "[httpfs][s3][refre
+ 					                    full_download ? FileFlags::FILE_FLAGS_READ
+ 					                                  : FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 					    string buffer(8, '\0');
+-					    handle->Read(QueryContext(*con.context), &buffer[0], buffer.size(), 0);
++					    handle->Read(*con.context, &buffer[0], buffer.size(), 0);
+ 					    REQUIRE(buffer == object_data.substr(0, buffer.size()));
+ 				    });
+ 				REQUIRE(observations.size() >= 2);
+diff --git a/test/unittest/s3/s3_request_test.cpp b/test/unittest/s3/s3_request_test.cpp
+index bc4b437..f15e565 100644
+--- a/test/unittest/s3/s3_request_test.cpp
++++ b/test/unittest/s3/s3_request_test.cpp
+@@ -21,7 +21,6 @@
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/main/client_context.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/secret/secret.hpp"
+ 
+ #include <new>
+@@ -112,7 +111,7 @@ static void RunChunkedFullGetScenario(const string &client_implementation) {
+ 	auto &fs = FileSystem::GetFileSystem(*con.context);
+ 	auto handle = fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_READ);
+ 	string result(object_data.size(), '\0');
+-	handle->Read(QueryContext(*con.context), &result[0], result.size(), 0);
++	handle->Read(*con.context, &result[0], result.size(), 0);
+ 	REQUIRE(result == object_data);
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+ 
+@@ -224,10 +223,10 @@ CREATE SECRET normalized_endpoint (
+ 	{
+ 		auto handle = fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 		char result;
+-		handle->Read(QueryContext(*con.context), &result, 1, 0);
++		handle->Read(*con.context, &result, 1, 0);
+ 		REQUIRE(result == server.ObjectData()[0]);
+ 	}
+-	auto glob_result = fs.Glob("s3://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY, nullptr);
++	auto glob_result = fs.Glob("s3://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY);
+ 	REQUIRE(glob_result->GetAllFiles().size() == 2);
+ 	S3TestHelper::WriteSinglePutPayload(con);
+ 	auto legacy_endpoint = server.Endpoint() + "//gateway/base/";
+@@ -413,7 +412,7 @@ CREATE SECRET s3_region_redirect (
+ 		// the whole object, not just its start: a size taken from the region probe's range would truncate it
+ 		REQUIRE(handle->GetFileSize() == server.ObjectData().size());
+ 		string result(server.ObjectData().size(), '\0');
+-		handle->Read(QueryContext(*con.context), &result[0], result.size(), 0);
++		handle->Read(*con.context, &result[0], result.size(), 0);
+ 		REQUIRE(result == server.ObjectData());
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+ 	}
+@@ -504,7 +503,7 @@ CREATE SECRET gcs_hmac (
+ 	const string gcs_path = "gcs://refresh-bucket/object.bin";
+ 	auto &fs = FileSystem::GetFileSystem(*con.context);
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-	auto glob_result = fs.Glob("gcs://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY, nullptr);
++	auto glob_result = fs.Glob("gcs://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY);
+ 	auto listed_files = glob_result->GetAllFiles();
+ 	REQUIRE(listed_files.size() == 1);
+ 	REQUIRE(listed_files[0].extended_info);
+@@ -516,7 +515,7 @@ CREATE SECRET gcs_hmac (
+ 		auto handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 		REQUIRE(handle);
+ 		char result;
+-		handle->Read(QueryContext(*con.context), &result, 1, offset);
++		handle->Read(*con.context, &result, 1, offset);
+ 		REQUIRE(result == server.ObjectData()[offset]);
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+ 	};
+@@ -581,7 +580,7 @@ static void RunGCSBearerRequestScenario(const string &client_implementation) {
+ 	auto handle = fs.OpenFile(gcs_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 	REQUIRE(handle);
+ 	char result;
+-	handle->Read(QueryContext(*con.context), &result, 1, 0);
++	handle->Read(*con.context, &result, 1, 0);
+ 	REQUIRE(result == server.ObjectData()[0]);
+ 	handle.reset();
+ 
+@@ -947,8 +946,8 @@ static void RunDirectDeleteErrorScenario(const string &client_implementation) {
+ 
+ static S3AuthParams ReadSecretAuthParams(Connection &con, KeyValueSecret &secret,
+                                          const string &path = "s3://bucket/key") {
+-	ClientContextFileOpener opener(con.context->GetContext());
+-	S3KeyValueReader secret_reader {KeyValueSecretReader(secret, opener)};
++	Context &context = con.context->GetContext();
++	S3KeyValueReader secret_reader {KeyValueSecretReader(secret, context)};
+ 	S3AuthResolveOptions options;
+ 	options.enable_deprecated_url_parameters = true;
+ 	return S3AuthResolver::Resolve(secret_reader, path, options);
+@@ -2275,8 +2274,8 @@ TEST_CASE("S3 malformed response cleanup does not require retry admission", "[ht
+ 			Connection con(db);
+ 			HTTPTestHelper::Configure(db, con, retries, client, true);
+ 			HTTPTestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-			ClientContextFileOpener opener(con.context->GetContext());
+-			auto session = S3RequestExecutor::CreateSession(opener, OpenFileInfo("s3://bucket/key"),
++			Context &context = con.context->GetContext();
++			auto session = S3RequestExecutor::CreateSession(context, OpenFileInfo("s3://bucket/key"),
+ 			                                                ResolveTestAuth(TestAuthConfig()));
+ 			::AESStateSSLFactory encryption_util;
+ 			S3RequestSpec spec {"s3://bucket/key", S3RequestOperation::LIST_OBJECTS, {}, "", "", ""};
+diff --git a/test/unittest/s3/s3_retry_test.cpp b/test/unittest/s3/s3_retry_test.cpp
+index c21eb4a..f69a0de 100644
+--- a/test/unittest/s3/s3_retry_test.cpp
++++ b/test/unittest/s3/s3_retry_test.cpp
+@@ -11,7 +11,6 @@
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+ #include "duckdb/common/string_util.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/http/http_retry_budget.hpp"
+ 
+ namespace duckdb {
+@@ -192,7 +191,7 @@ static void RunRecoveringCompletionFaultScenario(const string &client_implementa
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++	handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 	handle->Close();
+ 	handle.reset();
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -230,7 +229,7 @@ static void RunFailedCompletionFaultScenario(const string &client_implementation
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++	handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 	ErrorData error;
+ 	auto first_error = RequireError([&]() { handle->Sync(); }, error);
+ 	auto second_error = RequireError([&]() { handle->Close(); });
+@@ -428,7 +427,7 @@ static void RunTransientGetRetryScenario(const string &client_implementation) {
+ 	auto &fs = FileSystem::GetFileSystem(*con.context);
+ 	auto handle = fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_READ);
+ 	string buffer(8, '\0');
+-	handle->Read(QueryContext(*con.context), &buffer[0], buffer.size(), 0);
++	handle->Read(*con.context, &buffer[0], buffer.size(), 0);
+ 	REQUIRE(buffer == object_data.substr(0, buffer.size()));
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+ 
+@@ -462,7 +461,7 @@ static void RunSharedReadBudgetScenario(const string &client, bool range, bool c
+ 		auto flags = range ? FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO : FileFlags::FILE_FLAGS_READ;
+ 		auto handle = fs.OpenFile(S3TestHelper::S3_PATH, flags);
+ 		string buffer(8, '\0');
+-		handle->Read(QueryContext(*con.context), &buffer[0], buffer.size(), 7);
++		handle->Read(*con.context, &buffer[0], buffer.size(), 7);
+ 		REQUIRE(buffer == data.substr(7, buffer.size()));
+ 	};
+ 	if (failures > retries) {
+@@ -641,7 +640,7 @@ static void RunMultipartInitializationThrottleScenario(const string &client_impl
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++	handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 	handle->Close();
+ 	handle.reset();
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -667,8 +666,8 @@ static void RunMultipartInitializationThrottleExhaustedScenario(const string &cl
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	auto first_error = RequireError(
+-	    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++	auto first_error =
++	    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 	auto second_error = RequireError([&]() { handle->Close(); });
+ 	REQUIRE(second_error == first_error);
+ 	handle.reset();
+@@ -694,7 +693,7 @@ static void RunMultipartInitFailureNotRetriedScenario(const string &client_imple
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	RequireError([&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++	RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 	handle.reset();
+ 	S3TestHelper::RequireQueryOk(con, "ROLLBACK");
+ 
+@@ -777,7 +776,7 @@ static void RunCompletionRefreshThenRetryScenario(const string &client_implement
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 	auto handle = OpenWriter(con);
+ 	auto payload = MultipartPayload();
+-	handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++	handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 	handle->Close();
+ 	handle.reset();
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -1138,10 +1137,10 @@ static void RunThrottledListSignalTest(const string &client_implementation, idx_
+ 	ConfigureListRetryTest(db, con, server, client_implementation, 2);
+ 
+ 	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-	ClientContextFileOpener opener(con.context->GetContext());
+-	FileOpenerInfo info = {S3TestHelper::S3_PATH};
+-	auto auth_params = S3AuthResolver::Resolve(opener, info);
+-	auto session = S3RequestExecutor::CreateSession(opener, info.file, auth_params);
++	Context &context = con.context->GetContext();
++	FileLookupInfo info = {S3TestHelper::S3_PATH};
++	auto auth_params = S3AuthResolver::Resolve(context, info);
++	auto session = S3RequestExecutor::CreateSession(context, info.file, auth_params);
+ 	::AESStateSSLFactory encryption_util;
+ 	auto result = AWSListObjectV2::Request(encryption_util, *session, "s3://refresh-bucket/", "", S3ListMode::FLAT);
+ 
+diff --git a/test/unittest/s3/s3_sse_test.cpp b/test/unittest/s3/s3_sse_test.cpp
+index 1e6d948..4c28106 100644
+--- a/test/unittest/s3/s3_sse_test.cpp
++++ b/test/unittest/s3/s3_sse_test.cpp
+@@ -11,7 +11,6 @@
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+ #include "duckdb/common/string_util.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/secret/secret.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "test_helpers.hpp"
+@@ -97,7 +96,7 @@ static string ReadOneByte(Connection &con, const string &path, bool force_downlo
+ 	}
+ 	auto handle = fs.OpenFile(path, flags);
+ 	string result(1, '\0');
+-	handle->Read(QueryContext(*con.context), &result[0], result.size(), 0);
++	handle->Read(*con.context, &result[0], result.size(), 0);
+ 	return result;
+ }
+ 
+@@ -105,7 +104,7 @@ static void WriteObject(Connection &con, const string &path, idx_t size) {
+ 	auto &fs = FileSystem::GetFileSystem(*con.context);
+ 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+ 	string payload(size, 'x');
+-	handle->Write(QueryContext(*con.context), &payload[0], payload.size());
++	handle->Write(*con.context, &payload[0], payload.size());
+ 	handle->Close();
+ }
+ 
+@@ -212,7 +211,7 @@ static void RunSSECustomerMatrix(const string &client_implementation) {
+ 	WriteObject(con, S3TestHelper::S3_PATH, 32);
+ 	S3TestHelper::RequireQueryOk(con, "SET s3_uploader_max_filesize='50GB'");
+ 	WriteObject(con, S3TestHelper::S3_PATH, 10ULL * 1024ULL * 1024ULL + 1);
+-	auto glob_result = fs.Glob("s3://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY, nullptr);
++	auto glob_result = fs.Glob("s3://refresh-bucket/*.bin", FileGlobOptions::ALLOW_EMPTY);
+ 	REQUIRE(glob_result->GetAllFiles().size() == 1);
+ 	fs.RemoveFile(S3TestHelper::S3_PATH);
+ 	fs.RemoveFiles({S3TestHelper::S3_PATH, "s3://refresh-bucket/another.bin"});
+@@ -220,7 +219,7 @@ static void RunSSECustomerMatrix(const string &client_implementation) {
+ 		auto handle =
+ 		    fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+ 		string payload(10ULL * 1024ULL * 1024ULL + 1, 'a');
+-		handle->Write(QueryContext(*con.context), &payload[0], payload.size());
++		handle->Write(*con.context, &payload[0], payload.size());
+ 		handle->AbortWrite();
+ 	}
+ 	S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -626,8 +625,8 @@ WHERE name = 'persistent_sse' AND contains(secret_string, '%s') AND contains(sec
+ 		auto secret_entry = secret_manager.GetSecretByName(transaction, "persistent_sse");
+ 		REQUIRE(secret_entry);
+ 		auto &secret = secret_entry->secret->Cast<KeyValueSecret>();
+-		ClientContextFileOpener opener(con.context->GetContext());
+-		S3KeyValueReader reader {KeyValueSecretReader(secret, opener)};
++		Context &context = con.context->GetContext();
++		S3KeyValueReader reader {KeyValueSecretReader(secret, context)};
+ 		auto auth_params = S3AuthResolver::Resolve(reader, "s3://persistent/object.bin");
+ 		REQUIRE(auth_params.GetRequestOptions().sse_customer_key);
+ 		REQUIRE(KeyMatches(*auth_params.GetRequestOptions().sse_customer_key, SSE_C_KEY, SSE_C_KEY_MD5));
+diff --git a/test/unittest/s3/s3_test_helper.cpp b/test/unittest/s3/s3_test_helper.cpp
+index 67ea199..eda1483 100644
+--- a/test/unittest/s3/s3_test_helper.cpp
++++ b/test/unittest/s3/s3_test_helper.cpp
+@@ -346,7 +346,7 @@ void S3TestHelper::WriteMultipartPayload(Connection &con) {
+ 	auto handle =
+ 	    fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+ 	string payload(10 * 1024 * 1024 + 1, 'x');
+-	handle->Write(QueryContext(*con.context), &payload[0], payload.size());
++	handle->Write(*con.context, &payload[0], payload.size());
+ 	handle->Close();
+ }
+ 
+@@ -357,7 +357,7 @@ void S3TestHelper::WriteSinglePutPayload(Connection &con) {
+ 	auto handle =
+ 	    fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+ 	string payload = "single-shot payload";
+-	handle->Write(QueryContext(*con.context), &payload[0], payload.size());
++	handle->Write(*con.context, &payload[0], payload.size());
+ 	handle->Close();
+ }
+ 
+diff --git a/test/unittest/s3/s3_upload_lifecycle_test.cpp b/test/unittest/s3/s3_upload_lifecycle_test.cpp
+index 7bb6c28..bb584ed 100644
+--- a/test/unittest/s3/s3_upload_lifecycle_test.cpp
++++ b/test/unittest/s3/s3_upload_lifecycle_test.cpp
+@@ -83,8 +83,7 @@ struct S3UploadLifecycleTest {
+ 		auto payload = MultipartPayload();
+ 		ErrorData primary_error;
+ 		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); },
+-		    primary_error);
++		    [&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); }, primary_error);
+ 		RequireStableError(*handle, first_error);
+ 		auto abort_error = RequireError([&]() { handle->AbortWrite(); });
+ 		REQUIRE(abort_error == first_error);
+@@ -120,7 +119,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto first_error = RequireError([&]() { handle->Sync(); });
+ 		RequireStableError(*handle, first_error);
+ 		REQUIRE(StringUtil::Contains(first_error, "InternalError"));
+@@ -155,7 +154,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto first_error = RequireError([&]() { handle->Sync(); });
+ 		RequireStableError(*handle, first_error);
+ 		auto abort_error = RequireError([&]() { handle->AbortWrite(); });
+@@ -199,8 +198,8 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto first_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		RequireStableError(*handle, first_error);
+ 		REQUIRE(StringUtil::Contains(first_error, error_fragment));
+ 		handle.reset();
+@@ -227,7 +226,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "small encrypted object";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		handle->AbortWrite();
+ 		handle->Close();
+@@ -261,7 +260,7 @@ struct S3UploadLifecycleTest {
+ 		{
+ 			auto handle = OpenWriter(con);
+ 			auto payload = MultipartPayload();
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++			handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		}
+ 		S3TestHelper::RequireQueryOk(con, "ROLLBACK");
+ 
+@@ -290,8 +289,8 @@ struct S3UploadLifecycleTest {
+ 		handle->AbortWrite();
+ 		handle->AbortWrite();
+ 		string payload = "not published";
+-		auto write_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto write_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		auto close_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(StringUtil::Contains(write_error, "Cannot write to an aborted S3 upload"));
+ 		REQUIRE(StringUtil::Contains(close_error, "Cannot finalize an aborted S3 upload"));
+@@ -320,7 +319,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "buffered replacement";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->AbortWrite();
+ 		handle->AbortWrite();
+ 		handle.reset();
+@@ -349,7 +348,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->AbortWrite();
+ 		handle->AbortWrite();
+ 		handle.reset();
+@@ -384,7 +383,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto abort_error = RequireError([&]() { handle->AbortWrite(); });
+ 		REQUIRE(StringUtil::Contains(abort_error, "Failed to abort S3 multipart upload"));
+ 		handle->AbortWrite();
+@@ -420,7 +419,7 @@ struct S3UploadLifecycleTest {
+ 
+ 		std::thread writer([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++				handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 			} catch (std::exception &ex) {
+ 				write_error = ex.what();
+ 			}
+@@ -466,7 +465,7 @@ struct S3UploadLifecycleTest {
+ 		auto payload = MultipartPayload();
+ 		try {
+ 			auto handle = OpenWriter(con);
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++			handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 			throw IOException("Trigger stack unwinding");
+ 		} catch (IOException &) {
+ 		}
+@@ -493,11 +492,10 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		string extra = "x";
+-		auto first_error = RequireError([&]() {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(extra.data()), extra.size(), payload.size() - 1);
+-		});
++		auto first_error = RequireError(
++		    [&]() { handle->Write(*con.context, data_ptr_cast(extra.data()), extra.size(), payload.size() - 1); });
+ 		RequireStableError(*handle, first_error);
+ 		REQUIRE(StringUtil::Contains(first_error, "S3 writes must be sequential"));
+ 		handle.reset();
+@@ -532,7 +530,7 @@ struct S3UploadLifecycleTest {
+ 
+ 		std::thread first([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size(), 0);
++				handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size(), 0);
+ 			} catch (std::exception &ex) {
+ 				first_error = ex.what();
+ 			}
+@@ -542,7 +540,7 @@ struct S3UploadLifecycleTest {
+ 		std::thread second([&]() {
+ 			second_started.store(true);
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(duplicate.data()), duplicate.size(), 0);
++				handle->Write(*con.context, data_ptr_cast(duplicate.data()), duplicate.size(), 0);
+ 			} catch (std::exception &ex) {
+ 				second_error = ex.what();
+ 			}
+@@ -591,7 +589,7 @@ struct S3UploadLifecycleTest {
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = MultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+diff --git a/test/unittest/s3/s3_upload_test.cpp b/test/unittest/s3/s3_upload_test.cpp
+index d5b9c9e..a1b4669 100644
+--- a/test/unittest/s3/s3_upload_test.cpp
++++ b/test/unittest/s3/s3_upload_test.cpp
+@@ -109,7 +109,7 @@ CREATE SECRET gcs_upload (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con, "gcs://refresh-bucket/object.bin");
+ 		auto payload = multipart ? CreateMultipartPayload() : string("single GCS PUT");
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -178,7 +178,7 @@ CREATE SECRET gcs_refresh_upload (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con, "gcs://refresh-bucket/object.bin");
+ 		auto payload = CreateMultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -264,8 +264,8 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload(10ULL * 1024ULL * 1024ULL + 1, 'x');
+-		auto error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "ROLLBACK");
+ 
+@@ -368,11 +368,11 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "single PUT upload baseline";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		string extra = "x";
+-		auto write_after_finalize = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(extra.data()), extra.size()); });
++		auto write_after_finalize =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(extra.data()), extra.size()); });
+ 		REQUIRE(StringUtil::Contains(write_after_finalize, "finalized S3 upload"));
+ 		handle->Close();
+ 		handle.reset();
+@@ -441,7 +441,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		if (!payload.empty()) {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++			handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		}
+ 		handle->Close();
+ 		handle.reset();
+@@ -476,7 +476,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "unsupported single PUT response";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto error = RequireError([&]() { handle->Close(); });
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "ROLLBACK");
+@@ -506,8 +506,8 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = CreateMultipartPayload();
+-		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto first_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+ 		handle.reset();
+@@ -552,7 +552,7 @@ CREATE SECRET refresh_upload_policy (
+ 		std::exception_ptr write_error;
+ 		std::thread writer([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++				handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 			} catch (...) {
+ 				write_error = std::current_exception();
+ 			}
+@@ -613,7 +613,7 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(payload_size);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto before_close = server.Observations();
+ 		INFO(MockS3DescribeObservations(before_close));
+ 		if (payload_size <= INITIAL_PART_SIZE) {
+@@ -655,13 +655,13 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(INITIAL_PART_SIZE + 1);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), INITIAL_PART_SIZE);
++		handle->Write(*con.context, data_ptr_cast(payload.data()), INITIAL_PART_SIZE);
+ 		auto after_first_write = server.Observations();
+ 		INFO(MockS3DescribeObservations(after_first_write));
+ 		REQUIRE(Count(after_first_write, "PUT") == 0);
+ 		REQUIRE(Count(after_first_write, "POST") == 0);
+ 
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + INITIAL_PART_SIZE, 1);
++		handle->Write(*con.context, data_ptr_cast(payload.data()) + INITIAL_PART_SIZE, 1);
+ 		auto after_second_write = server.Observations();
+ 		INFO(MockS3DescribeObservations(after_second_write));
+ 		REQUIRE(Count(after_second_write, "POST", "uploads") == 1);
+@@ -693,9 +693,9 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(prefix_size + second_write_size);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), prefix_size);
++		handle->Write(*con.context, data_ptr_cast(payload.data()), prefix_size);
+ 		REQUIRE(server.Observations().empty());
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + prefix_size, second_write_size);
++		handle->Write(*con.context, data_ptr_cast(payload.data()) + prefix_size, second_write_size);
+ 		RequirePartSizes(server.Observations(),
+ 		                 {INITIAL_PART_SIZE, prefix_size + second_write_size - INITIAL_PART_SIZE});
+ 		handle->Close();
+@@ -726,7 +726,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		for (auto write_size : write_sizes) {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + offset, write_size);
++			handle->Write(*con.context, data_ptr_cast(payload.data()) + offset, write_size);
+ 			offset += write_size;
+ 		}
+ 		REQUIRE(offset == payload.size());
+@@ -850,8 +850,7 @@ CREATE SECRET refresh_upload_policy (
+ 		std::thread later([&]() {
+ 			later_started.store(true);
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + write_size, write_size,
+-				              write_size);
++				handle->Write(*con.context, data_ptr_cast(payload.data()) + write_size, write_size, write_size);
+ 			} catch (...) {
+ 				later_error = std::current_exception();
+ 			}
+@@ -864,7 +863,7 @@ CREATE SECRET refresh_upload_policy (
+ 		auto later_waited_for_admission = !later_finished.load() && server.Observations().empty();
+ 		std::thread earlier([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), write_size, 0);
++				handle->Write(*con.context, data_ptr_cast(payload.data()), write_size, 0);
+ 			} catch (...) {
+ 				earlier_error = std::current_exception();
+ 			}
+@@ -957,7 +956,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		for (auto write_size : write_sizes) {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + offset, write_size);
++			handle->Write(*con.context, data_ptr_cast(payload.data()) + offset, write_size);
+ 			offset += write_size;
+ 		}
+ 		handle->Close();
+@@ -988,7 +987,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con, R2_PATH);
+ 		for (auto write_size : write_sizes) {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + offset, write_size);
++			handle->Write(*con.context, data_ptr_cast(payload.data()) + offset, write_size);
+ 			offset += write_size;
+ 		}
+ 		REQUIRE(offset == payload.size());
+@@ -1017,7 +1016,7 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(3 * FIXED_PART_SIZE);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con, s3_routed ? S3TestHelper::S3_PATH : R2_PATH);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		try {
+ 			handle->Close();
+ 		} catch (...) {
+@@ -1053,7 +1052,7 @@ CREATE SECRET refresh_upload_policy (
+ 		std::exception_ptr second_error;
+ 		std::thread first([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), write_size, 0);
++				handle->Write(*con.context, data_ptr_cast(payload.data()), write_size, 0);
+ 			} catch (...) {
+ 				first_error = std::current_exception();
+ 			}
+@@ -1061,8 +1060,7 @@ CREATE SECRET refresh_upload_policy (
+ 		auto part_1_started = server.WaitForPartUpload(1);
+ 		std::thread second([&]() {
+ 			try {
+-				handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + write_size, write_size,
+-				              write_size);
++				handle->Write(*con.context, data_ptr_cast(payload.data()) + write_size, write_size, write_size);
+ 			} catch (...) {
+ 				second_error = std::current_exception();
+ 			}
+@@ -1129,7 +1127,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		for (auto write_size : write_sizes) {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + offset, write_size);
++			handle->Write(*con.context, data_ptr_cast(payload.data()) + offset, write_size);
+ 			offset += write_size;
+ 		}
+ 		auto error = RequireError([&]() { handle->Close(); });
+@@ -1186,7 +1184,7 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(1ULL * 1024ULL * 1024ULL);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		handle->Close();
+ 		handle.reset();
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -1213,8 +1211,8 @@ CREATE SECRET refresh_upload_policy (
+ 		auto payload = CreatePayload(1ULL * 1024ULL * 1024ULL + 1);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto first_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+ 		handle.reset();
+@@ -1240,11 +1238,10 @@ CREATE SECRET refresh_upload_policy (
+ 		auto excessive_tail = CreatePayload(1ULL * 1024ULL * 1024ULL);
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), INITIAL_PART_SIZE);
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()) + INITIAL_PART_SIZE, 1);
+-		auto first_error = RequireError([&]() {
+-			handle->Write(QueryContext(*con.context), data_ptr_cast(excessive_tail.data()), excessive_tail.size());
+-		});
++		handle->Write(*con.context, data_ptr_cast(payload.data()), INITIAL_PART_SIZE);
++		handle->Write(*con.context, data_ptr_cast(payload.data()) + INITIAL_PART_SIZE, 1);
++		auto first_error = RequireError(
++		    [&]() { handle->Write(*con.context, data_ptr_cast(excessive_tail.data()), excessive_tail.size()); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+ 		handle.reset();
+@@ -1274,7 +1271,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "failed single PUT";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto first_error = RequireError([&]() { handle->Sync(); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+@@ -1302,7 +1299,7 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = CreateMultipartPayload();
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size());
++		handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size());
+ 		auto first_error = RequireError([&]() { handle->Sync(); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+@@ -1334,8 +1331,8 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		auto payload = CreateMultipartPayload();
+-		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size()); });
++		auto first_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size()); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+ 		handle.reset();
+@@ -1364,9 +1361,9 @@ CREATE SECRET refresh_upload_policy (
+ 		S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+ 		auto handle = OpenWriter(con);
+ 		string payload = "out of order";
+-		handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), 1);
+-		auto first_error = RequireError(
+-		    [&]() { handle->Write(QueryContext(*con.context), data_ptr_cast(payload.data()), payload.size(), 0); });
++		handle->Write(*con.context, data_ptr_cast(payload.data()), 1);
++		auto first_error =
++		    RequireError([&]() { handle->Write(*con.context, data_ptr_cast(payload.data()), payload.size(), 0); });
+ 		auto second_error = RequireError([&]() { handle->Close(); });
+ 		REQUIRE(second_error == first_error);
+ 		handle.reset();
+diff --git a/test/unittest/s3/s3_url_boundary_test.cpp b/test/unittest/s3/s3_url_boundary_test.cpp
+index b9d0087..6ca3379 100644
+--- a/test/unittest/s3/s3_url_boundary_test.cpp
++++ b/test/unittest/s3/s3_url_boundary_test.cpp
+@@ -9,7 +9,6 @@
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/error_data.hpp"
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/test/unittest/s3/s3_url_parameters_test.cpp b/test/unittest/s3/s3_url_parameters_test.cpp
+index 99959c9..3adf8ec 100644
+--- a/test/unittest/s3/s3_url_parameters_test.cpp
++++ b/test/unittest/s3/s3_url_parameters_test.cpp
+@@ -7,7 +7,6 @@
+ #include "crypto.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/execution/operator/helper/physical_set.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/storage/buffer_manager.hpp"
+ #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+ 
+@@ -24,8 +23,8 @@ static constexpr const char *SET_NULL = "SET s3_enable_deprecated_url_parameters
+ static constexpr const char *MIGRATION_HINT = "opt in with SET s3_enable_deprecated_url_parameters = true";
+ 
+ static bool Enabled(Connection &con) {
+-	ClientContextFileOpener opener(con.context->GetContext());
+-	return S3Settings::URLParametersEnabled(&opener);
++	Context &context = con.context->GetContext();
++	return S3Settings::URLParametersEnabled(context);
+ }
+ 
+ static string ReadBlob(Connection &con, const string &path) {
+@@ -43,25 +42,6 @@ static void Configure(Connection &con, const MockS3Server &server, const string
+ 	                                      server.Endpoint() + "', URL_STYLE 'path', USE_SSL false)");
+ }
+ 
+-class ChangePolicyDuringRequest : public ClientContextFileOpener {
+-public:
+-	ChangePolicyDuringRequest(ClientContext &context, Connection &other, string statement)
+-	    : ClientContextFileOpener(context.GetContext()), other(other), statement(std::move(statement)) {
+-	}
+-
+-	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result, FileOpenerInfo &info) override {
+-		if (!changed && key == "http_timeout") {
+-			changed = true;
+-			S3TestHelper::RequireQueryOk(other, statement);
+-		}
+-		return ClientContextFileOpener::TryGetCurrentSetting(key, result, info);
+-	}
+-
+-	bool changed = false;
+-	Connection &other;
+-	string statement;
+-};
+-
+ class PauseAfterPolicySet : public ExtensionOptionInfo {
+ public:
+ 	PauseAfterPolicySet(shared_ptr<ExtensionOptionInfo> target, std::promise<void> &callback_completed,
+@@ -248,7 +228,7 @@ TEST_CASE("S3 refresh keeps the URL policy captured before settings change", "[h
+ 		auto handle = fs.OpenFile(server.S3Path() + "?s3_version_id=v1",
+ 		                          FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+ 		string data(5, '\0');
+-		handle->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++		handle->Read(*con.context, &data[0], data.size(), 0);
+ 		REQUIRE(data == server.ObjectData().substr(0, data.size()));
+ 		REQUIRE_FALSE(Enabled(other));
+ 		S3TestHelper::RequireQueryOk(con, "COMMIT");
+@@ -287,7 +267,7 @@ TEST_CASE("HTTPFS caches S3 question-mark paths under a stable URL policy", "[ht
+ 				for (idx_t iteration = 0; iteration < 2; iteration++) {
+ 					auto reader = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+ 					string data(reader->GetFileSize(), '\0');
+-					reader->Read(QueryContext(*con.context), &data[0], data.size(), 0);
++					reader->Read(*con.context, &data[0], data.size(), 0);
+ 					REQUIRE(data == server.ObjectData());
+ 				}
+ 				const auto observations = server.Observations();
+@@ -376,7 +356,7 @@ TEST_CASE("Core caches S3 question-mark paths under a stable URL policy", "[http
+ 				};
+ 				for (idx_t iteration = 0; iteration < 2; iteration++) {
+ 					S3TestHelper::RequireQueryOk(con, "BEGIN");
+-					auto handle = fs.OpenFile(OpenFileInfo(path), FileFlags::FILE_FLAGS_READ);
++					auto handle = fs.OpenFile(*con.context, OpenFileInfo(path), FileFlags::FILE_FLAGS_READ);
+ 					REQUIRE(read(*handle) == server.ObjectData().substr(0, 12));
+ 					REQUIRE(read(*handle) == server.ObjectData().substr(0, 12));
+ 					handle.reset();
+@@ -531,77 +511,4 @@ TEST_CASE("S3 directory removal reconstructs full object paths", "[httpfs][s3][u
+ 	REQUIRE(deleted);
+ }
+ 
+-TEST_CASE("Bulk S3 deletion keeps the URL policy for every entry", "[httpfs][s3][url-parameters]") {
+-	MockS3Server server {MockS3ServerConfig()};
+-	DuckDB db(nullptr);
+-	Connection con(db), other(db);
+-	S3TestHelper::LoadExtension(db);
+-	Configure(con, server, "curl");
+-	S3TestHelper::RequireQueryOk(
+-	    con, "CREATE SECRET literal_reader (TYPE S3, KEY_ID 'id', SECRET 'secret', ENDPOINT '" + server.Endpoint() +
+-	             "', URL_STYLE 'path', USE_SSL false, URL_COMPATIBILITY_MODE true, "
+-	             "SCOPE 's3://refresh-bucket/third')");
+-	S3TestHelper::RequireQueryOk(con, ENABLE);
+-	S3TestHelper::RequireQueryOk(con, "BEGIN");
+-	S3FileSystem fs(BufferManager::GetBufferManager(*db.instance));
+-	ChangePolicyDuringRequest opener(*con.context, other, DISABLE);
+-	fs.RemoveFiles({"s3://refresh-bucket/first?s3_requester_pays=true",
+-	                "s3://refresh-bucket/second?s3_requester_pays=true",
+-	                "s3://refresh-bucket/third?s3_requester_pays=true"},
+-	               &opener);
+-	REQUIRE(opener.changed);
+-	REQUIRE_FALSE(Enabled(other));
+-	const string expected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+-	                        "<Delete xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+-	                        "<Object><Key>first</Key></Object><Object><Key>second</Key></Object>"
+-	                        "<Quiet>true</Quiet></Delete>";
+-	const string literal_expected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+-	                                "<Delete xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+-	                                "<Object><Key>third?s3_requester_pays=true</Key></Object>"
+-	                                "<Quiet>true</Quiet></Delete>";
+-	idx_t parsed_requests = 0, literal_requests = 0;
+-	for (const auto &request : server.Observations()) {
+-		if (request.method == "POST") {
+-			if (request.body_digest == MockS3DigestBody(expected)) {
+-				parsed_requests++;
+-			} else {
+-				REQUIRE(request.body_digest == MockS3DigestBody(literal_expected));
+-				literal_requests++;
+-			}
+-		}
+-	}
+-	REQUIRE(parsed_requests == 1);
+-	REQUIRE(literal_requests == 1);
+-	S3TestHelper::RequireQueryOk(con, "COMMIT");
+-}
+-
+-TEST_CASE("S3 directory removal keeps its policy between listing and deleting", "[httpfs][s3][url-parameters]") {
+-	MockS3ServerConfig config;
+-	config.object.key = "dir/literal?s3_requester_pays=true";
+-	MockS3Server server(config);
+-	DuckDB db(nullptr);
+-	Connection con(db), other(db);
+-	S3TestHelper::LoadExtension(db);
+-	Configure(con, server, "curl");
+-	S3TestHelper::RequireQueryOk(con, "BEGIN");
+-	S3FileSystem fs(BufferManager::GetBufferManager(*db.instance));
+-	ChangePolicyDuringRequest opener(*con.context, other, ENABLE);
+-	fs.RemoveDirectory("s3://refresh-bucket/dir", &opener);
+-	REQUIRE(opener.changed);
+-	REQUIRE(Enabled(other));
+-	const string expected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+-	                        "<Delete xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+-	                        "<Object><Key>dir/literal?s3_requester_pays=true</Key></Object>"
+-	                        "<Quiet>true</Quiet></Delete>";
+-	idx_t requests = 0;
+-	for (const auto &request : server.Observations()) {
+-		if (request.method == "POST") {
+-			REQUIRE(request.body_digest == MockS3DigestBody(expected));
+-			requests++;
+-		}
+-	}
+-	REQUIRE(requests == 1);
+-	S3TestHelper::RequireQueryOk(con, "COMMIT");
+-}
+-
+ } // namespace duckdb

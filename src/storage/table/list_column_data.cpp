@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -98,7 +99,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	if (row_idx >= count) {
 		throw DataCorruptionException("Corrupted database: list offset row ID is out of range");
 	}
-	ColumnScanState offset_state(nullptr);
+	ColumnScanState offset_state(nullptr, GetDatabase().GetContext());
 	ColumnData::InitializeScanWithOffset(offset_state, row_idx);
 	Vector result(LogicalType::UBIGINT, 1);
 	ScanVector(offset_state, result, 1, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -336,7 +337,7 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
                                idx_t result_offset) {
 	// insert the validity child state
 	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>(state.context);
 		state.child_states.push_back(std::move(child_state));
 	}
 
@@ -383,7 +384,7 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
 		// now we need to read from the child all the elements between [offset...length]
 		auto child_scan_count = list_entry.length;
 		if (child_scan_count > 0) {
-			ColumnScanState child_state(nullptr);
+			ColumnScanState child_state(nullptr, state.context);
 			auto &child_type = ListType::GetChildType(result.GetType());
 			Vector child_scan(child_type, child_scan_count);
 			// seek the scan towards the specified position and read [length] entries
@@ -595,7 +596,7 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
-void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void ListColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                           vector<ColumnSegmentInfo> &result,
                                           const ColumnSegmentInfoScanOptions &options) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);

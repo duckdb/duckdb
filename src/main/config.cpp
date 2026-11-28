@@ -1028,9 +1028,10 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 	return *callback_manager;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
-	auto &fs = file_system->FindFileSystem(path_p, opener);
-	auto result = fs.CanonicalizePath(FileSystem::ExpandPath(path_p, opener), opener);
+string DBConfig::SanitizeAllowedPath(Context &context, const string &path_p) const {
+	// canonicalizing does not need the file system extension of the path, so it is not autoloaded
+	auto &fs = file_system->FindFileSystem(path_p);
+	auto result = fs.CanonicalizePath(context, FileSystem::ExpandPath(context, path_p));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = fs.PathSeparator(path_p);
 	if (path_sep != "/") {
@@ -1070,8 +1071,8 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 	throw InvalidInputException("Unknown configuration option %s in allowed_configs", config_name);
 }
 
-void DBConfig::AddAllowedDirectory(const string &path) {
-	auto allowed_directory = SanitizeAllowedPath(path);
+void DBConfig::AddAllowedDirectory(Context &context, const string &path) {
+	auto allowed_directory = SanitizeAllowedPath(context, path);
 	if (allowed_directory.empty()) {
 		throw InvalidInputException("Cannot provide an empty string for allowed_directory");
 	}
@@ -1107,10 +1108,10 @@ void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
 	has_disabled_optimizers.store(!options.disabled_optimizers.empty());
 }
 
-void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
+void DBConfig::SetAllowedDirectories(Context &context, const vector<string> &paths) {
 	decltype(options.allowed_directories) new_directories;
 	for (auto &path : paths) {
-		auto allowed_directory = SanitizeAllowedPath(path);
+		auto allowed_directory = SanitizeAllowedPath(context, path);
 		if (allowed_directory.empty()) {
 			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
 		}
@@ -1123,10 +1124,10 @@ void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
 	options.allowed_directories = std::move(new_directories);
 }
 
-void DBConfig::SetAllowedPaths(const vector<string> &paths) {
+void DBConfig::SetAllowedPaths(Context &context, const vector<string> &paths) {
 	decltype(options.allowed_paths) new_paths;
 	for (auto &path : paths) {
-		new_paths.insert(SanitizeAllowedPath(path));
+		new_paths.insert(SanitizeAllowedPath(context, path));
 	}
 	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_paths = std::move(new_paths);
@@ -1142,17 +1143,17 @@ void DBConfig::ResetAllowedPaths() {
 	options.allowed_paths = DBConfigOptions().allowed_paths;
 }
 
-void DBConfig::AddAllowedPath(const string &path) {
-	auto allowed_path = SanitizeAllowedPath(path);
+void DBConfig::AddAllowedPath(Context &context, const string &path) {
+	auto allowed_path = SanitizeAllowedPath(context, path);
 	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_paths.insert(allowed_path);
 }
 
-void DBConfig::AddAllowedDatabasePath(const string &database_path) {
-	AddAllowedPath(database_path);
-	AddAllowedPath(database_path + ".wal");
-	AddAllowedPath(database_path + ".wal.checkpoint");
-	AddAllowedPath(database_path + ".wal.recovery");
+void DBConfig::AddAllowedDatabasePath(Context &context, const string &database_path) {
+	AddAllowedPath(context, database_path);
+	AddAllowedPath(context, database_path + ".wal");
+	AddAllowedPath(context, database_path + ".wal.checkpoint");
+	AddAllowedPath(context, database_path + ".wal.recovery");
 }
 
 vector<string> DBConfig::GetAllowedDirectories() const {
@@ -1197,7 +1198,7 @@ static bool HasRemotePathTraversal(const string &path) {
 	return false;
 }
 
-bool DBConfig::CanAccessFile(const string &input_path, FileType type, optional_ptr<FileOpener> opener) {
+bool DBConfig::CanAccessFile(Context &context, const string &input_path, FileType type) {
 	if (Settings::Get<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
@@ -1206,7 +1207,7 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type, optional_p
 	if (HasRemotePathTraversal(input_path)) {
 		return false;
 	}
-	string path = SanitizeAllowedPath(input_path, opener);
+	string path = SanitizeAllowedPath(context, input_path);
 
 	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {

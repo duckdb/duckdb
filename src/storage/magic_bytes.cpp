@@ -26,7 +26,7 @@ static DataFileType ClassifyMagicBytes(const char *buffer) {
 	return DataFileType::UNKNOWN_FILE;
 }
 
-DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path,
+DataFileType MagicBytes::CheckMagicBytes(Context &context, FileSystem &fs, const string &path,
                                          optional_ptr<PrefetchedFileData> out_prefetch) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;

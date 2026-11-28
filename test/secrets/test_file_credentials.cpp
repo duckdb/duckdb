@@ -1,13 +1,12 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb.hpp"
-#include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/file_lookup_info.hpp"
 #include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -113,9 +112,8 @@ public:
 		return "MemoryFileSystem";
 	}
 	using BaseFileSystem::OpenFile;
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		return OpenFileExtended(OpenFileInfo(path), flags, opener);
+	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override {
+		return OpenFileExtended(context, OpenFileInfo(path), flags);
 	}
 	bool CanHandleFile(const string &path) override {
 		return StringUtil::StartsWith(path, "mem://");
@@ -167,17 +165,16 @@ public:
 	idx_t SeekPosition(FileHandle &handle) override {
 		return handle.Cast<MemoryFileHandle>().position;
 	}
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+	bool FileExists(Context &context, const string &filename) override {
 		return files.count(filename) > 0;
 	}
 
 protected:
-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-	                                        optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info(file);
+	unique_ptr<FileHandle> OpenFileExtended(Context &context, const OpenFileInfo &file, FileOpenFlags flags) override {
+		FileLookupInfo info(file);
 		string key_id;
 		string region;
-		ReadSecret(opener, info, key_id, region);
+		ReadSecret(context, info, key_id, region);
 		Record("open", file.path, key_id, region);
 		if (!files.count(file.path) && flags.ReturnNullIfNotExists()) {
 			return nullptr;
@@ -187,12 +184,12 @@ protected:
 		}
 		return make_uniq<MemoryFileHandle>(*this, file.path, flags, key_id);
 	}
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &pattern, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info(pattern);
+	unique_ptr<MultiFileList> GlobFilesExtended(Context &context, const string &pattern,
+	                                            const FileGlobInput &input) override {
+		FileLookupInfo info(pattern);
 		string key_id;
 		string region;
-		ReadSecret(opener, info, key_id, region);
+		ReadSecret(context, info, key_id, region);
 		Record("glob", pattern, key_id, region);
 		string secret_name;
 		auto listed_with = listing_secrets.find(listing_secrets.count(pattern) ? pattern : "");
@@ -222,13 +219,10 @@ protected:
 	}
 
 private:
-	void ReadSecret(optional_ptr<FileOpener> opener, FileOpenerInfo &info, string &key_id, string &region) {
+	void ReadSecret(Context &context, FileLookupInfo &info, string &key_id, string &region) {
 		key_id = NO_KEY;
 		region = NO_KEY;
-		if (!opener) {
-			return;
-		}
-		KeyValueSecretReader reader(*opener, &info, TEST_TYPE);
+		KeyValueSecretReader reader(context, &info, TEST_TYPE);
 		Value value;
 		if (reader.TryGetSecretKeyOrSetting("key_id", "file_credentials_test_key_id", value) && !value.IsNull()) {
 			key_id = value.ToString();
@@ -380,10 +374,9 @@ TEST_CASE("A file that names a secret reads with it instead of the secret matche
 	// the named secret sets no region: the setting fills it, as for a secret matched to the path
 	REQUIRE(f.fs->Accesses("open")[1].region == "setting-region");
 	f.con.Rollback();
-	// an opener without a client finds the secret too
-	DatabaseFileOpener database_opener(*f.db.instance);
-	FileOpenerInfo info(CredentialsFixture::File(path, named));
-	KeyValueSecretReader reader(database_opener, &info, TEST_TYPE);
+	// the database-wide context without a client finds the secret too
+	FileLookupInfo info(CredentialsFixture::File(path, named));
+	KeyValueSecretReader reader(f.db.instance->GetContext(), &info, TEST_TYPE);
 	REQUIRE(reader.GetSecretKey("key_id").ToString() == "named-key");
 	// the name is an option of the file, so it also travels in a file struct, and a statement can name a secret
 	string name;
@@ -406,10 +399,9 @@ TEST_CASE("A named secret of another type fails the read, and a reader of severa
 	f.con.BeginTransaction();
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", other)); },
 	                  "is of type \"file_credentials_test_other\", which this read does not take");
-	ClientContextFileOpener opener(f.Context().GetContext());
-	FileOpenerInfo info(CredentialsFixture::File("mem://bucket/table/a.bin", other));
+	FileLookupInfo info(CredentialsFixture::File("mem://bucket/table/a.bin", other));
 	const char *with_other[] = {TEST_TYPE, "FILE_CREDENTIALS_TEST_OTHER"};
-	KeyValueSecretReader reader(opener, &info, with_other, 2);
+	KeyValueSecretReader reader(f.Context().GetContext(), &info, with_other, 2);
 	REQUIRE(reader.GetSecretKey("key_id").ToString() == "other-key");
 	f.con.Rollback();
 }

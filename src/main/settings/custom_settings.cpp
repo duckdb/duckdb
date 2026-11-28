@@ -307,7 +307,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	for (auto &val : ListValue::GetChildren(input)) {
 		directories.push_back(val.GetValue<string>());
 	}
-	config.SetAllowedDirectories(directories);
+	config.SetAllowedDirectories(db->GetContext(), directories);
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -344,7 +344,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	for (auto &val : ListValue::GetChildren(input)) {
 		paths.push_back(val.GetValue<string>());
 	}
-	config.SetAllowedPaths(paths);
+	config.SetAllowedPaths(db->GetContext(), paths);
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -734,20 +734,21 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		throw InvalidInputException("Cannot enable external access while database is running");
 	}
 	auto &config = info.config;
+	auto &services = info.db->GetContext();
 	if (info.db && Settings::Get<EnableExternalAccessSetting>(*info.db)) {
 		// we are turning off external access - add any already attached databases to the list of accepted paths
 		auto &db_manager = DatabaseManager::Get(*info.db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
 		for (auto &path : attached_paths) {
-			config.AddAllowedPath(path);
-			config.AddAllowedPath(path + ".wal");
-			config.AddAllowedPath(path + ".wal.checkpoint");
-			config.AddAllowedPath(path + ".wal.recovery");
+			config.AddAllowedPath(services, path);
+			config.AddAllowedPath(services, path + ".wal");
+			config.AddAllowedPath(services, path + ".wal.checkpoint");
+			config.AddAllowedPath(services, path + ".wal.recovery");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
 		// if temp directory is enabled we can also write there
-		config.AddAllowedDirectory(config.options.temporary_directory);
+		config.AddAllowedDirectory(services, config.options.temporary_directory);
 	}
 }
 
@@ -1246,8 +1247,9 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), path,
-		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
+		client_data.log_query_writer =
+		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), info.context->GetContext(), path,
+		                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
 }
 

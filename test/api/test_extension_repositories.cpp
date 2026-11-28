@@ -205,8 +205,9 @@ TEST_CASE("Test that adding trusted extension repositories must be opted into", 
 static void WriteTextFile(const string &path, const string &contents) {
 	// the database file system refuses to write *.duckdb_extension* files, so write through a raw local file system
 	LocalFileSystem fs;
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, nullptr);
-	handle->Write(QueryContext(), (void *)contents.data(), contents.size(), 0);
+	auto handle =
+	    fs.OpenFile(TestServicesContext(), path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	handle->Write(TestServicesContext(), (void *)contents.data(), contents.size(), 0);
 	handle->Sync();
 }
 
@@ -1025,6 +1026,7 @@ TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
 	auto info_path = fs.JoinPath(
 	    fs.JoinPath(fs.JoinPath(ExtensionHelper::ExtensionDirectory(*db.instance, fs), "repositories"), "host.example"),
 	    "loadable_extension_demo.duckdb_extension.info");
-	auto info = ExtensionInstallInfo::TryReadInfoFile(fs, info_path, "loadable_extension_demo");
+	auto info =
+	    ExtensionInstallInfo::TryReadInfoFile(db.instance->GetContext(), fs, info_path, "loadable_extension_demo");
 	REQUIRE(info->repository_url == new_prefix);
 }

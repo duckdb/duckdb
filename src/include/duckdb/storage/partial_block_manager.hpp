@@ -13,7 +13,7 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
 #include <cstdint>
@@ -64,9 +64,6 @@ public:
 	//! The source is neither modified nor retained; destination and packable lifetime rules are as above.
 	optional<BlockPointer> Write(Context &context, BlockPackable &packable, const BufferHandle &source,
 	                             uint32_t byte_size);
-	//! As above, for index checkpoints, whose Index::Checkpoint API does not provide a context: blocks this flushes
-	//! are not attributed to a query.
-	optional<BlockPointer> Write(BlockPackable &packable, const BufferHandle &source, uint32_t byte_size);
 
 	//! Reserve a disk block ID, using checkpoint accounting in FULL_CHECKPOINT mode; not for in-memory storage.
 	block_id_t GetFreeBlockId();
@@ -88,9 +85,9 @@ private:
 	//! Remove the block with least free space if the map limit is exceeded; otherwise return nullptr.
 	unique_ptr<PartialBlock> PruneFreeList();
 	//! Consume the block, retaining it if reusable or flushing it otherwise; also flush any pruned map entry.
-	void RetainOrFlush(optional_ptr<Context> context, unique_ptr<PartialBlock> partial_block);
+	void RetainOrFlush(Context &context, unique_ptr<PartialBlock> partial_block);
 	//! Store a copy of the source in a block and retain or flush it.
-	optional<BlockPointer> WriteCopy(optional_ptr<Context> context, BlockPackable &packable, const BufferHandle &source,
+	optional<BlockPointer> WriteCopy(Context &context, BlockPackable &packable, const BufferHandle &source,
 	                                 uint32_t byte_size);
 
 private:

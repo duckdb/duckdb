@@ -6,7 +6,6 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -18,7 +17,7 @@
 
 namespace duckdb {
 
-//! The file system of a client: the database file system with the client file opener
+//! The file system of a client: the database file system with the context of the client
 class ClientFileSystem : public FileSystem {
 public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
@@ -28,8 +27,8 @@ public:
 		return VirtualFileSystem::Get(context);
 	}
 
-	optional_ptr<FileOpener> GetOpener() const override {
-		return context.GetContext().TryGetFileOpener();
+	Context &GetContext() const override {
+		return context.GetContext();
 	}
 
 	ClientContext &context;
@@ -60,7 +59,7 @@ public:
 		return result;
 	}
 	BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
-		auto result = Inner().Allocate(QueryContext(context), tag, block_size, can_destroy);
+		auto result = Inner().Allocate(context, tag, block_size, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result.GetBlockHandle()) {
 			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
@@ -68,21 +67,21 @@ public:
 		return result;
 	}
 	BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) override {
-		auto result = Inner().Allocate(QueryContext(context), tag, block_manager, can_destroy);
+		auto result = Inner().Allocate(context, tag, block_manager, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result.GetBlockHandle()) {
 			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
-	BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
+	BufferHandle Allocate(Context &context, MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
 		auto result = Inner().Allocate(context, tag, block_size, can_destroy);
 		if (result.GetBlockHandle()) {
 			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
-	BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	BufferHandle Allocate(Context &context, MemoryTag tag, BlockManager *block_manager,
 	                      bool can_destroy = true) override {
 		auto result = Inner().Allocate(context, tag, block_manager, can_destroy);
 		if (result.GetBlockHandle()) {
@@ -91,12 +90,12 @@ public:
 		return result;
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
-		return Pin(QueryContext(context), handle);
+		return Pin(context, handle);
 	}
-	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) override {
+	BufferHandle Pin(Context &context, shared_ptr<BlockHandle> &handle) override {
 		return Inner().Pin(context, handle);
 	}
-	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) override {
+	void Prefetch(Context &context, vector<shared_ptr<BlockHandle>> &handles) override {
 		return Inner().Prefetch(context, handles);
 	}
 	void Unpin(shared_ptr<BlockHandle> &handle) override {
@@ -207,10 +206,10 @@ public:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) override {
 		return Inner().AddToEvictionQueue(handle);
 	}
-	void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
+	void WriteTemporaryBuffer(Context &context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
 		return Inner().WriteTemporaryBuffer(context, tag, block_id, buffer);
 	}
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(Context &context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer) override {
 		return Inner().ReadTemporaryBuffer(context, tag, block, std::move(buffer));
 	}
@@ -244,7 +243,6 @@ void Context::InitializeClient(ClientContext &context_p) {
 	D_ASSERT(!context);
 	context = &context_p;
 	config = make_uniq<ClientConfig>();
-	file_opener = make_uniq<ClientContextFileOpener>(*this);
 	client_file_system = make_uniq<ClientFileSystem>(context_p);
 	profiler = make_shared_ptr<QueryProfiler>(context_p);
 	registered_state = make_uniq<RegisteredStateManager>();
@@ -263,6 +261,10 @@ optional_ptr<ClientContext> Context::TryGetClientContext(optional_ptr<Context> c
 		return nullptr;
 	}
 	return context->TryGetClientContext();
+}
+
+Context &Context::GetOrDatabase(optional_ptr<ClientContext> client, DatabaseInstance &db) {
+	return client ? client->GetContext() : db.GetContext();
 }
 
 optional_ptr<QueryProfiler> Context::TryGetQueryProfiler(optional_ptr<Context> context) {
@@ -343,10 +345,6 @@ FileSystem &Context::GetFileSystem() const {
 		return *client_file_system;
 	}
 	return FileSystem::GetFileSystem(db);
-}
-
-optional_ptr<FileOpener> Context::TryGetFileOpener() const {
-	return file_opener.get();
 }
 
 BufferManager &Context::GetBufferManager() const {

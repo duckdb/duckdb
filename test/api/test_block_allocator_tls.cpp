@@ -863,13 +863,15 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 	Allocator fallback;
 	BlockAllocator allocator(fallback, 65536, 0);
 	TestBufferPool pool(allocator, MEMORY_LIMIT, false, MEMORY_LIMIT);
+	DuckDB buffer_pool_db(nullptr);
+	auto &services = buffer_pool_db.instance->GetContext();
 	auto pointer = allocator.AllocateData(freed_size);
 	allocator.FreeData(pointer, freed_size);
 	CHECK(allocator.GetCachedMemory() == (cached ? freed_size : 0));
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (cached ? 0 : freed_size));
 	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - freed_size);
 	SECTION("A small reservation consumes retained backing's headroom") {
-		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
+		auto result = pool.EvictBlocks(services, MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
 		CHECK(result.success);
 		CHECK(allocator.GetCachedMemory() == 0);
 		// A trimmed allocation of less than a sixteenth of the limit is not purged yet, the larger uncached free is.
@@ -880,7 +882,7 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 			allocator.FreeData(pointer, freed_size);
 			CHECK(allocator.GetCachedMemory() == freed_size);
 			// With the second one the trimmed allocations reach the threshold.
-			auto second_result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
+			auto second_result = pool.EvictBlocks(services, MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
 			CHECK(second_result.success);
 			CHECK(allocator.GetCachedMemory() == 0);
 			CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==
@@ -888,7 +890,7 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 		}
 	}
 	SECTION("Lowering the limit releases retained backing") {
-		pool.SetLimit(MEMORY_LIMIT - freed_size, "");
+		pool.SetLimit(services, MEMORY_LIMIT - freed_size, "");
 		CHECK(allocator.GetCachedMemory() == 0);
 		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
 	}

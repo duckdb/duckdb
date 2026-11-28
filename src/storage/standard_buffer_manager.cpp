@@ -133,8 +133,8 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 }
 
 template <typename... ARGS>
-TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
-                                                                    idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(Context &context, MemoryTag tag, idx_t memory_delta,
+                                                                    unique_ptr<FileBuffer> *buffer,
                                                                     const ARGS &...args) {
 	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
@@ -162,7 +162,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
 	D_ASSERT(size < GetBlockSize());
-	auto reservation = EvictBlocksOrThrow(QueryContext(), tag, size, nullptr, "could not allocate block of size %s%s",
+	auto reservation = EvictBlocksOrThrow(db.GetContext(), tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, nullptr, FileBufferType::TINY_BUFFER);
@@ -178,7 +178,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
-                                                              bool can_destroy, QueryContext context) {
+                                                              bool can_destroy, Context &context) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
@@ -193,6 +193,11 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	const auto destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
+}
+
+shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
+                                                              bool can_destroy) {
+	return RegisterMemory(tag, block_size, block_header_size, can_destroy, db.GetContext());
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
@@ -225,7 +230,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	return Pin(block);
 }
 
-BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy) {
+BufferHandle StandardBufferManager::Allocate(Context &context, MemoryTag tag, idx_t block_size, bool can_destroy) {
 	auto block = RegisterMemory(tag, block_size, Storage::DEFAULT_BLOCK_HEADER_SIZE, can_destroy, context);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
@@ -235,7 +240,7 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 	return Pin(context, block);
 }
 
-BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+BufferHandle StandardBufferManager::Allocate(Context &context, MemoryTag tag, BlockManager *block_manager,
                                              bool can_destroy) {
 	auto block =
 	    RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy, context);
@@ -247,7 +252,7 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 	return Pin(context, block);
 }
 
-void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
+void StandardBufferManager::BatchRead(Context &context, PrefetchRun &run) {
 	idx_t block_count = run.handles.size();
 
 	// Allocate a buffer to hold the data of all blocks.
@@ -336,7 +341,7 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 	return plan;
 }
 
-void StandardBufferManager::ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan) {
+void StandardBufferManager::ExecutePrefetch(Context &context, vector<PrefetchRun> &plan) {
 	for (auto &run : plan) {
 		if (run.handles.size() == 1 &&
 		    Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
@@ -347,12 +352,12 @@ void StandardBufferManager::ExecutePrefetch(QueryContext context, vector<Prefetc
 	}
 }
 
-void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
+void StandardBufferManager::Prefetch(Context &context, vector<shared_ptr<BlockHandle>> &handles) {
 	auto plan = RegisterPrefetch(handles);
 	ExecutePrefetch(context, plan);
 }
 
-vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(QueryContext context,
+vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(Context &context,
                                                                          vector<shared_ptr<BlockHandle>> &handles) {
 	auto plan = RegisterPrefetch(handles);
 	vector<unique_ptr<AsyncTask>> tasks;
@@ -361,16 +366,16 @@ vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(QueryCo
 		// the io size is the number of bytes this run will read
 		auto io_size = run.handles.size() * run.handles[0]->GetBlockAllocSize();
 		tasks.push_back(make_uniq<CallbackAsyncTask>(
-		    [this, context, run = std::move(run)]() mutable { BatchRead(context, run); }, io_size));
+		    [this, context = &context, run = std::move(run)]() mutable { BatchRead(*context, run); }, io_size));
 	}
 	return tasks;
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
-	return Pin(QueryContext(), handle);
+	return Pin(db.GetContext(), handle);
 }
 
-BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(Context &context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
@@ -496,7 +501,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
-	buffer_pool.SetLimit(limit, InMemoryWarning());
+	buffer_pool.SetLimit(db.GetContext(), limit, InMemoryWarning());
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {
@@ -548,7 +553,7 @@ bool StandardBufferManager::EncryptTemporaryFiles() {
 	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
-void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id,
+void StandardBufferManager::WriteTemporaryBuffer(Context &context, MemoryTag tag, block_id_t block_id,
                                                  FileBuffer &buffer) {
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
@@ -557,7 +562,7 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
 		idx_t eviction_size = temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(context, block_id, buffer);
 		evicted_data_per_tag[uint8_t(tag)] += eviction_size;
-		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+		auto profiler = context.TryGetQueryProfiler();
 		if (profiler) {
 			profiler->TrackBytesSpilled(eviction_size);
 		}
@@ -607,14 +612,13 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 		throw;
 	}
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-	auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+	auto profiler = context.TryGetQueryProfiler();
 	if (profiler) {
 		profiler->TrackBytesSpilled(buffer.AllocSize() + header_size);
 	}
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag,
-                                                                  BlockHandle &block,
+unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(Context &context, MemoryTag tag, BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
 	auto id = block.BlockId();
@@ -803,7 +807,7 @@ void StandardBufferManager::ReserveMemory(idx_t size) {
 		return;
 	}
 	auto reservation =
-	    EvictBlocksOrThrow(QueryContext(), MemoryTag::EXTENSION, size, nullptr,
+	    EvictBlocksOrThrow(db.GetContext(), MemoryTag::EXTENSION, size, nullptr,
 	                       "failed to reserve memory data of size %s%s", StringUtil::BytesToHumanReadableString(size));
 	reservation.size = 0;
 }
@@ -819,7 +823,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 // Buffer Allocator
 //===--------------------------------------------------------------------===//
 TempBufferPoolReservation BufferAllocatorData::Reserve(idx_t size) {
-	return manager.EvictBlocksOrThrow(QueryContext(), MemoryTag::ALLOCATOR, size, nullptr,
+	return manager.EvictBlocksOrThrow(manager.GetDatabase().GetContext(), MemoryTag::ALLOCATOR, size, nullptr,
 	                                  "failed to allocate data of size %s%s",
 	                                  StringUtil::BytesToHumanReadableString(size));
 }

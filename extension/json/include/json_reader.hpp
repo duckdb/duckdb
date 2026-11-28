@@ -15,7 +15,7 @@
 #include "duckdb/common/open_file_info.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "json_common.hpp"
 #include "json_enums.hpp"
 #include "yyjson_memory.hpp"
@@ -49,7 +49,7 @@ public:
 
 struct JSONFileHandle {
 public:
-	JSONFileHandle(QueryContext context, unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	JSONFileHandle(Context &context, unique_ptr<FileHandle> file_handle, Allocator &allocator);
 
 	bool IsOpen() const;
 	void Close();
@@ -82,7 +82,7 @@ private:
 	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
-	QueryContext context;
+	Context &context;
 
 	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;

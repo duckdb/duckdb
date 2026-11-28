@@ -109,26 +109,25 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	throw NotImplementedException("This type of BufferManager does not support 'AddToEvictionQueue");
 }
 
-BufferHandle BufferManager::Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy) {
+BufferHandle BufferManager::Allocate(Context &context, MemoryTag tag, idx_t block_size, bool can_destroy) {
 	return Allocate(tag, block_size, can_destroy);
 }
 
-BufferHandle BufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
-                                     bool can_destroy) {
+BufferHandle BufferManager::Allocate(Context &context, MemoryTag tag, BlockManager *block_manager, bool can_destroy) {
 	return Allocate(tag, block_manager, can_destroy);
 }
 
-vector<unique_ptr<AsyncTask>> BufferManager::CreatePrefetchTasks(QueryContext context,
+vector<unique_ptr<AsyncTask>> BufferManager::CreatePrefetchTasks(Context &context,
                                                                  vector<shared_ptr<BlockHandle>> &handles) {
 	Prefetch(context, handles);
 	return vector<unique_ptr<AsyncTask>>();
 }
 
-void BufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+void BufferManager::WriteTemporaryBuffer(Context &context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
-unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
+unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(Context &context, MemoryTag tag, BlockHandle &block,
                                                           unique_ptr<FileBuffer> buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }

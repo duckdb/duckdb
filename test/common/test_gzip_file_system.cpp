@@ -8,6 +8,12 @@ using namespace duckdb;
 
 namespace {
 
+//! The database-wide Context used to read through file systems without a database
+Context &GzipTestContext() {
+	static DuckDB db(nullptr);
+	return db.instance->GetContext();
+}
+
 class ShortReadFileHandle : public FileHandle {
 public:
 	ShortReadFileHandle(BaseFileSystem &file_system, const string &path)
@@ -76,7 +82,7 @@ vector<data_t> ReadGZipTestFile(const string &name) {
 	auto handle = file_system.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = NumericCast<idx_t>(handle->GetFileSize());
 	vector<data_t> result(file_size);
-	handle->Read(QueryContext(), result.data(), file_size, 0);
+	handle->Read(GzipTestContext(), result.data(), file_size, 0);
 	return result;
 }
 
@@ -85,12 +91,12 @@ string ReadCompressedData(const vector<data_t> &compressed_data, idx_t max_read_
 	ShortReadFileSystem file_system(compressed_data, max_read_size, read_boundary);
 	auto child_handle = make_uniq<ShortReadFileHandle>(file_system, "short-read.gz");
 	GZipFileSystem gzip_file_system;
-	auto compressed_handle = gzip_file_system.OpenCompressedFile(QueryContext(), std::move(child_handle), false);
+	auto compressed_handle = gzip_file_system.OpenCompressedFile(GzipTestContext(), std::move(child_handle), false);
 
 	string result;
 	data_t buffer[37];
 	while (true) {
-		auto read_count = compressed_handle->Read(QueryContext(), buffer, sizeof(buffer));
+		auto read_count = compressed_handle->Read(GzipTestContext(), buffer, sizeof(buffer));
 		if (read_count == 0) {
 			break;
 		}
@@ -135,10 +141,10 @@ TEST_CASE("GZIP progress counts every compressed byte, the header included", "[f
 			auto child_handle = make_uniq<ShortReadFileHandle>(file_system, "progress.gz");
 			GZipFileSystem gzip_file_system;
 			auto compressed_handle =
-			    gzip_file_system.OpenCompressedFile(QueryContext(), std::move(child_handle), false);
+			    gzip_file_system.OpenCompressedFile(GzipTestContext(), std::move(child_handle), false);
 			data_t buffer[37];
 			idx_t previous_progress = 0;
-			while (compressed_handle->Read(QueryContext(), buffer, sizeof(buffer)) != 0) {
+			while (compressed_handle->Read(GzipTestContext(), buffer, sizeof(buffer)) != 0) {
 				auto progress = compressed_handle->GetProgress();
 				REQUIRE(progress >= previous_progress);
 				REQUIRE(progress <= compressed_data.size());

@@ -51,23 +51,23 @@ public:
 		return false;
 	}
 
-	bool FileExists(const string &path, optional_ptr<FileOpener> opener) override {
-		return LocalFileSystem::FileExists(MapPath(path), opener);
+	bool FileExists(Context &context, const string &path) override {
+		return LocalFileSystem::FileExists(context, MapPath(path));
 	}
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override {
+	vector<OpenFileInfo> Glob(Context &context, const string &path) override {
 		if (!CanHandleFile(path)) {
-			return LocalFileSystem::Glob(path, opener);
+			return LocalFileSystem::Glob(context, path);
 		}
 		vector<OpenFileInfo> result;
-		if (LocalFileSystem::FileExists(MapPath(path), opener)) {
+		if (LocalFileSystem::FileExists(context, MapPath(path))) {
 			result.emplace_back(path);
 		}
 		return result;
 	}
 
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override {
-		return LocalFileSystem::OpenFile(MapPath(path), flags, opener);
+	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override {
+		return LocalFileSystem::OpenFile(context, MapPath(path), flags);
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {

@@ -248,7 +248,7 @@ void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
                                 idx_t result_offset) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
-		state.child_states.push_back(make_uniq<ColumnFetchState>());
+		state.child_states.push_back(make_uniq<ColumnFetchState>(state.context));
 	}
 
 	// Fetch validity
@@ -262,7 +262,7 @@ void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
 
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
 		// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
-		ColumnScanState child_state(nullptr);
+		ColumnScanState child_state(nullptr, state.context);
 		child_state.Initialize(state.context, child_type, nullptr);
 
 		const auto row_id = offsets[sel.get_index(idx)];
@@ -387,7 +387,7 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 	this->count = validity->count.load();
 }
 
-void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void ArrayColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result,
                                            const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);

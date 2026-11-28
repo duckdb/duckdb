@@ -62,7 +62,7 @@ TEST_CASE("Sparse DICT_FSST filtering retains strings from an already decoded di
 	}
 	const auto input_count = selected_count;
 	{
-		ColumnScanState state(nullptr);
+		ColumnScanState state(nullptr, *con.context);
 		state.current = node;
 		state.offset_in_column = node->GetRowStart();
 		segment.InitializeScan(state);
@@ -131,7 +131,7 @@ TEST_CASE("Retained RLE dictionaries survive selection reuse and scan destructio
 		} else {
 			segment->GetStatsMutable().SetHasNoNull();
 		}
-		ColumnScanState state(nullptr);
+		ColumnScanState state(nullptr, db.instance->GetContext());
 		segment->InitializeScan(state);
 		segment->Scan(state, 28, first, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
 		REQUIRE(first.GetVectorType() == VectorType::DICTIONARY_VECTOR);
@@ -200,7 +200,7 @@ static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &
 		// A zero-length legacy run is unused even when statistics exclude row NULLs.
 		auto segment = MakeRLEPlaceholderSegment<T>(db, compression, type, run_length);
 		if (run_length == 37) {
-			ColumnScanState scan(nullptr);
+			ColumnScanState scan(nullptr, db.instance->GetContext());
 			segment->InitializeScan(scan);
 			Vector result(type, 128);
 			segment->Scan(scan, 128, result, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
@@ -222,7 +222,7 @@ static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &
 		auto filter_state = TableFilterState::Initialize(*con.context, filter);
 		REQUIRE(filter_state->can_cache);
 		REQUIRE_FALSE(filter_state->Cast<ExpressionFilterState>().fast_executor);
-		ColumnScanState state(nullptr);
+		ColumnScanState state(nullptr, *con.context);
 		segment->InitializeScan(state);
 		const auto count = 20 * run_length;
 		Vector result(type, count);
@@ -371,7 +371,7 @@ TEST_CASE("RLE validation covers batch boundaries before decoding", "[storage][c
 	counts.push_back(65535);
 	const auto row_count = expected.size();
 	auto segment = MakeRLETestSegment(db, function, counts, row_count);
-	ColumnScanState state(nullptr);
+	ColumnScanState state(nullptr, *con.context);
 	segment->InitializeScan(state);
 	Vector result(LogicalType::INTEGER, row_count + 3);
 	auto check = [&](idx_t offset, idx_t count, idx_t expected_offset) {
@@ -425,7 +425,7 @@ TEST_CASE("RLE filtering advances past a partially selected batch", "[storage][c
 	auto function = RLEFun::GetFunction(PhysicalType::INT32);
 	vector<uint16_t> counts {0, 1, 9, 0, 1, 9, 0};
 	auto segment = MakeRLETestSegment(db, function, counts, 20);
-	ColumnScanState state(nullptr);
+	ColumnScanState state(nullptr, *con.context);
 	segment->InitializeScan(state);
 	auto filter =
 	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::INTEGER(3));
@@ -475,7 +475,7 @@ TEST_CASE("RLE filtering preserves selections retained by dictionary results",
 	const auto half_batch = NumericCast<uint16_t>(batch_size / 2);
 	vector<uint16_t> counts {half_batch, half_batch, half_batch, half_batch};
 	auto segment = MakeRLETestSegment(db, function, counts, 2 * batch_size);
-	ColumnScanState state(nullptr);
+	ColumnScanState state(nullptr, *con.context);
 	segment->InitializeScan(state);
 	auto filter = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(1));
 	auto filter_state = TableFilterState::Initialize(*con.context, *filter);
@@ -537,7 +537,7 @@ TEST_CASE("Malformed RLE batches fail before unchecked run access", "[storage][c
 		std::fill(counts.begin(), counts.end(), 0);
 	}
 	auto segment = MakeRLETestSegment(db, function, counts, row_count);
-	ColumnScanState state(nullptr);
+	ColumnScanState state(nullptr, *con.context);
 	segment->InitializeScan(state);
 	Vector result(LogicalType::INTEGER, row_count);
 
@@ -582,7 +582,7 @@ TEST_CASE("Constant selection preserves the surrounding flat result", "[storage]
 	SelectionVector selection(2);
 	selection.set_index(0, 1);
 	selection.set_index(1, 6);
-	ColumnScanState state(nullptr);
+	ColumnScanState state(nullptr, db.instance->GetContext());
 
 	SECTION("values") {
 		auto function = ConstantFun::GetFunction(PhysicalType::INT32);

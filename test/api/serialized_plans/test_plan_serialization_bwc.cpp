@@ -50,7 +50,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileWriter target(db.GetFileSystem(), file_location);
+	BufferedFileWriter target(db.GetFileSystem(), con.context->GetContext(), file_location);
 	std::ifstream queries(get_full_file_name("queries.sql"));
 	string query;
 	while (std::getline(queries, query)) {
@@ -129,7 +129,7 @@ TEST_CASE("Generate specific serialized plans", "[.][serialization]") {
 			plan = optimizer.Optimize(std::move(plan));
 		}
 
-		BufferedFileWriter target(fs, fs.JoinPath(dir_location, name + ".bin"));
+		BufferedFileWriter target(fs, con.context->GetContext(), fs.JoinPath(dir_location, name + ".bin"));
 		BinarySerializer serializer(target);
 		serializer.Begin();
 		plan->Serialize(serializer);

@@ -21,17 +21,17 @@ static void CopyFile(FileSystem &fs, const string &source, const string &target)
 	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	auto file_size = source_handle->GetFileSize();
 	auto contents = duckdb::unique_ptr<data_t[]>(new data_t[file_size]);
-	source_handle->Read(QueryContext(), contents.get(), file_size, 0);
+	source_handle->Read(contents.get(), file_size, 0);
 
 	auto target_handle = fs.OpenFile(target, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-	target_handle->Write(QueryContext(), contents.get(), file_size, 0);
+	fs.Write(*target_handle, contents.get(), UnsafeNumericCast<int64_t>(file_size), 0);
 }
 
 static pair<idx_t, idx_t> GetWALCommitBoundaries(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
-	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
+	handle->Read(wal_contents.get(), wal_size, 0);
 
 	for (idx_t start = 0; start + 2 * sizeof(uint64_t) <= wal_size; start++) {
 		idx_t offset = start;
@@ -164,10 +164,10 @@ static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
 
-	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
+	handle->Read(wal_contents.get(), wal_size, 0);
 	wal_contents[byte_pos]++;
 
-	handle->Write(QueryContext(), wal_contents.get(), wal_size, 0);
+	fs.Write(*handle, wal_contents.get(), UnsafeNumericCast<int64_t>(wal_size), 0);
 }
 
 TEST_CASE("Test WAL checksums", "[storage][.]") {
@@ -255,7 +255,7 @@ TEST_CASE("Test WAL entry size that overflows the bound check", "[storage][.]") 
 		auto handle = lfs.OpenFile(storage_wal, FileFlags::FILE_FLAGS_WRITE);
 		data_t header[2 * sizeof(uint64_t)];
 		memset(header, 0xFF, sizeof(header));
-		handle->Write(QueryContext(), header, sizeof(header), commit_boundaries.first);
+		handle->Write(TestServicesContext(), header, sizeof(header), commit_boundaries.first);
 	}
 	{
 		// the oversized entry is treated as a torn write: table A is replayed, table B is not
@@ -294,7 +294,7 @@ static void RenumberFirstEntryField(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
-	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
+	handle->Read(TestServicesContext(), wal_contents.get(), wal_size, 0);
 
 	// find the first framed entry by trying every start offset: the first [size][checksum][payload] with a valid
 	// checksum that is followed by another valid entry
@@ -317,8 +317,8 @@ static void RenumberFirstEntryField(FileSystem &fs, const string &path) {
 			if (entry[i] == 101 && entry[i + 1] == 0) {
 				entry[i] = 154;
 				uint64_t new_checksum = Checksum(entry.get(), entry_size);
-				handle->Write(QueryContext(), entry.get(), entry_size, payload_offset);
-				handle->Write(QueryContext(), &new_checksum, sizeof(uint64_t), start + sizeof(uint64_t));
+				handle->Write(TestServicesContext(), entry.get(), entry_size, payload_offset);
+				handle->Write(TestServicesContext(), &new_checksum, sizeof(uint64_t), start + sizeof(uint64_t));
 				return;
 			}
 		}
@@ -352,7 +352,7 @@ static void CorruptInsertEntryType(FileSystem &fs, const string &path, idx_t ins
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
-	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
+	handle->Read(TestServicesContext(), wal_contents.get(), wal_size, 0);
 
 	// find the chain of framed [size][checksum][payload] entries by trying every start offset
 	for (idx_t start = 0; start + 2 * sizeof(uint64_t) <= wal_size; start++) {
@@ -379,8 +379,8 @@ static void CorruptInsertEntryType(FileSystem &fs, const string &path, idx_t ins
 			if (is_insert && valid_entries >= 2 && inserts_seen++ == insert_nr) {
 				entry[2] = 7; // unused WALType
 				uint64_t new_checksum = Checksum(entry.get(), entry_size);
-				handle->Write(QueryContext(), entry.get(), entry_size, payload_offset);
-				handle->Write(QueryContext(), &new_checksum, sizeof(uint64_t), offset + sizeof(uint64_t));
+				handle->Write(TestServicesContext(), entry.get(), entry_size, payload_offset);
+				handle->Write(TestServicesContext(), &new_checksum, sizeof(uint64_t), offset + sizeof(uint64_t));
 				return;
 			}
 			offset = payload_offset + entry_size;

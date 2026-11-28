@@ -31,7 +31,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
@@ -43,7 +43,6 @@ class Catalog;
 class CatalogSearchPath;
 class ColumnDataCollection;
 class DatabaseInstance;
-class FileOpener;
 class Context;
 class LogicalOperator;
 class PreparedStatement;
@@ -293,6 +292,10 @@ public:
 	//! The Context (client configuration, logging, metrics, file system) owned by this client context
 	Context &GetContext() const {
 		return *context;
+	}
+	//! A ClientContext can be passed where the Context of the client is expected
+	operator Context &() const { // NOLINT: allow implicit conversion
+		return GetContext();
 	}
 
 	//! Returns the current query string (if any)

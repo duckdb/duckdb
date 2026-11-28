@@ -472,7 +472,7 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 		// We scan the existing table for the conflicting tuples, if we
 		// need them for the conditions, or SET expressions.
 		scan_chunk.Initialize(context.client, types_to_fetch);
-		fetch_state = make_uniq<ColumnFetchState>();
+		fetch_state = make_uniq<ColumnFetchState>(context.client);
 
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);

@@ -4,7 +4,7 @@
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"

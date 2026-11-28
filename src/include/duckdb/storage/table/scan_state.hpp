@@ -97,12 +97,13 @@ public:
 };
 
 struct ColumnScanState {
-	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
+	ColumnScanState(optional_ptr<CollectionScanState> parent_p, Context &context_p)
+	    : parent(parent_p), context(context_p) {
 	}
 
 	optional_ptr<CollectionScanState> parent;
-	//! The query context for this scan
-	QueryContext context;
+	//! The context for this scan
+	reference<Context> context;
 	//! The column segment that is currently being scanned
 	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Column segment tree
@@ -141,9 +142,9 @@ public:
 	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
 
 public:
-	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
+	void Initialize(Context &context_p, const LogicalType &type, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
-	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
+	void Initialize(Context &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -162,9 +163,12 @@ enum class FetchType {
 };
 
 struct ColumnFetchState {
+	explicit ColumnFetchState(Context &context_p) : context(context_p) {
+	}
+
 	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
-	//! The query context for this fetch
-	QueryContext context;
+	//! The context for this fetch
+	reference<Context> context;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
 	//! The current row group we are fetching from
@@ -272,7 +276,8 @@ public:
 	idx_t RowCount() const;
 
 private:
-	QueryContext context;
+	//! The context the scan runs in; not part of the assignment itself
+	mutable optional_ptr<Context> context;
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> row_group;
 	shared_ptr<RowGroup> pinned_row_group;
@@ -294,8 +299,8 @@ struct TableScanAssignment {
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
-	//! The query context for this scan
-	QueryContext context;
+	//! The context for this scan
+	optional_ptr<Context> context;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -331,7 +336,7 @@ public:
 	unique_ptr<StorageLockKey> local_row_groups_lock;
 
 public:
-	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
+	void Initialize(Context &context_p, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();

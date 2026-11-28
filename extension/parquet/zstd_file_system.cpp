@@ -27,7 +27,7 @@ struct ZstdStreamWrapper : public StreamWrapper {
 	bool writing = false;
 
 public:
-	void Initialize(QueryContext context, CompressedFile &file, bool write) override;
+	void Initialize(Context &context, CompressedFile &file, bool write) override;
 	bool Read(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
@@ -59,7 +59,7 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 	}
 }
 
-void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
+void ZstdStreamWrapper::Initialize(Context &context, CompressedFile &file, bool write) {
 	D_ASSERT(!zstd_stream_ptr && !zstd_compress_ptr);
 	this->file = &file;
 	this->writing = write;
@@ -124,7 +124,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start == sd.out_buff.get() + sd.out_buf_size) {
 			// no more output buffer available: flush
-			file.child_handle->Write(file.context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file.child_handle->Write(*file.context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
@@ -155,7 +155,7 @@ void ZstdStreamWrapper::FlushStream() {
 		idx_t written_to_output = out_buffer.pos;
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(file->context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file->child_handle->Write(*file->context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		if (res == 0) {
@@ -191,7 +191,7 @@ struct ZStdFileSystemHolder {
 
 class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
-	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	ZStdFile(Context &context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
 		Initialize(context, write);
 	}
@@ -203,8 +203,7 @@ public:
 
 } // namespace
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle, bool write) {
 	try {
 		auto path = handle->path;
 		return make_uniq<ZStdFile>(context, std::move(handle), path, write);

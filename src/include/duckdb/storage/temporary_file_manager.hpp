@@ -170,9 +170,9 @@ public:
 	void EraseBlockIndex(block_id_t block_index);
 
 	//! Read/Write temporary buffers at given positions in this file (potentially compressed)
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, const TemporaryFileIndex &index_in_file,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(Context &context, const TemporaryFileIndex &index_in_file,
 	                                           unique_ptr<FileBuffer> buffer);
-	void WriteTemporaryBuffer(QueryContext context, FileBuffer &buffer, idx_t block_index,
+	void WriteTemporaryBuffer(Context &context, FileBuffer &buffer, idx_t block_index,
 	                          AllocatedData &compressed_buffer);
 
 	//! Deletes the file if there are no more blocks
@@ -314,10 +314,10 @@ public:
 	};
 
 	//! Create/Read/Update/Delete operations for temporary buffers
-	idx_t WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer);
+	idx_t WriteTemporaryBuffer(Context &context, block_id_t block_id, FileBuffer &buffer);
 	bool HasTemporaryBuffer(block_id_t block_id);
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, block_id_t id,
-	                                           unique_ptr<FileBuffer> reusable_buffer, idx_t *eviction_size = nullptr);
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(Context &context, block_id_t id, unique_ptr<FileBuffer> reusable_buffer,
+	                                           idx_t *eviction_size = nullptr);
 	idx_t DeleteTemporaryBuffer(block_id_t id);
 	bool IsEncrypted() const;
 

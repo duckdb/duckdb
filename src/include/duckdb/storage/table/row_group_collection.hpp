@@ -117,11 +117,11 @@ public:
 	void Verify();
 	void Destroy();
 
-	void InitializeScan(const QueryContext &context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
+	void InitializeScan(Context &context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
 	                    optional_ptr<TableFilterSet> table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
-	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
+	void InitializeScanWithOffset(Context &context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
+	                              idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
 	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
 	                                     idx_t vector_index, idx_t max_row, bool initialize_columns = true);
@@ -160,7 +160,7 @@ public:
 	bool IsPersistent() const;
 
 	//! Removes the rows from the indexes added before the bound.
-	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
+	void RemoveFromIndexes(Context &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx(),
 	                       VisibilityBound bound = VisibilityBound::IncludingUncommitted());
 
@@ -200,12 +200,12 @@ public:
 
 	vector<PartitionStatistics> GetPartitionStats(TransactionData transaction) const;
 	vector<ColumnSegmentInfo>
-	GetColumnSegmentInfo(const QueryContext &context,
+	GetColumnSegmentInfo(Context &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) const;
 	//! Initialize an incremental scan over column segment info, pinning the current row groups for consistency.
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const;
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
-	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	bool ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result) const;
 	bool SupportsPerColumnWrites() const;
 	bool SupportsPerColumnWrites();
@@ -217,7 +217,7 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
 	                                         TransactionData transaction);
-	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
+	void VerifyNewConstraint(Context &context, DuckTransaction &transaction, DataTable &parent,
 	                         const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);

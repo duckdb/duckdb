@@ -6,7 +6,7 @@
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_opener.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
@@ -364,17 +364,7 @@ string BaseFileSystem::ExtractExtension(const string &path) {
 	return vec.back();
 }
 
-string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
-	// read the home_directory setting first, if it is set
-	if (opener) {
-		Value result;
-		if (opener->TryGetCurrentSetting("home_directory", result)) {
-			if (!result.IsNull() && !result.ToString().empty()) {
-				return result.ToString();
-			}
-		}
-	}
-	// fallback to the default home directories for the specified system
+string FileSystem::GetDefaultHomeDirectory() {
 #ifdef DUCKDB_WINDOWS
 	return FileSystem::GetEnvVariable("USERPROFILE");
 #else
@@ -382,8 +372,20 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 #endif
 }
 
+string FileSystem::GetHomeDirectory(Context &context) {
+	// read the home_directory setting first, if it is set
+	Value result;
+	if (context.TryGetCurrentSetting("home_directory", result)) {
+		if (!result.IsNull() && !result.ToString().empty()) {
+			return result.ToString();
+		}
+	}
+	// fallback to the default home directories for the specified system
+	return GetDefaultHomeDirectory();
+}
+
 string BaseFileSystem::GetHomeDirectory() {
-	return FileSystem::GetHomeDirectory(nullptr);
+	return FileSystem::GetDefaultHomeDirectory();
 }
 
 // Helper function to handle file:/ URLs
@@ -423,12 +425,19 @@ static idx_t GetFileUrlOffset(const string &path) {
 	return 0;
 }
 
-string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
+string FileSystem::ExpandPath(Context &context, const string &path) {
+	if (!path.empty() && path[0] == '~') {
+		return ExpandPathWithHome(path, GetHomeDirectory(context));
+	}
+	return ExpandPathWithHome(path, string());
+}
+
+string FileSystem::ExpandPathWithHome(const string &path, const string &home_directory) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
-		return FileSystem::GetHomeDirectory(opener) + path.substr(1);
+		return home_directory + path.substr(1);
 	}
 	// handle file URIs
 	auto file_offset = GetFileUrlOffset(path);
@@ -439,35 +448,34 @@ string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opene
 }
 
 string BaseFileSystem::ExpandPath(const string &path) {
-	return FileSystem::ExpandPath(path, nullptr);
+	return FileSystem::ExpandPathWithHome(path, GetHomeDirectory());
 }
 
 // LCOV_EXCL_START
-unique_ptr<FileHandle> BaseFileSystem::OpenFileExtended(const OpenFileInfo &path,
-                                                        FileOpenFlags flags, // NOLINT: virtual, overrides mutate flags
-                                                        optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle>
+BaseFileSystem::OpenFileExtended(Context &context, const OpenFileInfo &path,
+                                 FileOpenFlags flags) { // NOLINT: virtual, overrides mutate flags
 	throw NotImplementedException("%s: OpenFileExtended is not implemented!", GetName());
 }
 
-bool BaseFileSystem::ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-                                       optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::ListFilesExtended(Context &context, const string &directory,
+                                       const std::function<void(OpenFileInfo &info)> &callback) {
 	throw NotImplementedException("%s: ListFilesExtended is not implemented!", GetName());
 }
 
-unique_ptr<FileHandle> BaseFileSystem::OpenFile(const string &path, FileOpenFlags flags,
-                                                optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> BaseFileSystem::OpenFile(Context &context, const string &path, FileOpenFlags flags) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(OpenFileInfo(path), std::move(flags), opener);
+		return OpenFileExtended(context, OpenFileInfo(path), std::move(flags));
 	}
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
-unique_ptr<FileHandle> BaseFileSystem::OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags,
-                                                optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> BaseFileSystem::OpenFile(Context &context, const OpenFileInfo &file,
+                                                const FileOpenFlags &flags) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(file, flags, opener);
+		return OpenFileExtended(context, file, flags);
 	} else {
-		return OpenFile(file.path, flags, opener);
+		return OpenFile(context, file.path, flags);
 	}
 }
 
@@ -535,8 +543,8 @@ FileMetadata BaseFileSystem::Stats(FileHandle &handle) {
 	return metadata;
 }
 
-optional<FileMetadata> BaseFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
-	auto handle = OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+optional<FileMetadata> BaseFileSystem::GetStatsIfExists(Context &context, const OpenFileInfo &file) {
+	auto handle = OpenFile(context, file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		return nullopt;
 	}
@@ -547,36 +555,36 @@ void BaseFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
 
-bool BaseFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::DirectoryExists(Context &context, const string &directory) {
 	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
-void BaseFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+void BaseFileSystem::CreateDirectory(Context &context, const string &directory) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-bool BaseFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                             optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::CreateDirectoryExtended(Context &context, const string &directory,
+                                             const CreateDirectoryOptions &options) {
 	switch (options.mode) {
 	case CreateDirectoryMode::SINGLE:
-		if (!DirectoryExists(directory, opener)) {
-			CreateDirectory(directory, opener);
+		if (!DirectoryExists(context, directory)) {
+			CreateDirectory(context, directory);
 		}
 		return false;
 	case CreateDirectoryMode::RECURSIVE: {
 		auto parsed = Path::FromString(directory);
 		vector<string> directories;
-		while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString(), opener)) {
+		while (!parsed.GetPathSegments().empty() && !DirectoryExists(context, parsed.ToString())) {
 			directories.push_back(parsed.ToString());
 			parsed = parsed.Parent();
 		}
-		if (parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString(), opener)) {
+		if (parsed.GetPathSegments().empty() && !DirectoryExists(context, parsed.ToString())) {
 			directories.push_back(parsed.ToString());
 		}
 
 		bool target_created = false;
 		for (auto riter = directories.rbegin(); riter != directories.rend(); ++riter) {
-			auto created = CreateDirectoryExtended(*riter, {CreateDirectoryMode::SINGLE}, opener);
+			auto created = CreateDirectoryExtended(context, *riter, {CreateDirectoryMode::SINGLE});
 			if (*riter == directories.front()) {
 				target_created = created;
 			}
@@ -588,21 +596,21 @@ bool BaseFileSystem::CreateDirectoryExtended(const string &directory, const Crea
 	}
 }
 
-void BaseFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+void BaseFileSystem::CreateDirectoriesRecursive(Context &context, const string &path) {
+	CreateDirectoryExtended(context, path, {CreateDirectoryMode::RECURSIVE});
 }
 
-void BaseFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+void BaseFileSystem::RemoveDirectory(Context &context, const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
-bool BaseFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                             optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::RemoveDirectoryExtended(Context &context, const string &directory,
+                                             const RemoveDirectoryOptions &options) {
 	switch (options.mode) {
 	case RemoveDirectoryMode::SINGLE:
 		return false;
 	case RemoveDirectoryMode::RECURSIVE:
-		RemoveDirectory(directory, opener);
+		RemoveDirectory(context, directory);
 		return false;
 	default:
 		throw InternalException("Unknown RemoveDirectoryMode");
@@ -620,66 +628,60 @@ bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	return type == "directory";
 }
 
-bool BaseFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                               FileOpener *opener) {
+bool BaseFileSystem::ListFiles(Context &context, const string &directory,
+                               const std::function<void(const string &, bool)> &callback) {
 	if (SupportsListFilesExtended()) {
-		return ListFilesExtended(
-		    directory,
-		    [&](const OpenFileInfo &info) {
-			    bool is_dir = FileSystem::IsDirectory(info);
-			    callback(info.path, is_dir);
-		    },
-		    opener);
+		return ListFilesExtended(context, directory, [&](const OpenFileInfo &info) {
+			bool is_dir = FileSystem::IsDirectory(info);
+			callback(info.path, is_dir);
+		});
 	}
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
-bool BaseFileSystem::ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-                               optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::ListFiles(Context &context, const string &directory,
+                               const std::function<void(OpenFileInfo &info)> &callback) {
 	if (SupportsListFilesExtended()) {
-		return ListFilesExtended(directory, callback, opener);
+		return ListFilesExtended(context, directory, callback);
 	} else {
-		return ListFiles(
-		    directory,
-		    [&](const string &path, bool is_dir) {
-			    OpenFileInfo info(path);
-			    if (is_dir) {
-				    info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-				    info.extended_info->options["type"] = "directory";
-			    }
-			    callback(info);
-		    },
-		    opener.get());
+		return ListFiles(context, directory, [&](const string &path, bool is_dir) {
+			OpenFileInfo info(path);
+			if (is_dir) {
+				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				info.extended_info->options["type"] = "directory";
+			}
+			callback(info);
+		});
 	}
 }
 
-void BaseFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
+void BaseFileSystem::MoveFile(Context &context, const string &source, const string &target) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-bool BaseFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::FileExists(Context &context, const string &filename) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
-bool BaseFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
+bool BaseFileSystem::IsPipe(Context &context, const string &filename) {
 	return false;
 }
 
-void BaseFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+void BaseFileSystem::RemoveFile(Context &context, const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
-bool BaseFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	if (FileExists(filename, opener)) {
-		RemoveFile(filename, opener);
+bool BaseFileSystem::TryRemoveFile(Context &context, const string &filename) {
+	if (FileExists(context, filename)) {
+		RemoveFile(context, filename);
 		return true;
 	}
 	return false;
 }
 
-void BaseFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+void BaseFileSystem::RemoveFiles(Context &context, const vector<string> &filenames) {
 	for (const auto &filename : filenames) {
-		TryRemoveFile(filename, opener);
+		TryRemoveFile(context, filename);
 	}
 }
 
@@ -705,26 +707,25 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<OpenFileInfo> BaseFileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> BaseFileSystem::Glob(Context &context, const string &path) {
 	if (SupportsGlobExtended()) {
-		auto result = GlobFilesExtended(path, FileGlobOptions::ALLOW_EMPTY, opener);
+		auto result = GlobFilesExtended(context, path, FileGlobOptions::ALLOW_EMPTY);
 		return result->GetAllFiles();
 	}
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
-unique_ptr<MultiFileList> BaseFileSystem::Glob(const string &path, const FileGlobInput &input,
-                                               optional_ptr<FileOpener> opener) {
+unique_ptr<MultiFileList> BaseFileSystem::Glob(Context &context, const string &path, const FileGlobInput &input) {
 	if (!SupportsGlobExtended()) {
-		auto result = Glob(path, opener.get());
+		auto result = Glob(context, path);
 		return make_uniq<SimpleMultiFileList>(std::move(result));
 	} else {
-		return GlobFilesExtended(path, input, opener);
+		return GlobFilesExtended(context, path, input);
 	}
 }
 
-unique_ptr<MultiFileList> BaseFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
-                                                            optional_ptr<FileOpener> opener) {
+unique_ptr<MultiFileList> BaseFileSystem::GlobFilesExtended(Context &context, const string &path,
+                                                            const FileGlobInput &input) {
 	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
@@ -756,8 +757,7 @@ FileWriteMode BaseFileSystem::GetWriteMode(FileHandle &handle) {
 	return FileWriteMode::SEQUENTIAL;
 }
 
-unique_ptr<FileHandle> BaseFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+unique_ptr<FileHandle> BaseFileSystem::OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
@@ -785,14 +785,14 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
-static optional_ptr<QueryProfiler> GetTrackingProfiler(bool track_io, const QueryContext &context) {
-	if (!track_io || !context.Valid()) {
+static optional_ptr<QueryProfiler> GetTrackingProfiler(bool track_io, Context &context) {
+	if (!track_io) {
 		return nullptr;
 	}
-	return context.GetContext()->TryGetQueryProfiler();
+	return context.TryGetQueryProfiler();
 }
 
-int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
+int64_t FileHandle::Read(Context &context, void *buffer, idx_t nr_bytes) {
 	auto profiler = GetTrackingProfiler(track_io, context);
 	const bool track = profiler != nullptr;
 	const auto start = track ? TimePoint::Tick() : TimePoint();
@@ -815,7 +815,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
-int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
+int64_t FileHandle::Write(Context &context, void *buffer, idx_t nr_bytes) {
 	auto profiler = GetTrackingProfiler(track_io, context);
 	const bool track = profiler != nullptr;
 	const auto start = track ? TimePoint::Tick() : TimePoint();
@@ -832,7 +832,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(Context &context, void *buffer, idx_t nr_bytes, idx_t location) {
 	auto profiler = GetTrackingProfiler(track_io, context);
 	const bool track = profiler != nullptr;
 	const auto start = track ? TimePoint::Tick() : TimePoint();
@@ -843,7 +843,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 	}
 }
 
-void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Write(Context &context, void *buffer, idx_t nr_bytes, idx_t location) {
 	auto profiler = GetTrackingProfiler(track_io, context);
 	const bool track = profiler != nullptr;
 	const auto start = track ? TimePoint::Tick() : TimePoint();
@@ -878,8 +878,8 @@ FileCompressionType FileHandle::GetFileCompressionType() {
 	return FileCompressionType::UNCOMPRESSED;
 }
 
-bool FileHandle::IsPipe() {
-	return file_system.IsPipe(path, nullptr);
+bool FileHandle::IsPipe(Context &context) {
+	return file_system.IsPipe(context, path);
 }
 
 string FileHandle::ReadLine() {
@@ -896,7 +896,7 @@ string FileHandle::ReadLine() {
 	}
 }
 
-string FileHandle::ReadLine(QueryContext context) {
+string FileHandle::ReadLine(Context &context) {
 	string result;
 	char buffer[1];
 	while (true) {
@@ -942,20 +942,19 @@ FileMetadata FileHandle::Stats() {
 	return file_system.Stats(*this);
 }
 
-void FileHandle::TryAddLogger(FileOpener &opener) {
+void FileHandle::TryAddLogger(Context &context) {
 	if (flags.DisableLogging()) {
 		return;
 	}
 
-	auto &context = opener.TryGetContext();
 	if (context.IsClient() && context.GetLogger().ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = context.GetLoggerPtr();
 		return;
 	}
 
-	auto database = opener.TryGetDatabase();
-	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
-		logger = database->GetLogManager().GlobalLoggerReference();
+	auto &database = context.GetDatabase();
+	if (Logger::Get(database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = database.GetLogManager().GlobalLoggerReference();
 	}
 }
 
@@ -978,7 +977,11 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 	return false;
 }
 
-string BaseFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+string BaseFileSystem::CanonicalizePath(Context &context, const string &path_p) {
+	return GenericCanonicalizePath(path_p);
+}
+
+string BaseFileSystem::GenericCanonicalizePath(const string &path_p) {
 	// TODO: @benfleis - integrate this properly with Path (needs additional work)
 	if (FileSystem::IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
 		// don't canonicalize remote paths

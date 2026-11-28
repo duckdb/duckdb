@@ -1,0 +1,67 @@
+diff --git a/src/include/quack_ssl_key_generator.hpp b/src/include/quack_ssl_key_generator.hpp
+index 252ee2a..acf5466 100644
+--- a/src/include/quack_ssl_key_generator.hpp
++++ b/src/include/quack_ssl_key_generator.hpp
+@@ -6,18 +6,18 @@
+ namespace duckdb {
+ 
+ class FileSystem;
+-class FileOpener;
++class Context;
+ 
+ class SslKeyGenerator {
+ public:
+ 	static void GenerateSslKeys(const std::string &cert_filename, const std::string &private_key_filename,
+ 	                            const std::string &dh_filename, size_t cert_days_valid);
+ 
+-	//! `<home>/.duckdb/extension_data/quack`, created if missing. With an opener, the home_directory
++	//! `<home>/.duckdb/extension_data/quack`, created if missing. With an context, the home_directory
+ 	//! setting is honored.
+ 	static constexpr size_t DEFAULT_DAYS_VALID = 3650;
+ 
+-	static std::string GetDefaultCertificateDirectory(FileSystem &fs, optional_ptr<FileOpener> opener = nullptr);
++	static std::string GetDefaultCertificateDirectory(FileSystem &fs, Context &context);
+ 	static std::string GetDefaultCertificateFile(FileSystem &fs, const std::string &certificate_directory);
+ 	static std::string GetDefaultPrivateKeyFile(FileSystem &fs, const std::string &certificate_directory);
+ 	//! Restrict a freshly written key file to its owner where the platform supports it
+diff --git a/src/quack_http_server.cpp b/src/quack_http_server.cpp
+index 351586e..8596bfe 100644
+--- a/src/quack_http_server.cpp
++++ b/src/quack_http_server.cpp
+@@ -197,7 +197,7 @@ HttpQuackServer::HttpQuackServer(ClientContext &context_p, const QuackUri &uri_p
+ 		if (cert_file.empty()) {
+ 			auto &fs = FileSystem::GetFileSystem(context_p);
+ 			auto certificate_directory =
+-			    SslKeyGenerator::GetDefaultCertificateDirectory(fs, context_p.GetContext().TryGetFileOpener().get());
++			    SslKeyGenerator::GetDefaultCertificateDirectory(fs, context_p.GetContext());
+ 			cert_file = SslKeyGenerator::GetDefaultCertificateFile(fs, certificate_directory);
+ 			key_file = SslKeyGenerator::GetDefaultPrivateKeyFile(fs, certificate_directory);
+ 			if (!fs.FileExists(cert_file) || !fs.FileExists(key_file)) {
+diff --git a/src/quack_ssl_key_generator.cpp b/src/quack_ssl_key_generator.cpp
+index ac0aac8..1772503 100644
+--- a/src/quack_ssl_key_generator.cpp
++++ b/src/quack_ssl_key_generator.cpp
+@@ -20,8 +20,8 @@
+ 
+ using namespace duckdb;
+ 
+-std::string SslKeyGenerator::GetDefaultCertificateDirectory(FileSystem &fs, optional_ptr<FileOpener> opener) {
+-	auto home_directory = opener ? FileSystem::GetHomeDirectory(opener) : fs.GetHomeDirectory();
++std::string SslKeyGenerator::GetDefaultCertificateDirectory(FileSystem &fs, Context &context) {
++	auto home_directory = FileSystem::GetHomeDirectory(context);
+ 	auto certificate_directory = fs.JoinPath(home_directory, ".duckdb", "extension_data", "quack");
+ 	if (!fs.DirectoryExists(certificate_directory)) {
+ 		fs.CreateDirectoriesRecursive(certificate_directory);
+diff --git a/src/quack_start_stop.cpp b/src/quack_start_stop.cpp
+index f0b0fab..97576b9 100644
+--- a/src/quack_start_stop.cpp
++++ b/src/quack_start_stop.cpp
+@@ -313,7 +313,7 @@ static void QuackGenerateKeysFun(ClientContext &context, TableFunctionInput &dat
+ 	auto certificate_directory = bind_data.certificate_directory;
+ 	if (certificate_directory.empty()) {
+ 		certificate_directory =
+-		    SslKeyGenerator::GetDefaultCertificateDirectory(fs, context.GetContext().TryGetFileOpener().get());
++		    SslKeyGenerator::GetDefaultCertificateDirectory(fs, context.GetContext());
+ 	} else if (!fs.DirectoryExists(certificate_directory)) {
+ 		fs.CreateDirectoriesRecursive(certificate_directory);
+ 	}

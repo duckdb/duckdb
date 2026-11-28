@@ -176,7 +176,7 @@ StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOption
 	auto &fs = FileSystem::Get(db);
 	path = fs.ExpandPath(path);
 
-	auto &services = db.GetDatabase().GetContext();
+	auto &services = db.GetContext();
 	storage_options.Initialize(services, options.options);
 }
 
@@ -580,7 +580,7 @@ inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
 	}
 }
 
-void StorageManager::Initialize(QueryContext context) {
+void StorageManager::Initialize(Context &context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
@@ -622,7 +622,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), options) {
 }
 
-void SingleFileStorageManager::LoadDatabase(QueryContext context) {
+void SingleFileStorageManager::LoadDatabase(Context &context) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
@@ -777,7 +777,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		unique_ptr<MetricsTimer> timer = nullptr;
 
 		// Start timing the storage load step.
-		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+		auto profiler = context.TryGetQueryProfiler();
 		if (profiler) {
 			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachLoadStorageLatency>());
 		}
@@ -982,7 +982,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 }
 
 unique_ptr<CheckpointWriter>
-SingleFileStorageManager::CreateCheckpointWriter(QueryContext context, CheckpointOptions options,
+SingleFileStorageManager::CreateCheckpointWriter(Context &context, CheckpointOptions options,
                                                  optional_ptr<ClientContext> checkpoint_context) {
 	if (InMemory()) {
 		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options, checkpoint_context);
@@ -1100,7 +1100,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(optional_ptr<ClientConte
 	return true;
 }
 
-void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options,
+void SingleFileStorageManager::CreateCheckpoint(Context &context, CheckpointOptions options,
                                                 optional_ptr<ClientContext> client_context) {
 	if (read_only || !load_complete) {
 		return;
@@ -1131,7 +1131,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	// Shared by the index binds before the checkpoint and by the checkpoint transaction.
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<ClientContext> checkpoint_context;
-	if (should_checkpoint && Context::TryGetClientContext(context.GetContext())) {
+	if (should_checkpoint && context.IsClient()) {
 		checkpoint_connection = make_uniq<Connection>(Connection::CreateInternal(db.GetDatabase()));
 		checkpoint_context = checkpoint_connection->context.get();
 	}
@@ -1143,7 +1143,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (should_checkpoint) {
 		try {
 			// Start timing the checkpoint.
-			auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+			auto profiler = context.TryGetQueryProfiler();
 			MetricsTimer timer;
 			if (profiler) {
 				timer = profiler->StartTimer<MetricStorageCheckpointLatency>();

@@ -226,8 +226,10 @@ public:
 	//! The state here can change if the block lock is held.
 	//! However, this method does not hold the block lock.
 	CanUnloadResult CanUnload() const;
-	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, QueryContext context = QueryContext());
-	void Unload(BlockLock &l, QueryContext context = QueryContext());
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, Context &context);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l);
+	void Unload(BlockLock &l, Context &context);
+	void Unload(BlockLock &l);
 
 private:
 	//! A reference to the buffer manager.
@@ -312,7 +314,7 @@ public:
 public:
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
-	BufferHandle Load(BlockLock &l, QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
+	BufferHandle Load(BlockLock &l, Context &context, unique_ptr<FileBuffer> buffer = nullptr);
 
 private:
 	//! The block manager, which loads the block.

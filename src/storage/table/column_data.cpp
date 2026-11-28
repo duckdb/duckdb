@@ -33,6 +33,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -404,7 +405,7 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
-	ColumnScanState child_state(nullptr);
+	ColumnScanState child_state(nullptr, GetDatabase().GetContext());
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
 	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -494,7 +495,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, const Sca
 	        : *state.current;
 	// segment rows are relative to the row group
 	checked_end = checked_segment.GetRowStart() + checked_segment.GetNode().count;
-	return CheckSegmentStatistics(state.context.GetClientContext(), checked_segment, expr_filter);
+	return CheckSegmentStatistics(state.context.get().TryGetClientContext(), checked_segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const ScanFilter &filter, idx_t row,
@@ -507,7 +508,7 @@ FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const S
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.filter, "ColumnData::CheckZonemapAt");
 	auto segment = data.GetSegment(row);
 	checked_end = segment->GetRowStart() + segment->GetNode().count;
-	return CheckSegmentStatistics(state.context.GetClientContext(), *segment, expr_filter);
+	return CheckSegmentStatistics(state.context.get().TryGetClientContext(), *segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
@@ -801,13 +802,12 @@ void ColumnData::FetchScannedRows(ColumnScanState &state, const SelectionVector 
 	              result_offset);
 }
 
-void ColumnData::FetchBaseRows(const QueryContext &context, const idx_t *offsets, const SelectionVector &sel,
-                               idx_t fetch_count, Vector &result, idx_t result_offset) {
+void ColumnData::FetchBaseRows(Context &context, const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count,
+                               Vector &result, idx_t result_offset) {
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	ColumnScanState scan_state(nullptr);
-	scan_state.context = context;
+	ColumnScanState scan_state(nullptr, context);
 	scan_state.string_scan_type = StringScanType::COPY_STRINGS;
 	SelectionVector window_sel;
 	idx_t idx = 0;
@@ -879,7 +879,8 @@ void ColumnData::FetchBaseRows(const row_t *row_ids, idx_t count, Vector &result
 		}
 		offsets[i] = UnsafeNumericCast<idx_t>(row_ids[i]) - row_group_start;
 	}
-	FetchBaseRows(QueryContext(), offsets.data(), *FlatVector::IncrementalSelectionVector(), count, result, 0);
+	FetchBaseRows(GetDatabase().GetContext(), offsets.data(), *FlatVector::IncrementalSelectionVector(), count, result,
+	              0);
 }
 
 void ColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
@@ -1443,7 +1444,7 @@ struct ListBlockIds : public BlockIdVisitor {
 	vector<block_id_t> &block_ids;
 };
 
-void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
 	D_ASSERT(!col_path.empty());
 

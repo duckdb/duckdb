@@ -97,21 +97,20 @@ void CachingFileSystemWrapper::FileSync(FileHandle &handle) {
 //===----------------------------------------------------------------------===//
 // OpenFile Operations
 //===----------------------------------------------------------------------===//
-unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const string &path, FileOpenFlags flags,
-                                                          optional_ptr<FileOpener> opener) {
-	return OpenFile(OpenFileInfo(path), flags, opener);
+unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(Context &context, const string &path, FileOpenFlags flags) {
+	return OpenFile(context, OpenFileInfo(path), flags);
 }
 
-unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
-                                                          optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(Context &context, const OpenFileInfo &path,
+                                                          FileOpenFlags flags) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(path, std::move(flags), opener);
+		return OpenFileExtended(context, path, std::move(flags));
 	}
 	throw NotImplementedException("CachingFileSystemWrapper: OpenFile is not implemented!");
 }
 
-unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
-                                                                  optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(Context &context, const OpenFileInfo &path,
+                                                                  FileOpenFlags flags) {
 	if (flags.OpenForWriting()) {
 		throw NotImplementedException("CachingFileSystemWrapper: Cannot open file for writing. "
 		                              "CachingFileSystemWrapper is a read-only caching filesystem.");
@@ -122,7 +121,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 	}
 
 	if (ShouldUseCache(path.path)) {
-		auto caching_handle = caching_file_system.OpenFile(path, flags, opener);
+		auto caching_handle = caching_file_system.OpenFile(context, path, flags);
 		if (!caching_handle) {
 			return nullptr;
 		}
@@ -208,49 +207,46 @@ FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 	return underlying_file_system.Stats(*file_handle);
 }
 
-optional<FileMetadata> CachingFileSystemWrapper::GetStatsIfExists(const OpenFileInfo &file,
-                                                                  optional_ptr<FileOpener> opener) {
+optional<FileMetadata> CachingFileSystemWrapper::GetStatsIfExists(Context &context, const OpenFileInfo &file) {
 	return underlying_file_system.GetStatsIfExists(file);
 }
 
 //===----------------------------------------------------------------------===//
 // Directory Operations
 //===----------------------------------------------------------------------===//
-bool CachingFileSystemWrapper::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::DirectoryExists(Context &context, const string &directory) {
 	return underlying_file_system.DirectoryExists(directory);
 }
 
-void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+void CachingFileSystemWrapper::CreateDirectory(Context &context, const string &directory) {
+	CreateDirectoryExtended(context, directory, {CreateDirectoryMode::SINGLE});
 }
 
-bool CachingFileSystemWrapper::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                                       optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::CreateDirectoryExtended(Context &context, const string &directory,
+                                                       const CreateDirectoryOptions &options) {
 	return underlying_file_system.CreateDirectoryExtended(directory, options);
 }
 
-void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+void CachingFileSystemWrapper::CreateDirectoriesRecursive(Context &context, const string &path) {
+	CreateDirectoryExtended(context, path, {CreateDirectoryMode::RECURSIVE});
 }
 
-void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+void CachingFileSystemWrapper::RemoveDirectory(Context &context, const string &directory) {
+	RemoveDirectoryExtended(context, directory, {RemoveDirectoryMode::RECURSIVE});
 }
 
-bool CachingFileSystemWrapper::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                                       optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::RemoveDirectoryExtended(Context &context, const string &directory,
+                                                       const RemoveDirectoryOptions &options) {
 	return underlying_file_system.RemoveDirectoryExtended(directory, options);
 }
 
-bool CachingFileSystemWrapper::ListFiles(const string &directory,
-                                         const std::function<void(const string &, bool)> &callback,
-                                         FileOpener *opener) {
+bool CachingFileSystemWrapper::ListFiles(Context &context, const string &directory,
+                                         const std::function<void(const string &, bool)> &callback) {
 	return underlying_file_system.ListFiles(directory, callback);
 }
 
-bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
-                                                 const std::function<void(OpenFileInfo &info)> &callback,
-                                                 optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::ListFilesExtended(Context &context, const string &directory,
+                                                 const std::function<void(OpenFileInfo &info)> &callback) {
 	// Use the public ListFiles API which will internally call `ListFilesExtended` if supported.
 	return underlying_file_system.ListFiles(directory, callback);
 }
@@ -260,23 +256,23 @@ bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
 	return true;
 }
 
-void CachingFileSystemWrapper::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
+void CachingFileSystemWrapper::MoveFile(Context &context, const string &source, const string &target) {
 	underlying_file_system.MoveFile(source, target);
 }
 
-bool CachingFileSystemWrapper::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::FileExists(Context &context, const string &filename) {
 	return underlying_file_system.FileExists(filename);
 }
 
-bool CachingFileSystemWrapper::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::IsPipe(Context &context, const string &filename) {
 	return underlying_file_system.IsPipe(filename);
 }
 
-void CachingFileSystemWrapper::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+void CachingFileSystemWrapper::RemoveFile(Context &context, const string &filename) {
 	underlying_file_system.RemoveFile(filename);
 }
 
-bool CachingFileSystemWrapper::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+bool CachingFileSystemWrapper::TryRemoveFile(Context &context, const string &filename) {
 	return underlying_file_system.TryRemoveFile(filename);
 }
 
@@ -295,7 +291,7 @@ string CachingFileSystemWrapper::PathSeparator(const string &path) {
 	return underlying_file_system.PathSeparator(path);
 }
 
-vector<OpenFileInfo> CachingFileSystemWrapper::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> CachingFileSystemWrapper::Glob(Context &context, const string &path) {
 	return underlying_file_system.Glob(path);
 }
 
@@ -347,7 +343,7 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 //===----------------------------------------------------------------------===//
 // Other Operations
 //===----------------------------------------------------------------------===//
-unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
 	auto &file_system = handle->file_system;
 	return file_system.OpenCompressedFile(context, std::move(handle), write);

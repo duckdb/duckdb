@@ -25,13 +25,13 @@ struct DatabaseHandle {
 	//! Open a fresh handle for the database file. A header prefix in `options.prefetched` (from file-type
 	//! detection) is adopted to serve the initial header reads from memory. With a client in `context`, the file
 	//! is opened through that client's file system, so the handle uses its settings and logger.
-	static unique_ptr<DatabaseHandle> Open(QueryContext context, AttachedDatabase &db, const string &path,
+	static unique_ptr<DatabaseHandle> Open(Context &context, AttachedDatabase &db, const string &path,
 	                                       const StorageManagerOptions &options, DatabaseOpenMode open_mode);
 	bool OnDiskFile() const;
 
-	void CheckMagicBytes(QueryContext context);
-	void Read(QueryContext context, FileBuffer &block, uint64_t location) const;
-	void Write(QueryContext context, FileBuffer &block, uint64_t location);
+	void CheckMagicBytes(Context &context);
+	void Read(Context &context, FileBuffer &block, uint64_t location) const;
+	void Write(Context &context, FileBuffer &block, uint64_t location);
 	void Sync();
 
 	void Truncate(idx_t new_size);
@@ -44,9 +44,9 @@ private:
 	//! Throws if a write at [required_size] would exceed the mmap reserve. No-op otherwise.
 	void EnsureMappedSize(idx_t required_size) const;
 
-	static unique_ptr<DatabaseHandle> OpenMemoryMap(QueryContext context, AttachedDatabase &db, const string &path,
+	static unique_ptr<DatabaseHandle> OpenMemoryMap(Context &context, AttachedDatabase &db, const string &path,
 	                                                const StorageManagerOptions &options, DatabaseOpenMode open_mode);
-	static unique_ptr<DatabaseHandle> OpenFile(QueryContext context, AttachedDatabase &db, const string &path,
+	static unique_ptr<DatabaseHandle> OpenFile(Context &context, AttachedDatabase &db, const string &path,
 	                                           const StorageManagerOptions &options, DatabaseOpenMode open_mode);
 
 private:

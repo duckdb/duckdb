@@ -14,9 +14,9 @@
 namespace duckdb {
 class MultiFileList;
 
-//! A file system bound to a context: it wraps a BaseFileSystem and pushes the FileOpener of that context into every
-//! call after checking that the access is allowed. It is not a BaseFileSystem: code that obtains it through
-//! FileSystem::GetFileSystem(context) cannot call the opener-taking BaseFileSystem methods by accident.
+//! A file system bound to a context: it wraps a BaseFileSystem and passes that context into every call after checking
+//! that the access is allowed. It is not a BaseFileSystem: code that obtains it through
+//! FileSystem::GetFileSystem(context) cannot call the context-taking BaseFileSystem methods by accident.
 class FileSystem {
 public:
 	virtual ~FileSystem() = default;
@@ -41,9 +41,13 @@ public:
 	//! Gets the working directory
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
+	DUCKDB_API static string GetHomeDirectory(Context &context);
+	//! Gets the default home directory of the user (without consulting the home_directory setting)
+	DUCKDB_API static string GetDefaultHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
-	DUCKDB_API static string ExpandPath(const string &path, optional_ptr<FileOpener> opener);
+	DUCKDB_API static string ExpandPath(Context &context, const string &path);
+	//! Expands "~" and file URLs in the path using the given home directory
+	DUCKDB_API static string ExpandPathWithHome(const string &path, const string &home_directory);
 	//! Returns the system-available memory in bytes. Returns an invalid index if the system function fails.
 	DUCKDB_API static optional_idx GetAvailableMemory();
 	//! Returns the space available on the disk. Returns an invalid index if the information was not available.
@@ -115,7 +119,7 @@ public:
 		handle.file_system.FileSync(handle);
 	}
 
-	//! Path-level operations: the access is verified, then forwarded together with the opener
+	//! Path-level operations: the access is verified, then forwarded together with the context
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, const FileOpenFlags &flags);
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags);
 	DUCKDB_API unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
@@ -217,7 +221,7 @@ public:
 protected:
 	//! The root that picks the file system of a path
 	virtual VirtualFileSystem &GetFileSystem() const = 0;
-	virtual optional_ptr<FileOpener> GetOpener() const = 0;
+	virtual Context &GetContext() const = 0;
 	//! If set, every path goes to this file system instead of the one the root picks
 	virtual optional_ptr<BaseFileSystem> GetFixedFileSystem() const {
 		return nullptr;

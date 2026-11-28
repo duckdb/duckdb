@@ -1,3 +1,4 @@
+#include "test_helpers.hpp"
 #include "test_capi_v2.hpp"
 #include "test_helpers.hpp"
 

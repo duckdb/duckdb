@@ -1,0 +1,14 @@
+diff --git a/src/lance_write.cpp b/src/lance_write.cpp
+index 100e8d6..9d34211 100644
+--- a/src/lance_write.cpp
++++ b/src/lance_write.cpp
+@@ -145,8 +145,7 @@ LanceWriteInitGlobal(ClientContext &context,
+   // Enforce DuckDB policy without probing storage or loading a filesystem.
+   // Check at execution so a prepared COPY observes later policy restrictions.
+   if (!DBConfig::GetConfig(context).CanAccessFile(
+-          open_path, FileType::FILE_TYPE_DIR,
+-          context.GetContext().TryGetFileOpener().get())) {
++          context.GetContext(), open_path, FileType::FILE_TYPE_DIR)) {
+     throw PermissionException("Cannot access directory \"%s\" - file system "
+                               "operations are disabled by configuration",
+                               open_path);

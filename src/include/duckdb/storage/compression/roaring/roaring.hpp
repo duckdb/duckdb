@@ -674,7 +674,7 @@ public:
 
 	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
 
-	explicit RoaringScanState(const QueryContext &context, ColumnSegment &segment);
+	explicit RoaringScanState(Context &context, ColumnSegment &segment);
 
 public:
 	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset);

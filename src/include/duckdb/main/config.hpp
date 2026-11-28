@@ -344,14 +344,14 @@ public:
 	SettingLookupResult TryGetDefaultValue(const Identifier &key, optional_ptr<const ConfigurationOption> option,
 	                                       Value &result) const;
 
-	//! The opener (if any) is used to expand "~" using the connection-specific home_directory
-	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
+	//! The context is used to expand "~" using the connection-specific home_directory
+	bool CanAccessFile(Context &context, const string &path, FileType type);
 	void AddAllowedConfig(const Identifier &config_name);
-	void AddAllowedDirectory(const string &path);
-	void AddAllowedPath(const string &path);
+	void AddAllowedDirectory(Context &context, const string &path);
+	void AddAllowedPath(Context &context, const string &path);
 	//! Replace / reset the allowed directories and paths as a whole (under the lock that guards them)
-	void SetAllowedDirectories(const vector<string> &paths);
-	void SetAllowedPaths(const vector<string> &paths);
+	void SetAllowedDirectories(Context &context, const vector<string> &paths);
+	void SetAllowedPaths(Context &context, const vector<string> &paths);
 	void ResetAllowedDirectories();
 	void ResetAllowedPaths();
 	//! Whether the given optimizer is disabled (disabled_optimizers)
@@ -360,10 +360,10 @@ public:
 	DUCKDB_API void SetDisabledOptimizers(set<OptimizerType> disabled_optimizers);
 	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled.
 	//! Only possible through API calls, not SQL calls.
-	void AddAllowedDatabasePath(const string &database_path);
+	void AddAllowedDatabasePath(Context &context, const string &database_path);
 	vector<string> GetAllowedDirectories() const;
 	vector<string> GetAllowedPaths() const;
-	string SanitizeAllowedPath(const string &path, optional_ptr<FileOpener> opener = nullptr) const;
+	string SanitizeAllowedPath(Context &context, const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
 

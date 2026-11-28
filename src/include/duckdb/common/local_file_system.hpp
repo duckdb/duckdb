@@ -15,10 +15,10 @@ namespace duckdb {
 
 class LocalFileSystem : public BaseFileSystem {
 public:
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override;
+	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override;
 
-	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
+	unique_ptr<MemoryMappedFile> MemoryMapFile(Context &context, const OpenFileInfo &path, FileOpenFlags flags,
+	                                           const MMapOptions &options) override;
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -47,32 +47,32 @@ public:
 	FileType GetFileType(FileHandle &handle) override;
 	//! Returns the file stats of the attached handle.
 	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
+	optional<FileMetadata> GetStatsIfExists(Context &context, const OpenFileInfo &file) override;
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
 	//! Check if a directory exists
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool DirectoryExists(Context &context, const string &directory) override;
 	//! Create a directory if it does not exist
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override;
+	void CreateDirectory(Context &context, const string &directory) override;
+	bool CreateDirectoryExtended(Context &context, const string &directory,
+	                             const CreateDirectoryOptions &options) override;
+	void CreateDirectoriesRecursive(Context &context, const string &path) override;
 	//! Recursively remove a directory and all files in it
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener) override;
+	void RemoveDirectory(Context &context, const string &directory) override;
+	bool RemoveDirectoryExtended(Context &context, const string &directory,
+	                             const RemoveDirectoryOptions &options) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
+	void MoveFile(Context &context, const string &source, const string &target) override;
 	//! Check if a file exists
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool FileExists(Context &context, const string &filename) override;
 
 	//! Check if path is a pipe or character device
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool IsPipe(Context &context, const string &filename) override;
 	//! Remove a file from disk
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+	void RemoveFile(Context &context, const string &filename) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 	//! Close and remove an incomplete output file
@@ -80,7 +80,7 @@ public:
 
 	//! Checks if path is is an absolute path
 	bool IsPathAbsolute(const string &path) override;
-	string MakePathAbsolute(const string &input, optional_ptr<FileOpener> opener);
+	string MakePathAbsolute(const string &input, const string &home_directory);
 	bool PathStartsWithDrive(const string &path);
 
 	bool CanHandleFile(const string &fpath) override {
@@ -112,22 +112,24 @@ public:
 	static std::string GetLastErrorAsString();
 
 	//! Checks a file is private (checks for 600 on linux/macos, TODO: currently always returns true on windows)
-	static bool IsPrivateFile(const string &path_p, FileOpener *opener);
+	static bool IsPrivateFile(const string &path_p);
 
-	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, Context &context, bool absolute_path);
 
-	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
+	string CanonicalizePath(Context &context, const string &path_p) override;
+	//! Canonicalizes a path, expanding "~" with the given home directory
+	string CanonicalizePathWithHome(const string &path_p, const string &home_directory);
 
 protected:
-	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                       optional_ptr<FileOpener> opener) override;
+	bool ListFilesExtended(Context &context, const string &directory,
+	                       const std::function<void(OpenFileInfo &info)> &callback) override;
 
 	bool SupportsListFilesExtended() const override {
 		return true;
 	}
 
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override;
+	unique_ptr<MultiFileList> GlobFilesExtended(Context &context, const string &path,
+	                                            const FileGlobInput &input) override;
 	bool SupportsGlobExtended() const override {
 		return true;
 	}

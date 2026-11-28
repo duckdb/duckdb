@@ -23,7 +23,7 @@ statement ok
 SELECT write_log('hi_client', level := 'info', scope := 'connection') from range(0,2500);
 
 statement ok
-SELECT write_log('hi_file', level := 'info', scope := 'file_opener') from range(0,2500);
+SELECT write_log('hi_file', level := 'info', scope := 'context') from range(0,2500);
 
 endloop
 

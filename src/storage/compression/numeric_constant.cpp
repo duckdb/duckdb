@@ -167,7 +167,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ConstantInitScan(Context &context, ColumnSegment &segment) {
 	return nullptr;
 }
 

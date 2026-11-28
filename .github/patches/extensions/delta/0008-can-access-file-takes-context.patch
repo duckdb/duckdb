@@ -1,0 +1,12 @@
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -595,7 +595,8 @@
+     : SimpleMultiFileList({ToDeltaPath(path_p)}), version(version_p) {
+ 	// delta-kernel resolves the table location using its own file and HTTP I/O, outside of the file systems of DuckDB,
+ 	// so check the file access settings here before that happens
+-	if (!DBConfig::GetConfig(context_p).CanAccessFile(ToDuckDBPath(path_p), FileType::FILE_TYPE_DIR)) {
++	auto &config = DBConfig::GetConfig(context_p);
++	if (!config.CanAccessFile(context_p.GetContext(), ToDuckDBPath(path_p), FileType::FILE_TYPE_DIR)) {
+ 		throw PermissionException("Cannot access \"%s\" - file system operations are disabled by configuration",
+ 		                          path_p);
+ 	}

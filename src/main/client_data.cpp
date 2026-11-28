@@ -9,7 +9,6 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -30,7 +29,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 
 ClientData::~ClientData() {
 	// This needs to be destroyed first because PreparedStatementData holds a PhysicalPlan,
-	// and the PhysicalPlan holds objects that might rely on the client file opener/file system/buffer manager
+	// and the PhysicalPlan holds objects that might rely on the client file system/buffer manager
 	prepared_statements.clear();
 	if (temporary_objects.use_count() == 1) {
 		// otherwise a shared transaction still uses it and the last reference closes it

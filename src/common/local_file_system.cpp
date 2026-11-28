@@ -4,7 +4,6 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/operator/add.hpp"
@@ -64,9 +63,9 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 namespace duckdb {
 
 #ifndef _WIN32
-bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::FileExists(Context &context, const string &filename) {
 	if (!filename.empty()) {
-		auto normalized_file = FileSystem::ExpandPath(filename, opener);
+		auto normalized_file = FileSystem::ExpandPath(context, filename);
 		struct stat status;
 		if (stat(normalized_file.c_str(), &status) == 0 && S_ISREG(status.st_mode)) {
 			return true;
@@ -76,9 +75,9 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 	return false;
 }
 
-bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::IsPipe(Context &context, const string &filename) {
 	if (!filename.empty()) {
-		auto normalized_file = FileSystem::ExpandPath(filename, opener);
+		auto normalized_file = FileSystem::ExpandPath(context, filename);
 		struct stat status;
 		if (stat(normalized_file.c_str(), &status) == 0 && (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode))) {
 			return true;
@@ -127,9 +126,7 @@ static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
 	return std::wstring(buf.data(), written);
 }
 
-static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const string &path,
-                                                     optional_ptr<FileOpener> opener) {
-	string normalized_path = FileSystem::ExpandPath(path, opener);
+static std::wstring NormalizeExpandedPathToUnicode(const string &normalized_path) {
 	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
 
 	// We need to get absolute path to check the length. Normalizing it (removing "." and "..",
@@ -157,8 +154,21 @@ static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const s
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
 }
 
-bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
+static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const string &path, Context &context) {
+	return NormalizeExpandedPathToUnicode(FileSystem::ExpandPath(context, path));
+}
+
+//! Removes a file whose path is already expanded (no Context needed): used when aborting a write
+static void RemoveExpandedFile(const string &expanded_path) {
+	auto unicode_path = NormalizeExpandedPathToUnicode(expanded_path);
+	if (!DeleteFileW(unicode_path.c_str()) && GetLastError() != ERROR_FILE_NOT_FOUND) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to delete file \"%s\": %s", expanded_path, error);
+	}
+}
+
+bool LocalFileSystem::FileExists(Context &context, const string &filename) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, context);
 	const wchar_t *wpath = unicode_path.c_str();
 	struct _stati64 status; // typos:ignore
 	if (_wstati64(wpath, &status) == 0 && (status.st_mode & S_IFREG)) {
@@ -166,8 +176,8 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 	}
 	return false;
 }
-bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
+bool LocalFileSystem::IsPipe(Context &context, const string &filename) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, context);
 	const wchar_t *wpath = unicode_path.c_str();
 	struct _stati64 status; // typos:ignore
 	if (_wstati64(wpath, &status) == 0 && (status.st_mode & _S_IFCHR)) {
@@ -204,8 +214,16 @@ static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
 #endif
 }
 
-static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
-	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
+static void ApplyLocalFileSystemDelay(Context &context) {
+	ApplyLocalFileSystemDelay(&context.GetDatabase());
+}
+
+//! Removes a file whose path is already expanded (no Context needed): used when aborting a write
+static void RemoveExpandedFile(const string &expanded_path) {
+	if (std::remove(expanded_path.c_str()) != 0 && errno != ENOENT) {
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", expanded_path,
+		                  strerror(errno));
+	}
 }
 
 struct UnixFileHandle : public FileHandle {
@@ -359,8 +377,8 @@ static void TryAcquireFileLock(BaseFileSystem &fs, int fd, const string &path, F
 	                  extended_error);
 }
 
-bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
+bool LocalFileSystem::IsPrivateFile(const string &path_p) {
+	auto path = FileSystem::ExpandPathWithHome(path_p, FileSystem::GetDefaultHomeDirectory());
 
 	struct stat st;
 
@@ -378,9 +396,8 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	return true;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
-                                                 optional_ptr<FileOpener> opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(Context &context, const string &path_p, FileOpenFlags flags) {
+	auto path = FileSystem::ExpandPath(context, path_p);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -435,7 +452,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
-	ApplyLocalFileSystemDelay(opener);
+	ApplyLocalFileSystemDelay(context);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -464,14 +481,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 	TryAcquireFileLock(*this, fd, path, flags);
 
-	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
+	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, &context.GetDatabase());
 	if (flags.OverwriteExistingFile() && StatsInternal(fd, path).file_type == FileType::FILE_TYPE_REGULAR) {
 		Truncate(*file_handle, 0);
 	}
-	if (opener) {
-		file_handle->TryAddLogger(*opener);
-		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
-	}
+	file_handle->TryAddLogger(context);
+	DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
 	return std::move(file_handle);
 }
 
@@ -634,12 +649,12 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
-optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(Context &context, const OpenFileInfo &file) {
 	const auto &path_p = file.path;
 	if (path_p.empty()) {
 		return nullopt;
 	}
-	auto path = FileSystem::ExpandPath(path_p, opener);
+	auto path = FileSystem::ExpandPath(context, path_p);
 	struct stat status;
 	if (stat(path.c_str(), &status) != 0) {
 		auto retained_errno = errno;
@@ -662,11 +677,11 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	ApplyLocalFileSystemDelay(opener);
+bool LocalFileSystem::DirectoryExists(Context &context, const string &directory) {
+	ApplyLocalFileSystemDelay(context);
 
 	if (!directory.empty()) {
-		auto normalized_dir = FileSystem::ExpandPath(directory, opener);
+		auto normalized_dir = FileSystem::ExpandPath(context, directory);
 		struct stat status;
 		if (stat(normalized_dir.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
 			return true;
@@ -676,24 +691,24 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 	return false;
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+void LocalFileSystem::CreateDirectory(Context &context, const string &directory) {
+	CreateDirectoryExtended(context, directory, {CreateDirectoryMode::SINGLE});
 }
 
-void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+void LocalFileSystem::CreateDirectoriesRecursive(Context &context, const string &path) {
+	CreateDirectoryExtended(context, path, {CreateDirectoryMode::RECURSIVE});
 }
 
-bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::CreateDirectoryExtended(Context &context, const string &directory,
+                                              const CreateDirectoryOptions &options) {
 	if (options.mode == CreateDirectoryMode::RECURSIVE) {
-		return BaseFileSystem::CreateDirectoryExtended(directory, options, opener);
+		return BaseFileSystem::CreateDirectoryExtended(context, directory, options);
 	}
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
-	ApplyLocalFileSystemDelay(opener);
-	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
+	ApplyLocalFileSystemDelay(context);
+	auto normalized_dir = FileSystem::ExpandPath(context, directory);
 	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
 		return true;
 	}
@@ -748,20 +763,20 @@ int RemoveDirectoryRecursive(const char *path) {
 	return r;
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+void LocalFileSystem::RemoveDirectory(Context &context, const string &directory) {
+	RemoveDirectoryExtended(context, directory, {RemoveDirectoryMode::RECURSIVE});
 }
 
-bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::RemoveDirectoryExtended(Context &context, const string &directory,
+                                              const RemoveDirectoryOptions &options) {
 	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
-		auto normalized_dir = FileSystem::ExpandPath(directory, opener);
+		auto normalized_dir = FileSystem::ExpandPath(context, directory);
 		return RemoveDirectoryRecursive(normalized_dir.c_str()) == 0;
 	}
 	if (options.mode != RemoveDirectoryMode::SINGLE) {
 		throw InternalException("Unknown RemoveDirectoryMode");
 	}
-	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
+	auto normalized_dir = FileSystem::ExpandPath(context, directory);
 	if (rmdir(normalized_dir.c_str()) == 0) {
 		return true;
 	}
@@ -772,18 +787,17 @@ bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const Rem
 	                  strerror(errno));
 }
 
-void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto normalized_file = FileSystem::ExpandPath(filename, opener);
+void LocalFileSystem::RemoveFile(Context &context, const string &filename) {
+	auto normalized_file = FileSystem::ExpandPath(context, filename);
 	if (std::remove(normalized_file.c_str()) != 0) {
 		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", filename,
 		                  strerror(errno));
 	}
 }
 
-bool LocalFileSystem::ListFilesExtended(const string &directory,
-                                        const std::function<void(OpenFileInfo &info)> &callback,
-                                        optional_ptr<FileOpener> opener) {
-	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
+bool LocalFileSystem::ListFilesExtended(Context &context, const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback) {
+	auto normalized_dir = FileSystem::ExpandPath(context, directory);
 	auto dir = opendir(normalized_dir.c_str());
 	if (!dir) {
 		return false;
@@ -864,9 +878,9 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(), strerror(errno));
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	auto normalized_source = FileSystem::ExpandPath(source, opener);
-	auto normalized_target = FileSystem::ExpandPath(target, opener);
+void LocalFileSystem::MoveFile(Context &context, const string &source, const string &target) {
+	auto normalized_source = FileSystem::ExpandPath(context, source);
+	auto normalized_target = FileSystem::ExpandPath(context, target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source.c_str(), normalized_target.c_str()) != 0) {
 		throw IOException({{"errno", to_string(errno)}}, "Could not rename file \"%s\" to \"%s\": %s", source, target,
@@ -937,8 +951,8 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 	return BaseFileSystem::IsPathAbsolute(path);
 }
 
-string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto parsed = Path::FromString(FileSystem::ExpandPath(path_p, opener));
+string LocalFileSystem::MakePathAbsolute(const string &path_p, const string &home_directory) {
+	auto parsed = Path::FromString(FileSystem::ExpandPathWithHome(path_p, home_directory));
 	return (parsed.IsAbsolute() ? parsed : Path::FromString(FileSystem::GetWorkingDirectory()).Join(parsed)).ToString();
 }
 
@@ -1004,10 +1018,9 @@ void UnixMemoryMappedFile::Close() {
 	}
 }
 
-unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
-                                                            const MMapOptions &options,
-                                                            optional_ptr<FileOpener> opener) {
-	auto path = FileSystem::ExpandPath(path_info.path, opener);
+unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(Context &context, const OpenFileInfo &path_info,
+                                                            FileOpenFlags flags, const MMapOptions &options) {
+	auto path = FileSystem::ExpandPath(context, path_info.path);
 	flags.Verify();
 
 	bool open_read = flags.OpenForReading();
@@ -1279,15 +1292,14 @@ static string AdditionalLockInfo(const std::wstring path) {
 	return "File is already open in " + conflict_string;
 }
 
-bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+bool LocalFileSystem::IsPrivateFile(const string &path_p) {
 	// TODO: detect if file is shared in windows
 	return true;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
-                                                 optional_ptr<FileOpener> opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path, opener);
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(Context &context, const string &path_p, FileOpenFlags flags) {
+	auto path = FileSystem::ExpandPath(context, path_p);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path, context);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -1358,13 +1370,13 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
 		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, FileOpener::TryGetDatabase(opener));
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, &context.GetDatabase());
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
-	if (opener) {
-		handle->TryAddLogger(*opener);
+	{
+		handle->TryAddLogger(context);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
 	}
 	return std::move(handle);
@@ -1498,8 +1510,8 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
-static DWORD WindowsGetFileAttributes(LocalFileSystem &fs, const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(fs, filename, opener);
+static DWORD WindowsGetFileAttributes(LocalFileSystem &fs, const string &filename, Context &context) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(fs, filename, context);
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
@@ -1507,28 +1519,28 @@ static DWORD WindowsGetFileAttributes(const std::wstring &filename) {
 	return GetFileAttributesW(filename.c_str());
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	DWORD attrs = WindowsGetFileAttributes(*this, directory, opener);
+bool LocalFileSystem::DirectoryExists(Context &context, const string &directory) {
+	DWORD attrs = WindowsGetFileAttributes(*this, directory, context);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+void LocalFileSystem::CreateDirectory(Context &context, const string &directory) {
+	CreateDirectoryExtended(context, directory, {CreateDirectoryMode::SINGLE});
 }
 
-void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+void LocalFileSystem::CreateDirectoriesRecursive(Context &context, const string &path) {
+	CreateDirectoryExtended(context, path, {CreateDirectoryMode::RECURSIVE});
 }
 
-bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::CreateDirectoryExtended(Context &context, const string &directory,
+                                              const CreateDirectoryOptions &options) {
 	if (options.mode == CreateDirectoryMode::RECURSIVE) {
-		return BaseFileSystem::CreateDirectoryExtended(directory, options, opener);
+		return BaseFileSystem::CreateDirectoryExtended(context, directory, options);
 	}
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, context);
 	if (!directory.empty() && CreateDirectoryW(unicode_path.c_str(), NULL)) {
 		return true;
 	}
@@ -1545,18 +1557,15 @@ bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const Cre
 	throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 }
 
-static void DeleteDirectoryRecursive(BaseFileSystem &fs, string directory, optional_ptr<FileOpener> opener) {
-	fs.ListFiles(
-	    directory,
-	    [&](const string &fname, bool is_directory) {
-		    if (is_directory) {
-			    DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), opener);
-		    } else {
-			    fs.RemoveFile(fs.JoinPath(directory, fname), opener);
-		    }
-	    },
-	    opener.get());
-	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, opener);
+static void DeleteDirectoryRecursive(BaseFileSystem &fs, string directory, Context &context) {
+	fs.ListFiles(context, directory, [&](const string &fname, bool is_directory) {
+		if (is_directory) {
+			DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), context);
+		} else {
+			fs.RemoveFile(context, fs.JoinPath(directory, fname));
+		}
+	});
+	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, context);
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
@@ -1564,27 +1573,27 @@ static void DeleteDirectoryRecursive(BaseFileSystem &fs, string directory, optio
 	}
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+void LocalFileSystem::RemoveDirectory(Context &context, const string &directory) {
+	RemoveDirectoryExtended(context, directory, {RemoveDirectoryMode::RECURSIVE});
 }
 
-bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::RemoveDirectoryExtended(Context &context, const string &directory,
+                                              const RemoveDirectoryOptions &options) {
 	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
-		if (FileExists(directory, opener)) {
+		if (FileExists(context, directory)) {
 			throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!",
 			                  directory);
 		}
-		if (!DirectoryExists(directory, opener)) {
+		if (!DirectoryExists(context, directory)) {
 			return false;
 		}
-		DeleteDirectoryRecursive(*this, directory, opener);
+		DeleteDirectoryRecursive(*this, directory, context);
 		return true;
 	}
 	if (options.mode != RemoveDirectoryMode::SINGLE) {
 		throw InternalException("Unknown RemoveDirectoryMode");
 	}
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, context);
 	if (RemoveDirectoryW(unicode_path.c_str())) {
 		return true;
 	}
@@ -1596,8 +1605,8 @@ bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const Rem
 	throw IOException("Failed to remove empty directory \"%s\": %s", abs_path, GetLastErrorAsString());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
+void LocalFileSystem::RemoveFile(Context &context, const string &filename) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, context);
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
@@ -1605,10 +1614,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFilesExtended(const string &directory,
-                                        const std::function<void(OpenFileInfo &info)> &callback,
-                                        optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+bool LocalFileSystem::ListFilesExtended(Context &context, const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, context);
 
 	// Open a handle to the directory itself so we can use GetFileInformationByHandleEx,
 	// which returns FILE_ID_BOTH_DIR_INFO entries that include the per-file FileId
@@ -1700,9 +1708,9 @@ static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstri
 	return SetFileInformationByHandle(source_handle, file_rename_info_ex, rename_info, rename_info_size_dw);
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
-	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
+void LocalFileSystem::MoveFile(Context &context, const string &source, const string &target) {
+	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, context);
+	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, context);
 
 	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
 	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
@@ -1747,12 +1755,12 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
-optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(Context &context, const OpenFileInfo &file) {
 	const auto &path_p = file.path;
 	if (path_p.empty()) {
 		return nullopt;
 	}
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, context);
 	auto raw_handle = CreateFileW(unicode_path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
 	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 	if (raw_handle == INVALID_HANDLE_VALUE) {
@@ -1818,8 +1826,8 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 	return false;
 }
 
-string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
+string LocalFileSystem::MakePathAbsolute(const string &path_p, const string &home_directory) {
+	auto path = FileSystem::ExpandPathWithHome(path_p, home_directory);
 	auto parsed = Path::FromString(path);
 	if (parsed.IsAbsolute()) {
 		// already absolute - nothing to do
@@ -1904,10 +1912,9 @@ void WindowsMemoryMappedFile::Close() {
 	}
 }
 
-unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
-                                                            const MMapOptions &options,
-                                                            optional_ptr<FileOpener> opener) {
-	auto path = FileSystem::ExpandPath(path_info.path, opener);
+unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(Context &context, const OpenFileInfo &path_info,
+                                                            FileOpenFlags flags, const MMapOptions &options) {
+	auto path = FileSystem::ExpandPath(context, path_info.path);
 	flags.Verify();
 
 	bool open_read = flags.OpenForReading();
@@ -2020,7 +2027,7 @@ void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
 	auto path = handle.GetPath();
 	handle.Close();
 	if (remove_path) {
-		TryRemoveFile(path, nullptr);
+		RemoveExpandedFile(path);
 	}
 }
 
@@ -2040,13 +2047,17 @@ bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
 }
 
-string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileOpener> opener) {
+string LocalFileSystem::CanonicalizePath(Context &context, const string &input) {
+	return CanonicalizePathWithHome(input, FileSystem::GetHomeDirectory(context));
+}
+
+string LocalFileSystem::CanonicalizePathWithHome(const string &input, const string &home_directory) {
 	auto path_sep = PathSeparator(input);
 	if (path_sep.size() != 1) {
 		throw InternalException("path separator can only be a single byte for local file systems");
 	}
 	// make the path absolute
-	string path = MakePathAbsolute(input, opener);
+	string path = MakePathAbsolute(input, home_directory);
 
 	string current = path;
 	string remainder;
@@ -2067,7 +2078,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 			// this is a drive only (e.g. C:\)
 			// if we reach this, this is an unknown drive letter
 			// use fallback canonicalize for the remainder
-			return current + BaseFileSystem::CanonicalizePath(remainder, nullptr);
+			return current + BaseFileSystem::GenericCanonicalizePath(remainder);
 		}
 		// move up one directory
 		optional_idx sep_idx;
@@ -2114,7 +2125,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 		}
 	}
 	// failed to canonicalize path - fallback to generic canonicalization
-	return BaseFileSystem::CanonicalizePath(path, nullptr);
+	return BaseFileSystem::GenericCanonicalizePath(path);
 }
 
 string LocalFileSystem::VersionTagFromMetadata(const FileMetadata &stats) {
@@ -2172,13 +2183,12 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
-                                                           bool absolute_path) {
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, Context &context, bool absolute_path) {
 	vector<OpenFileInfo> result;
 	// a regular file comes with its type, size, modification time and version tag, as from a glob
 	auto add_file = [&](const string &file_path) {
 		OpenFileInfo info(file_path);
-		auto file_metadata = GetStatsIfExists(info, opener);
+		auto file_metadata = GetStatsIfExists(context, info);
 		if (file_metadata) {
 			info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 			auto &options = info.extended_info->options;
@@ -2187,20 +2197,20 @@ vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, o
 		}
 		result.push_back(std::move(info));
 	};
-	if (FileExists(path, opener)) {
+	if (FileExists(context, path)) {
 		add_file(path);
-	} else if (IsPipe(path, opener)) {
+	} else if (IsPipe(context, path)) {
 		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
+		if (context.TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener)) {
+				if (FileExists(context, joined_path)) {
 					add_file(joined_path);
-				} else if (IsPipe(joined_path, opener)) {
+				} else if (IsPipe(context, joined_path)) {
 					result.emplace_back(joined_path);
 				}
 			}
@@ -2241,10 +2251,10 @@ struct ExpandDirectory {
 	}
 };
 
-static void CrawlDirectoryLevel(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+static void CrawlDirectoryLevel(Context &context, LocalFileSystem &fs, const string &path,
                                 optional_ptr<vector<OpenFileInfo>> files,
                                 std::priority_queue<ExpandDirectory> &directories, idx_t split_index) {
-	auto callback = [&](OpenFileInfo &info) {
+	fs.ListFiles(context, path, [&](OpenFileInfo &info) {
 		info.path = fs.JoinPath(path, info.path);
 		if (IsSymbolicLink(info.path)) {
 			return;
@@ -2255,13 +2265,12 @@ static void CrawlDirectoryLevel(LocalFileSystem &fs, optional_ptr<FileOpener> op
 		} else if (files) {
 			files->push_back(std::move(info));
 		}
-	};
-	fs.ListFiles(path, callback, opener);
+	});
 }
 
-static void GlobFilesInternal(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
-                              const string &glob, bool match_directory, vector<OpenFileInfo> &result) {
-	auto callback = [&](OpenFileInfo &info) {
+static void GlobFilesInternal(Context &context, LocalFileSystem &fs, const string &path, const string &glob,
+                              bool match_directory, vector<OpenFileInfo> &result) {
+	fs.ListFiles(context, path, [&](OpenFileInfo &info) {
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
 			return;
@@ -2270,13 +2279,12 @@ static void GlobFilesInternal(LocalFileSystem &fs, optional_ptr<FileOpener> open
 			info.path = fs.JoinPath(path, info.path);
 			result.push_back(std::move(info));
 		}
-	};
-	fs.ListFiles(path, callback, opener);
+	});
 }
 
 struct LocalGlobResult : public LazyMultiFileList {
 public:
-	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobOptions options, optional_ptr<FileOpener> opener);
+	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobOptions options, Context &context);
 
 protected:
 	bool ExpandNextPath() const override;
@@ -2284,17 +2292,15 @@ protected:
 private:
 	LocalFileSystem &fs;
 	string path;
-	optional_ptr<FileOpener> opener;
+	Context &context;
 	vector<PathSplit> splits;
 	bool absolute_path = false;
 	mutable std::priority_queue<ExpandDirectory> expand_directories;
 	mutable bool finished = false;
 };
 
-LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
-                                 optional_ptr<FileOpener> opener)
-    : LazyMultiFileList(FileOpener::TryGetContext(opener)), fs(fs), path(FileSystem::ExpandPath(path_p, opener)),
-      opener(opener) {
+LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p, Context &context)
+    : LazyMultiFileList(context), fs(fs), path(FileSystem::ExpandPath(context, path_p)), context(context) {
 	if (path.empty()) {
 		finished = true;
 		return;
@@ -2317,13 +2323,13 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 	if (!splits.empty() && splits[0].path == "~") {
 		// starts with home directory
-		auto home_directory = FileSystem::GetHomeDirectory(opener);
+		auto home_directory = FileSystem::GetHomeDirectory(context);
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!FileSystem::HasGlob(path)) {
-				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
+				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), context, absolute_path);
 				finished = true;
 				return;
 			}
@@ -2332,7 +2338,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	// Check if the path has a glob at all
 	if (!FileSystem::HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+		expanded_files = fs.FetchFileWithoutGlob(path, context, absolute_path);
 		finished = true;
 		return;
 	}
@@ -2345,7 +2351,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
+		if (context.TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			auto search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
@@ -2370,7 +2376,7 @@ bool LocalGlobResult::ExpandNextPath() const {
 		if (expanded_files.empty()) {
 			// no result found that matches the glob
 			// last ditch effort: search the path as a string literal
-			expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+			expanded_files = fs.FetchFileWithoutGlob(path, context, absolute_path);
 		}
 		finished = true;
 		return false;
@@ -2400,7 +2406,7 @@ bool LocalGlobResult::ExpandNextPath() const {
 			if (is_last_component) {
 				// last component - we are emitting a result here
 				auto filename = fs.JoinPath(current_path, next_component);
-				if (fs.FileExists(filename, opener) || fs.DirectoryExists(filename, opener)) {
+				if (fs.FileExists(context, filename) || fs.DirectoryExists(context, filename)) {
 					expanded_files.emplace_back(std::move(filename));
 				}
 			} else {
@@ -2414,23 +2420,23 @@ bool LocalGlobResult::ExpandNextPath() const {
 			if (is_last_component) {
 				// the crawl is the last component - we are looking for files in this directory
 				// any directories we encounter are added to the expand directories
-				CrawlDirectoryLevel(fs, opener, current_path, expanded_files, expand_directories, split_index);
+				CrawlDirectoryLevel(context, fs, current_path, expanded_files, expand_directories, split_index);
 			} else {
 				// not the last crawl
 				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
 				expand_directories.emplace(current_path, split_index + 1);
 				// now crawl the contents of this directory - but don't add any files we find
-				CrawlDirectoryLevel(fs, opener, current_path, nullptr, expand_directories, split_index);
+				CrawlDirectoryLevel(context, fs, current_path, nullptr, expand_directories, split_index);
 			}
 		} else {
 			// glob this directory according to the next component
 			if (is_last_component) {
 				// last component - match files and place them in the result
-				GlobFilesInternal(fs, opener, current_path, next_component, false, expanded_files);
+				GlobFilesInternal(context, fs, current_path, next_component, false, expanded_files);
 			} else {
 				// not the last component - match directories and add to expansion list
 				vector<OpenFileInfo> child_directories;
-				GlobFilesInternal(fs, opener, current_path, next_component, true, child_directories);
+				GlobFilesInternal(context, fs, current_path, next_component, true, child_directories);
 				for (auto &file : child_directories) {
 					expand_directories.emplace(std::move(file.path), split_index + 1);
 				}
@@ -2440,9 +2446,9 @@ bool LocalGlobResult::ExpandNextPath() const {
 	return true;
 }
 
-unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
-                                                             optional_ptr<FileOpener> opener) {
-	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
+unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(Context &context, const string &path,
+                                                             const FileGlobInput &input) {
+	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, context);
 }
 
 } // namespace duckdb

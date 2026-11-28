@@ -192,8 +192,8 @@ public:
 	void FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
 	                             const SelectionVector &sel, idx_t count, Vector &result, idx_t result_offset);
 	//! Fetches the base data of a batch of row offsets, without updates
-	void FetchBaseRows(const QueryContext &context, const idx_t *offsets, const SelectionVector &sel, idx_t count,
-	                   Vector &result, idx_t result_offset);
+	void FetchBaseRows(Context &context, const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	                   idx_t result_offset);
 	//! Fetches base values of row_ids into result, densely and in the same order, without updates
 	void FetchBaseRows(const row_t *row_ids, idx_t count, Vector &result, idx_t row_group_start);
 	//! Reads the selected rows of a scan through FetchBaseRows (debug_force_fetch_row)
@@ -228,7 +228,7 @@ public:
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          ReadStream &source, const LogicalType &type);
 
-	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	virtual void GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
 	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 

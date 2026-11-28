@@ -57,7 +57,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, MemoryT
 	return result;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, block_id_t block_id,
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(Context &context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
                                                           ConvertToPersistentMode mode, optional<MemoryTag> tag) {
 	auto default_tag = old_block->GetMemory().GetMemoryTag();
@@ -123,7 +123,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	return new_block;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, block_id_t block_id,
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(Context &context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block,
                                                           ConvertToPersistentMode mode, optional<MemoryTag> tag) {
 	// pin the old block to ensure we have it loaded in memory
@@ -167,7 +167,7 @@ MetadataManager &BlockManager::GetMetadataManager() {
 	return *metadata_manager;
 }
 
-void BlockManager::Write(QueryContext context, FileBuffer &block, block_id_t block_id) {
+void BlockManager::Write(Context &context, FileBuffer &block, block_id_t block_id) {
 	// Fallback to the old Write.
 	Write(block, block_id);
 }

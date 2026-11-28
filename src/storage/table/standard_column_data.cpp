@@ -216,7 +216,7 @@ void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState
                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                    idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (state.child_states.empty()) {
-		state.child_states.emplace_back(make_uniq<ColumnFetchState>());
+		state.child_states.emplace_back(make_uniq<ColumnFetchState>(state.context));
 	}
 	// Bulk fetch the data and the validity in two passes.
 	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
@@ -365,7 +365,7 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 	}
 }
 
-void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+void StandardColumnData::GetColumnSegmentInfo(Context &context, duckdb::idx_t row_group_index,
                                               vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
                                               const ColumnSegmentInfoScanOptions &options) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);

@@ -3,6 +3,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
@@ -102,8 +103,10 @@ shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 
 	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
 	auto result = make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size);
+	// Index::Checkpoint has no context, so the blocks are written with the database-wide one
+	auto &context = block_manager.buffer_manager.GetDatabase().GetContext();
 	auto new_block_pointer =
-	    partial_block_manager.Write(*result, buffer_handle, NumericCast<uint32_t>(new_allocation_size));
+	    partial_block_manager.Write(context, *result, buffer_handle, NumericCast<uint32_t>(new_allocation_size));
 	if (!new_block_pointer) {
 		throw InternalException("failed to write FixedSizeBuffer to a partial block");
 	}

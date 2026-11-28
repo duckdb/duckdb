@@ -66,7 +66,7 @@ public:
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
-	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	void GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
 	                          vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) override;
 
 	void Verify(RowGroup &parent) override;

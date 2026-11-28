@@ -12,7 +12,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
@@ -283,7 +283,8 @@ static bool PrepareExtensionUpdateInternal(ClientContext &context, DatabaseInsta
 
 	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
 
-	auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, extension_name);
+	auto extension_install_info =
+	    ExtensionInstallInfo::TryReadInfoFile(db.GetContext(), fs, info_file_path, extension_name);
 
 	// Early out: no info file found
 	if (extension_install_info->mode == ExtensionInstallMode::UNKNOWN) {

@@ -1114,7 +1114,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> BitpackingInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	auto result = make_uniq<BitpackingScanState<T>>(std::move(handle), segment);
@@ -1446,7 +1446,7 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
 template <class T>
-InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(QueryContext context, ColumnSegment &segment) {
+InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(Context &context, ColumnSegment &segment) {
 	map<BitpackingMode, idx_t> counts;
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());

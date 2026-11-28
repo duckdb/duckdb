@@ -1,0 +1,351 @@
+diff --git a/src/io/s3/sirius_httpfs.cpp b/src/io/s3/sirius_httpfs.cpp
+index 0163c6e..a56b351 100644
+--- a/src/io/s3/sirius_httpfs.cpp
++++ b/src/io/s3/sirius_httpfs.cpp
+@@ -81,11 +81,10 @@ sirius_httpfs_file_handle& as_httpfs_handle(duckdb::FileHandle& handle)
+ /// contract — reject when gpu_execution is off or a CPU-fallback replay is
+ /// active. @p verb only shapes the error text.
+ duckdb::shared_ptr<duckdb::SiriusContext> resolve_gated_sirius_context(
+-  duckdb::optional_ptr<duckdb::FileOpener> opener, std::string const& path, char const* verb)
++  duckdb::Context &context, std::string const& path, char const* verb)
+ {
+-  // The ClientFileSystem (OpenerFileSystem) layer injects the connection's
+-  // FileOpener even though the parquet reader passes none.
+-  auto client = duckdb::FileOpener::TryGetClientContext(opener);
++  // The file system of the client passes the connection's Context into every call.
++  auto client = context.TryGetClientContext();
+   if (!client) {
+     throw std::runtime_error(std::string("[sirius_httpfs] no ClientContext while ") + verb + " '" +
+                              path + "'; S3 reads require a Sirius-enabled connection");
+@@ -236,9 +235,9 @@ bool sirius_httpfs::CanHandleFile(const std::string& fpath)
+ }
+ 
+ duckdb::unique_ptr<duckdb::FileHandle> sirius_httpfs::OpenFile(
++  duckdb::Context &context,
+   const std::string& path,
+-  duckdb::FileOpenFlags flags,
+-  duckdb::optional_ptr<duckdb::FileOpener> opener)
++  duckdb::FileOpenFlags flags)
+ {
+   // Read-only filesystem: reject write opens (e.g. COPY ... TO 's3://…') before
+   // resolving the connection, so callers get a clear error instead of failing
+@@ -247,8 +246,8 @@ duckdb::unique_ptr<duckdb::FileHandle> sirius_httpfs::OpenFile(
+     throw duckdb::IOException("[sirius_httpfs] '" + path +
+                               "' is read-only; S3 writes (COPY TO) are not supported");
+   }
+-  auto sirius_ctx = resolve_gated_sirius_context(opener, path, "reading");
+-  auto client     = duckdb::FileOpener::TryGetClientContext(opener);
++  auto sirius_ctx = resolve_gated_sirius_context(context, path, "reading");
++  auto client     = context.TryGetClientContext();
+   if (!client) {
+     throw duckdb::IOException(
+       "[sirius_httpfs] client context unavailable while resolving S3 credentials");
+@@ -268,18 +267,18 @@ duckdb::unique_ptr<duckdb::FileHandle> sirius_httpfs::OpenFile(
+ }
+ 
+ duckdb::unique_ptr<duckdb::FileHandle> sirius_httpfs::OpenFileExtended(
++  duckdb::Context &context,
+   const duckdb::OpenFileInfo& file,
+-  duckdb::FileOpenFlags flags,
+-  duckdb::optional_ptr<duckdb::FileOpener> opener)
++  duckdb::FileOpenFlags flags)
+ {
+   auto const known_size = extract_known_size(file);
+-  if (!known_size) { return OpenFile(file.path, flags, opener); }
++  if (!known_size) { return OpenFile(context, file.path, flags); }
+   if (flags.OpenForWriting()) {
+     throw duckdb::IOException("[sirius_httpfs] '" + file.path +
+                               "' is read-only; S3 writes (COPY TO) are not supported");
+   }
+-  auto sirius_ctx = resolve_gated_sirius_context(opener, file.path, "reading");
+-  auto client     = duckdb::FileOpener::TryGetClientContext(opener);
++  auto sirius_ctx = resolve_gated_sirius_context(context, file.path, "reading");
++  auto client     = context.TryGetClientContext();
+   if (!client) {
+     throw duckdb::IOException(
+       "[sirius_httpfs] client context unavailable while resolving S3 credentials");
+@@ -350,8 +349,7 @@ std::string sirius_httpfs::GetVersionTag(duckdb::FileHandle& handle)
+   return as_httpfs_handle(handle).version_tag_;
+ }
+ 
+-duckdb::vector<duckdb::OpenFileInfo> sirius_httpfs::Glob(const std::string& path,
+-                                                         duckdb::FileOpener* opener)
++duckdb::vector<duckdb::OpenFileInfo> sirius_httpfs::Glob(duckdb::Context &context, const std::string& path)
+ {
+   if (!duckdb::FileSystem::HasGlob(path)) {
+     duckdb::vector<duckdb::OpenFileInfo> result;
+@@ -362,8 +360,8 @@ duckdb::vector<duckdb::OpenFileInfo> sirius_httpfs::Glob(const std::string& path
+   // is gated exactly like OpenFile: expansion is metadata-only, but its file
+   // list is only ever consumed by a GPU-only scan, so failing here gives the
+   // clear error at the earliest point.
+-  auto sirius_ctx = resolve_gated_sirius_context(opener, path, "glob-expanding");
+-  auto client     = duckdb::FileOpener::TryGetClientContext(opener);
++  auto sirius_ctx = resolve_gated_sirius_context(context, path, "glob-expanding");
++  auto client     = context.TryGetClientContext();
+   if (!client) {
+     throw duckdb::IOException(
+       "[sirius_httpfs] client context unavailable while resolving S3 credentials");
+diff --git a/src/io/s3/sirius_httpfs.hpp b/src/io/s3/sirius_httpfs.hpp
+index 0ee77c7..e1600e5 100644
+--- a/src/io/s3/sirius_httpfs.hpp
++++ b/src/io/s3/sirius_httpfs.hpp
+@@ -18,6 +18,7 @@
+ 
+ #include "io/rest/s3/list_parser.hpp"
+ 
++#include <duckdb/common/base_file_system.hpp>
+ #include <duckdb/common/file_system.hpp>
+ #include <duckdb/common/open_file_info.hpp>
+ 
+@@ -49,15 +50,15 @@ namespace sirius::io::s3 {
+ ///
+ /// Registered DB-global on the VirtualFileSystem; the object itself is
+ /// **stateless** (holds no ioctx). The per-connection backend is resolved
+-/// lazily in @ref OpenFile via the injected @c FileOpener -> @c ClientContext ->
++/// lazily in @ref OpenFile via the injected @c Context -> @c ClientContext ->
+ /// @c SiriusContext: the @c ClientFileSystem (@c OpenerFileSystem) layer supplies
+-/// the opener even though the parquet reader calls @c OpenFile with a null opener.
++/// the context even though the parquet reader calls @c OpenFile with a null context.
+ ///
+ /// **GPU-only / no CPU fallback:** @ref OpenFile refuses to open an @c s3:// path
+ /// unless @c gpu_execution is enabled on the connection. The GPU path reads via
+ /// the routed ioctx, so this FileSystem only ever serves the bind-time footer
+ /// read; it is never the CPU data path. Read-only: write opens are rejected.
+-class sirius_httpfs : public duckdb::FileSystem {
++class sirius_httpfs : public duckdb::BaseFileSystem {
+  public:
+   sirius_httpfs() = default;
+ 
+@@ -66,18 +67,18 @@ class sirius_httpfs : public duckdb::FileSystem {
+   bool CanHandleFile(const std::string& fpath) override;
+ 
+   duckdb::unique_ptr<duckdb::FileHandle> OpenFile(
++    duckdb::Context &context,
+     const std::string& path,
+-    duckdb::FileOpenFlags flags,
+-    duckdb::optional_ptr<duckdb::FileOpener> opener = nullptr) override;
++    duckdb::FileOpenFlags flags) override;
+ 
+   /// A valid LIST-provided @c "file_size" option (the non-negative BIGINT
+   /// @ref Glob attaches) selects the parquet footer probe, which resolves size
+   /// and stashes the suffix in one GET. Invalid metadata falls back to the
+   /// regular HEAD-based open.
+   duckdb::unique_ptr<duckdb::FileHandle> OpenFileExtended(
++    duckdb::Context &context,
+     const duckdb::OpenFileInfo& file,
+-    duckdb::FileOpenFlags flags,
+-    duckdb::optional_ptr<duckdb::FileOpener> opener) override;
++    duckdb::FileOpenFlags flags) override;
+ 
+   void Read(duckdb::FileHandle& handle,
+             void* buffer,
+@@ -101,8 +102,7 @@ class sirius_httpfs : public duckdb::FileSystem {
+   /// literally, except a key with a literal @c '?' in a Hive partition segment
+   /// throws (it would be silently dropped from partitioning); and zero matches
+   /// yield an empty vector.
+-  duckdb::vector<duckdb::OpenFileInfo> Glob(const std::string& path,
+-                                            duckdb::FileOpener* opener = nullptr) override;
++  duckdb::vector<duckdb::OpenFileInfo> Glob(duckdb::Context &context, const std::string& path) override;
+ 
+   void Seek(duckdb::FileHandle& handle, duckdb::idx_t location) override;
+   duckdb::idx_t SeekPosition(duckdb::FileHandle& handle) override;
+diff --git a/test/cpp/io/s3/test_sirius_httpfs.cpp b/test/cpp/io/s3/test_sirius_httpfs.cpp
+index c6f86ca..34f8ea9 100644
+--- a/test/cpp/io/s3/test_sirius_httpfs.cpp
++++ b/test/cpp/io/s3/test_sirius_httpfs.cpp
+@@ -45,6 +45,18 @@
+ #include <utility>
+ #include <vector>
+ 
++#include <duckdb.hpp>
++#include <duckdb/main/database.hpp>
++
++namespace {
++//! The database-wide context of a database that lives for the whole test run
++duckdb::Context &test_context()
++{
++  static duckdb::DuckDB db(nullptr);
++  return db.instance->GetContext();
++}
++}  // namespace
++
+ namespace {
+ 
+ using sirius::test::s3::env_or;
+@@ -365,12 +377,12 @@ class exposed_sirius_httpfs final : public sirius::io::s3::sirius_httpfs {
+ 
+ TEST_CASE("Sirius S3 filesystem keeps precedence over later S3 handlers", "[s3][filesystem]")
+ {
+-  class later_s3_fs final : public duckdb::FileSystem {
++  class later_s3_fs final : public duckdb::BaseFileSystem {
+    public:
+     bool CanHandleFile(const std::string& path) override { return path.rfind("s3://", 0) == 0; }
+     std::string GetName() const override { return "LaterS3FS"; }
+     duckdb::unique_ptr<duckdb::FileHandle> OpenFile(
+-      const std::string&, duckdb::FileOpenFlags, duckdb::optional_ptr<duckdb::FileOpener>) override
++      duckdb::Context &, const std::string&, duckdb::FileOpenFlags) override
+     {
+       throw duckdb::IOException("later S3 handler was selected");
+     }
+@@ -380,7 +392,7 @@ TEST_CASE("Sirius S3 filesystem keeps precedence over later S3 handlers", "[s3][
+   fs.RegisterSubSystem(duckdb::make_uniq<sirius::io::s3::sirius_httpfs>());
+   fs.RegisterSubSystem(duckdb::make_uniq<later_s3_fs>());
+   auto const message = thrown_message([&] {
+-    fs.OpenFile("s3://bucket/object.parquet", duckdb::FileFlags::FILE_FLAGS_READ, nullptr);
++    fs.OpenFile(test_context(), "s3://bucket/object.parquet", duckdb::FileFlags::FILE_FLAGS_READ);
+   });
+   CHECK(message.find("[sirius_httpfs]") != std::string::npos);
+ }
+@@ -397,21 +409,21 @@ TEST_CASE("sirius_httpfs claims only valid S3 object paths", "[s3][filesystem]")
+   CHECK(fs.CanSeek());
+ }
+ 
+-TEST_CASE("sirius_httpfs accepts exact keys and gates wildcard expansion on a Sirius opener",
++TEST_CASE("sirius_httpfs accepts exact keys and gates wildcard expansion on a Sirius context",
+           "[s3][filesystem]")
+ {
+   exposed_sirius_httpfs fs;
+   CHECK(fs.SupportsOpenFileExtended());
+ 
+-  auto wildcard_message = thrown_message([&] { (void)fs.Glob("s3://bucket/prefix/*.parquet"); });
++  auto wildcard_message = thrown_message([&] { (void)fs.Glob(test_context(), "s3://bucket/prefix/*.parquet"); });
+   REQUIRE_FALSE(wildcard_message.empty());
+   CHECK(wildcard_message.find("no ClientContext") != std::string::npos);
+ 
+-  auto exact = fs.Glob("s3://bucket/key.parquet");
++  auto exact = fs.Glob(test_context(), "s3://bucket/key.parquet");
+   REQUIRE(exact.size() == 1);
+   CHECK(exact[0].path == "s3://bucket/key.parquet");
+ 
+-  CHECK(fs.Glob("s3://bucket").empty());
++  CHECK(fs.Glob(test_context(), "s3://bucket").empty());
+ }
+ 
+ TEST_CASE("sirius_httpfs glob helper throws instead of silently truncating matched files",
+@@ -429,13 +441,13 @@ TEST_CASE("sirius_httpfs glob helper throws instead of silently truncating match
+                     Catch::Matchers::ContainsSubstring("narrow the glob prefix"));
+ }
+ 
+-TEST_CASE("sirius_httpfs rejects write opens before opener resolution", "[s3][filesystem]")
++TEST_CASE("sirius_httpfs rejects write opens before context resolution", "[s3][filesystem]")
+ {
+   sirius::io::s3::sirius_httpfs fs;
+ 
+   auto const write_message = thrown_message([&] {
+     auto handle =
+-      fs.OpenFile("s3://bucket/key.parquet", duckdb::FileFlags::FILE_FLAGS_WRITE, nullptr);
++      fs.OpenFile(test_context(), "s3://bucket/key.parquet", duckdb::FileFlags::FILE_FLAGS_WRITE);
+     (void)handle;
+   });
+   REQUIRE_FALSE(write_message.empty());
+@@ -444,14 +456,14 @@ TEST_CASE("sirius_httpfs rejects write opens before opener resolution", "[s3][fi
+ 
+   auto const read_message = thrown_message([&] {
+     auto handle =
+-      fs.OpenFile("s3://bucket/key.parquet", duckdb::FileFlags::FILE_FLAGS_READ, nullptr);
++      fs.OpenFile(test_context(), "s3://bucket/key.parquet", duckdb::FileFlags::FILE_FLAGS_READ);
+     (void)handle;
+   });
+   REQUIRE_FALSE(read_message.empty());
+   CHECK(read_message.find("no ClientContext") != std::string::npos);
+ }
+ 
+-TEST_CASE("sirius_httpfs opens through FileOpener and reads positional ranges",
++TEST_CASE("sirius_httpfs opens through a Context and reads positional ranges",
+           "[.][s3][integration][filesystem]")
+ {
+   auto env = read_s3_test_env();
+@@ -460,7 +472,7 @@ TEST_CASE("sirius_httpfs opens through FileOpener and reads positional ranges",
+   sirius_httpfs_fixture fixture(*env);
+   auto const uri = s3_uri(env->bucket, "parquet/nation.parquet");
+   auto& fs       = duckdb::FileSystem::GetFileSystem(*fixture.con.context);
+-  auto handle    = fs.OpenFile(uri, duckdb::FileFlags::FILE_FLAGS_READ);
++  auto handle    = fs.OpenFile(test_context(), uri, duckdb::FileFlags::FILE_FLAGS_READ);
+   REQUIRE(handle != nullptr);
+ 
+   auto datasource = require_rest_datasource(fixture, uri);
+@@ -489,7 +501,7 @@ TEST_CASE("sirius_httpfs positional reads fail on short reads and negative sizes
+   sirius_httpfs_fixture fixture(*env);
+   auto const uri = s3_uri(env->bucket, "parquet/nation.parquet");
+   auto& fs       = duckdb::FileSystem::GetFileSystem(*fixture.con.context);
+-  auto handle    = fs.OpenFile(uri, duckdb::FileFlags::FILE_FLAGS_READ);
++  auto handle    = fs.OpenFile(test_context(), uri, duckdb::FileFlags::FILE_FLAGS_READ);
+   REQUIRE(handle != nullptr);
+ 
+   auto const size = handle->GetFileSize();
+@@ -522,17 +534,17 @@ TEST_CASE("sirius_httpfs exposes S3 ETags as DuckDB version tags",
+     auto& fs       = duckdb::FileSystem::GetFileSystem(*fixture.con.context);
+     auto const uri = s3_uri(env->bucket, "parquet/nation.parquet");
+ 
+-    auto plain = fs.OpenFile(uri, duckdb::FileFlags::FILE_FLAGS_READ);
++    auto plain = fs.OpenFile(test_context(), uri, duckdb::FileFlags::FILE_FLAGS_READ);
+     REQUIRE(plain != nullptr);
+     auto const plain_tag = plain->file_system.GetVersionTag(*plain);
+     REQUIRE(plain_tag.size() >= 2);
+     CHECK(plain_tag.front() == '"');
+     CHECK(plain_tag.back() == '"');
+ 
+-    auto matches = fs.Glob(s3_uri(env->bucket, "parquet/nation*.parquet"));
++    auto matches = fs.Glob(test_context(), s3_uri(env->bucket, "parquet/nation*.parquet"));
+     REQUIRE(matches.size() == 1);
+     REQUIRE(matches[0].extended_info != nullptr);
+-    auto glob = fs.OpenFile(matches[0], duckdb::FileFlags::FILE_FLAGS_READ);
++    auto glob = fs.OpenFile(test_context(), matches[0], duckdb::FileFlags::FILE_FLAGS_READ);
+     REQUIRE(glob != nullptr);
+     auto const glob_tag = glob->file_system.GetVersionTag(*glob);
+     REQUIRE(glob_tag.size() >= 2);
+@@ -549,7 +561,7 @@ TEST_CASE("sirius_httpfs exposes S3 ETags as DuckDB version tags",
+     set_gpu_execution(fixture.con, true);
+     auto& fs = duckdb::FileSystem::GetFileSystem(*fixture.con.context);
+ 
+-    auto handle = fs.OpenFile("s3://bucket/no-etag.bin", duckdb::FileFlags::FILE_FLAGS_READ);
++    auto handle = fs.OpenFile(test_context(), "s3://bucket/no-etag.bin", duckdb::FileFlags::FILE_FLAGS_READ);
+ 
+     REQUIRE(handle != nullptr);
+     CHECK(handle->GetFileSize() == 4096);
+@@ -588,7 +600,7 @@ TEST_CASE("DuckDB external file cache invalidates an overwritten S3 range by ETa
+   auto caching_fs        = duckdb::CachingFileSystem::Get(*fixture.con.context);
+   auto read_cached_range = [&] {
+     auto handle =
+-      caching_fs.OpenFile(duckdb::OpenFileInfo{uri}, duckdb::FileFlags::FILE_FLAGS_READ);
++      caching_fs.OpenFile(test_context(), duckdb::OpenFileInfo{uri}, duckdb::FileFlags::FILE_FLAGS_READ);
+     auto pin = handle->Read(read_size, read_offset);
+     std::vector<std::uint8_t> data(read_size);
+     pin.CopyTo(data.data(), data.size());
+@@ -647,7 +659,7 @@ TEST_CASE("Sirius S3 Parquet position delete reader preserves results and admiss
+   auto uri = s3_uri(env->bucket, key);
+   // Prove the filesystem actually selected is Sirius's production S3 adapter.
+   auto& filesystem = duckdb::FileSystem::GetFileSystem(*fixture.con.context);
+-  auto handle      = filesystem.OpenFile(uri, duckdb::FileFlags::FILE_FLAGS_READ);
++  auto handle      = filesystem.OpenFile(test_context(), uri, duckdb::FileFlags::FILE_FLAGS_READ);
+   REQUIRE(handle->file_system.GetName() == "SiriusHttpFS");
+   handle.reset();
+ 
+diff --git a/test/cpp/scan/test_parquet_delete_reader.cpp b/test/cpp/scan/test_parquet_delete_reader.cpp
+index 150ee27..28479d3 100644
+--- a/test/cpp/scan/test_parquet_delete_reader.cpp
++++ b/test/cpp/scan/test_parquet_delete_reader.cpp
+@@ -353,7 +353,7 @@ TEST_CASE("Iceberg consumes shared Parquet batches and rejects malformed positio
+ // A remote-shaped filesystem with per-open version tags and conditional reads.
+ // No device/inode metadata: this exercises the same branch as HTTP/S3.
+ namespace {
+-class delete_remote_fs : public duckdb::FileSystem {
++class delete_remote_fs : public duckdb::BaseFileSystem {
+  public:
+   struct remote_handle : duckdb::FileHandle {
+     remote_handle(delete_remote_fs& fs, std::string path, duckdb::FileOpenFlags flags)
+@@ -379,11 +379,11 @@ class delete_remote_fs : public duckdb::FileSystem {
+     bytes.assign(std::istreambuf_iterator<char>(input), {});
+   }
+   duckdb::unique_ptr<duckdb::FileHandle> OpenFile(
++    duckdb::Context &context,
+     std::string const& path,
+-    duckdb::FileOpenFlags flags,
+-    duckdb::optional_ptr<duckdb::FileOpener> opener) override
++    duckdb::FileOpenFlags flags) override
+   {
+-    if (duckdb::FileOpener::TryGetClientContext(opener).get() != expected_context)
++    if (context.TryGetClientContext().get() != expected_context)
+       throw duckdb::IOException("Wrong caller context");
+     return duckdb::make_uniq<remote_handle>(*this, path, flags);
+   }

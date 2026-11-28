@@ -36,6 +36,13 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/context.hpp"
+
+duckdb::Context &duckdb::TestServicesContext() {
+	static duckdb::DuckDB *db = new duckdb::DuckDB(nullptr); // NOLINT: intentionally leaked
+	return db->instance->GetContext();
+}
 
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
@@ -178,7 +185,7 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 
 FileSystem &TestLocalFileSystem() {
 	static LocalFileSystem local_fs;
-	static BoundFileSystem fs(local_fs, nullptr);
+	static BoundFileSystem fs(local_fs, TestServicesContext());
 	return fs;
 }
 

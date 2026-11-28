@@ -61,6 +61,7 @@ public:
 
 public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
+	DatabaseInstance &GetDatabase();
 	~MetadataManager();
 
 	BufferManager &GetBufferManager() const {
@@ -70,7 +71,7 @@ public:
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
 
-	MetadataHandle Pin(const QueryContext &context, const MetadataPointer &pointer);
+	MetadataHandle Pin(Context &context, const MetadataPointer &pointer);
 
 	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
@@ -80,7 +81,7 @@ public:
 	static MetaBlockPointer FromBlockPointer(BlockPointer block_pointer, const idx_t metadata_block_size);
 
 	//! Flush all blocks to disk
-	void Flush(QueryContext context = QueryContext());
+	void Flush(Context &context);
 
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);

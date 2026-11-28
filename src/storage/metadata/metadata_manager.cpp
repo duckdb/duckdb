@@ -1,3 +1,4 @@
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 
 #include "duckdb/common/serializer/read_stream.hpp"
@@ -8,6 +9,10 @@
 #include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
+
+DatabaseInstance &MetadataManager::GetDatabase() {
+	return buffer_manager.GetDatabase();
+}
 
 MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), pending_reuse(0), dirty(false) {
 }
@@ -98,10 +103,10 @@ MetadataHandle MetadataManager::AllocateHandle() {
 }
 
 MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
-	return Pin(QueryContext(), pointer);
+	return Pin(GetDatabase().GetContext(), pointer);
 }
 
-MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataPointer &pointer) {
+MetadataHandle MetadataManager::Pin(Context &context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	while (true) {
 		shared_ptr<BlockHandle> block_handle;
@@ -291,7 +296,7 @@ idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }
 
-void MetadataManager::Flush(QueryContext context) {
+void MetadataManager::Flush(Context &context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 

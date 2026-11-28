@@ -77,22 +77,22 @@ public:
 	string PathSeparator(const string &) override {
 		return "/";
 	}
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener>) override {
+	unique_ptr<FileHandle> OpenFile(Context &, const string &path, FileOpenFlags flags) override {
 		return make_uniq<Handle>(*this, path, flags);
 	}
-	bool FileExists(const string &, optional_ptr<FileOpener>) override {
+	bool FileExists(Context &, const string &) override {
 		return false;
 	}
-	bool IsPipe(const string &, optional_ptr<FileOpener>) override {
+	bool IsPipe(Context &, const string &) override {
 		return false;
 	}
-	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+	bool DirectoryExists(Context &, const string &) override {
 		return false;
 	}
-	bool CreateDirectoryExtended(const string &, const CreateDirectoryOptions &, optional_ptr<FileOpener>) override {
+	bool CreateDirectoryExtended(Context &, const string &, const CreateDirectoryOptions &) override {
 		return false;
 	}
-	bool ListFiles(const string &, const std::function<void(const string &, bool)> &, FileOpener *) override {
+	bool ListFiles(Context &, const string &, const std::function<void(const string &, bool)> &) override {
 		return true;
 	}
 };
@@ -120,21 +120,21 @@ public:
 	string PathSeparator(const string &) override {
 		return "/";
 	}
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener>) override {
+	unique_ptr<FileHandle> OpenFile(Context &, const string &path, FileOpenFlags flags) override {
 		opened_files++;
 		if (flags.ExclusiveCreate()) {
 			exclusive_opens++;
 		}
 		return make_uniq<Handle>(*this, path, flags);
 	}
-	void RemoveFile(const string &, optional_ptr<FileOpener>) override {
+	void RemoveFile(Context &, const string &) override {
 		removed_files++;
 	}
-	bool TryRemoveFile(const string &, optional_ptr<FileOpener>) override {
+	bool TryRemoveFile(Context &, const string &) override {
 		removed_files++;
 		return true;
 	}
-	void RemoveFiles(const vector<string> &paths, optional_ptr<FileOpener>) override {
+	void RemoveFiles(Context &, const vector<string> &paths) override {
 		removed_files += paths.size();
 	}
 	int64_t Write(FileHandle &handle, void *, int64_t nr_bytes) override {
@@ -146,20 +146,20 @@ public:
 	}
 	void FileSync(FileHandle &) override {
 	}
-	bool FileExists(const string &, optional_ptr<FileOpener>) override {
+	bool FileExists(Context &, const string &) override {
 		existence_checks++;
 		return false;
 	}
-	bool IsPipe(const string &, optional_ptr<FileOpener>) override {
+	bool IsPipe(Context &, const string &) override {
 		return false;
 	}
-	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+	bool DirectoryExists(Context &, const string &) override {
 		return false;
 	}
-	bool CreateDirectoryExtended(const string &, const CreateDirectoryOptions &, optional_ptr<FileOpener>) override {
+	bool CreateDirectoryExtended(Context &, const string &, const CreateDirectoryOptions &) override {
 		return false;
 	}
-	bool ListFiles(const string &, const std::function<void(const string &, bool)> &, FileOpener *) override {
+	bool ListFiles(Context &, const string &, const std::function<void(const string &, bool)> &) override {
 		return true;
 	}
 

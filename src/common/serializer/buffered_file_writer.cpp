@@ -11,8 +11,8 @@ namespace duckdb {
 const FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS =
     FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE);
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, const FileOpenFlags &open_flags,
-                                       QueryContext context_p)
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, Context &context_p, const string &path_p,
+                                       const FileOpenFlags &open_flags)
     : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
       total_written(0), context(context_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);

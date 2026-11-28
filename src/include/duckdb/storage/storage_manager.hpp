@@ -66,7 +66,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(QueryContext context);
+	void Initialize(Context &context);
 
 	static bool TargetAtLeastVersion(StorageVersion version, idx_t target_version);
 	static bool TargetAtLeastVersion(StorageVersion version, StorageVersion target_version);
@@ -117,7 +117,7 @@ public:
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
 	//! The client context is only passed for explicit checkpoints
-	virtual void CreateCheckpoint(QueryContext context, CheckpointOptions options = CheckpointOptions(),
+	virtual void CreateCheckpoint(Context &context, CheckpointOptions options = CheckpointOptions(),
 	                              optional_ptr<ClientContext> client_context = nullptr) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
@@ -187,7 +187,7 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(QueryContext context) = 0;
+	virtual void LoadDatabase(Context &context) = 0;
 
 protected:
 	//! The attached database managed by this storage manager.
@@ -246,7 +246,7 @@ public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(QueryContext context, CheckpointOptions options,
+	void CreateCheckpoint(Context &context, CheckpointOptions options,
 	                      optional_ptr<ClientContext> client_context) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
@@ -255,9 +255,9 @@ public:
 	void Destroy() override;
 
 protected:
-	void LoadDatabase(QueryContext context) override;
+	void LoadDatabase(Context &context) override;
 
-	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options,
+	unique_ptr<CheckpointWriter> CreateCheckpointWriter(Context &context, CheckpointOptions options,
 	                                                    optional_ptr<ClientContext> checkpoint_context);
 
 private:

@@ -3,7 +3,7 @@
 Ground-truth test for DuckDB's I/O profiling metrics.
 
 DuckDB reports `io.total_bytes_read` / `io.total_bytes_written` profiling metrics.
-These are only correct when a QueryContext is threaded down to the FileHandle
+These are only correct when a Context is threaded down to the FileHandle
 read/write calls; many code paths drop it and silently under- (or over-) count.
 
 This harness measures the REAL bytes read/written by the process at the libc
@@ -12,7 +12,7 @@ DuckDB's own instrumentation, and compares that ground truth against the
 reported metrics. A mismatch is a hard failure (no tolerance).
 
 Known-wrong metrics are listed in io_metrics_config.json with a "skip" reason
-(the QueryContext-not-passed bugs). Those are reported but do not fail the run;
+(the Context-not-passed bugs). Those are reported but do not fail the run;
 if a skipped test starts matching, the harness flags that the skip can be removed.
 
 Usage:

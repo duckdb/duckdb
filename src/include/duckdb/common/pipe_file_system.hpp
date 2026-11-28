@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PipeFileSystem : public BaseFileSystem {
 public:
-	static unique_ptr<FileHandle> OpenPipe(QueryContext context, unique_ptr<FileHandle> handle);
+	static unique_ptr<FileHandle> OpenPipe(Context &context, unique_ptr<FileHandle> handle);
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
@@ -29,7 +29,7 @@ public:
 	bool CanSeek() override {
 		return false;
 	}
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
+	bool IsPipe(Context &context, const string &filename) override {
 		return true;
 	}
 	void FileSync(FileHandle &handle) override;

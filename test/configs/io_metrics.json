@@ -7,7 +7,7 @@
 		"metrics. Any non-skipped mismatch fails the run (hard-fail, no tolerance).",
 		"",
 		"A test with a non-empty \"skip\" field is a KNOWN-WRONG metric: the string explains",
-		"why it is currently wrong (these are the QueryContext-not-passed bugs). When such a",
+		"why it is currently wrong (these are the Context-not-passed bugs). When such a",
 		"bug is fixed the test starts matching, and the harness will report that the skip is",
 		"no longer needed so the entry can be removed.",
 		"",
@@ -121,7 +121,7 @@
 		},
 		{
 			"name": "native_checkpoint_write",
-			"comment": "Verifies that checkpoint block writes to the main database file are attributed. The schema is created+checkpointed in the un-instrumented prep phase so that the file-header writes at database creation (attributed to the connection-open context, not a measured statement) are not counted. The measure phase inserts and checkpoints into the existing file. The .wal is excluded because the write-ahead log uses a single long-lived BufferedFileWriter whose per-commit QueryContext is not threaded (a separate known gap, ~1 KB here); the checkpoint/block-manager writes to the main file are fully attributed.",
+			"comment": "Verifies that checkpoint block writes to the main database file are attributed. The schema is created+checkpointed in the un-instrumented prep phase so that the file-header writes at database creation (attributed to the connection-open context, not a measured statement) are not counted. The measure phase inserts and checkpoints into the existing file. The .wal is excluded because the write-ahead log uses a single long-lived BufferedFileWriter whose per-commit Context is not threaded (a separate known gap, ~1 KB here); the checkpoint/block-manager writes to the main file are fully attributed.",
 			"default_db": "{dir}/native.db",
 			"include": ["{dir}/native.db"],
 			"exclude": ["{dir}/native.db.wal"],

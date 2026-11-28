@@ -4,7 +4,7 @@
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -21,16 +21,17 @@
 
 namespace duckdb {
 
-static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(Context &context, FileSystem &fs, const string &path,
+                                                             idx_t &file_size) {
 	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	file_size = source_file->GetFileSize();
 	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);
-	source_file->Read(QueryContext(), in_buffer.get(), file_size, 0);
+	source_file->Read(context, in_buffer.get(), file_size, 0);
 	source_file->Close();
 	return in_buffer;
 }
 
-static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
+static void WriteExtensionFileToDisk(Context &query_context, FileSystem &fs, const string &path, void *data,
                                      idx_t data_size, DatabaseInstance &db, ExtensionInstallInfo &info) {
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		string signature_key_fingerprint;
@@ -58,10 +59,11 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
 	target_file.reset();
 }
 
-static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
+static void WriteExtensionMetadataFileToDisk(Context &context, FileSystem &fs, const string &path,
+                                             ExtensionInstallInfo &metadata) {
 	// the metadata file records which repository the extension came from, and thereby which keys may have signed it,
 	// so it is part of the extension trust domain and reserved from other writers
-	auto file_writer = BufferedFileWriter(fs, path,
+	auto file_writer = BufferedFileWriter(fs, context, path,
 	                                      FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                          FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	BinarySerializer::Serialize(metadata, file_writer);
@@ -91,7 +93,7 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   1. Crash after extension removal: extension is now uninstalled, metadata file still present
 //   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
-static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
+static void WriteExtensionFiles(Context &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
                                 ExtensionInstallInfo &info, DatabaseInstance &db) {
 	// temp_path ends with '.duckdb_extension'
@@ -115,7 +117,7 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	// Write metadata to tmp file
 	auto metadata_tmp_path = temp_path + ".info";
 	auto metadata_file_path = local_extension_path + ".info";
-	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
+	WriteExtensionMetadataFileToDisk(db.GetContext(), fs, metadata_tmp_path, info);
 
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 	fs.MoveFile(temp_path, local_extension_path);
@@ -164,7 +166,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	}
 
 	idx_t file_size;
-	auto in_buffer = ReadExtensionFileFromDisk(fs, file, file_size);
+	auto in_buffer = ReadExtensionFileFromDisk(Context::GetOrDatabase(context, db), fs, file, file_size);
 
 	ExtensionInstallInfo info;
 
@@ -194,7 +196,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 		info.repository_name = options.repository->name;
 	}
 
-	QueryContext query_context(context);
+	Context &query_context = Context::GetOrDatabase(context, db);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
 	                    extension_decompressed_size, info, db);
 
@@ -206,12 +208,12 @@ static void VerifyCanDownloadExtension(DatabaseInstance &db, const string &url) 
 	if (Settings::Get<EnableExternalAccessSetting>(db) || ExtensionRepository::IsOfficialRepositoryUrl(url)) {
 		return;
 	}
-	if (db.config.CanAccessFile(url, FileType::FILE_TYPE_REGULAR)) {
+	if (db.config.CanAccessFile(db.GetContext(), url, FileType::FILE_TYPE_REGULAR)) {
 		return;
 	}
 	// with httpfs loaded http repositories are bumped to https: allow them if the http url is allowed
 	if (StringUtil::StartsWith(url, "https://") &&
-	    db.config.CanAccessFile("http://" + url.substr(8), FileType::FILE_TYPE_REGULAR)) {
+	    db.config.CanAccessFile(db.GetContext(), "http://" + url.substr(8), FileType::FILE_TYPE_REGULAR)) {
 		return;
 	}
 	throw PermissionException("Cannot download extension from \"%s\" - external access is disabled by "
@@ -261,8 +263,8 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 		auto &fs = FileSystem::GetLocal(db);
 		if (fs.FileExists(local_extension_path + ".info")) {
 			try {
-				install_info =
-				    ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
+				install_info = ExtensionInstallInfo::TryReadInfoFile(db.GetContext(), fs,
+				                                                     local_extension_path + ".info", extension_name);
 			} catch (...) {
 				if (!options.force_install) {
 					// We are going to rewrite the file anyhow, so this is fine
@@ -340,7 +342,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 		info.full_path = download_url;
 	}
 
-	QueryContext query_context(context);
+	Context &query_context = Context::GetOrDatabase(context, db);
 	auto &fs = FileSystem::GetLocal(db);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
@@ -379,10 +381,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	                              context);
 }
 
-static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
+static void ThrowErrorOnMismatchingExtensionOrigin(Context &context, FileSystem &fs, const string &local_extension_path,
                                                    const string &extension_name, const string &extension,
                                                    optional_ptr<ExtensionRepository> repository) {
-	auto install_info = ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
+	auto install_info =
+	    ExtensionInstallInfo::TryReadInfoFile(context, fs, local_extension_path + ".info", extension_name);
 
 	string format_string = "Installing extension '%s' failed. The extension is already installed "
 	                       "but the origin is different.\n"
@@ -447,7 +450,7 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
 		// File exists: throw error if origin mismatches
 		if (options.throw_on_origin_mismatch && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(db) &&
 		    fs.FileExists(local_extension_path + ".info")) {
-			ThrowErrorOnMismatchingExtensionOrigin(fs, local_extension_path, extension_name, extension,
+			ThrowErrorOnMismatchingExtensionOrigin(db.GetContext(), fs, local_extension_path, extension_name, extension,
 			                                       options.repository);
 		}
 

@@ -214,8 +214,8 @@ public:
 	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
 	//! Remove the row identifiers from the indexes of the table added before the bound
-	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type, optional_idx checkpoint_id, VisibilityBound bound);
+	void RemoveFromIndexes(Context &context, Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
+	                       optional_idx checkpoint_id, VisibilityBound bound);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -261,11 +261,10 @@ public:
 	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo>
-	GetColumnSegmentInfo(const QueryContext &context,
+	GetColumnSegmentInfo(Context &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
-	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
-	                           vector<ColumnSegmentInfo> &result);
+	bool ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state, vector<ColumnSegmentInfo> &result);
 
 	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit when building in place
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexEntry> build);

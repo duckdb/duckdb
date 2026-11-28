@@ -63,7 +63,7 @@ TEST_CASE("TemporaryMemoryManager handles many active states", "[storage][tempor
 	constexpr idx_t initial_reservation = 10ULL * 1024ULL * 1024ULL;
 	constexpr idx_t remaining_size = 1024ULL * 1024ULL * 1024ULL;
 
-	buffer_pool.SetLimit(memory_limit, "temporary memory manager test");
+	buffer_pool.SetLimit(context.GetContext(), memory_limit, "temporary memory manager test");
 
 	auto &manager = TemporaryMemoryManager::Get(context.GetContext());
 	duckdb::vector<duckdb::unique_ptr<TemporaryMemoryState>> states;

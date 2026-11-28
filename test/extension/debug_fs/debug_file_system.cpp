@@ -125,10 +125,10 @@ void DebugFileSystem::ApplyDelay() {
 #endif
 }
 
-unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-                                                         optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(Context &context, const OpenFileInfo &file,
+                                                         FileOpenFlags flags) {
 	ApplyDelay();
-	auto inner_handle = inner_fs->OpenFile(ToInner(file), flags, opener);
+	auto inner_handle = inner_fs->OpenFile(context, ToInner(file), flags);
 	if (!inner_handle) {
 		return nullptr;
 	}
@@ -192,8 +192,8 @@ FileMetadata DebugFileSystem::Stats(FileHandle &handle) {
 	return inner.file_system.Stats(inner);
 }
 
-optional<FileMetadata> DebugFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
-	return inner_fs->GetStatsIfExists(ToInner(file), opener);
+optional<FileMetadata> DebugFileSystem::GetStatsIfExists(Context &context, const OpenFileInfo &file) {
+	return inner_fs->GetStatsIfExists(context, ToInner(file));
 }
 
 void DebugFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -245,7 +245,7 @@ bool DebugFileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThrough
 	return inner.file_system.TryGetNetworkThroughput(inner, result);
 }
 
-unique_ptr<FileHandle> DebugFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+unique_ptr<FileHandle> DebugFileSystem::OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle,
                                                            bool write) {
 	auto &debug_handle = handle->Cast<DebugFileHandle>();
 	auto &inner_fs_ref = debug_handle.inner->file_system;
@@ -254,67 +254,67 @@ unique_ptr<FileHandle> DebugFileSystem::OpenCompressedFile(QueryContext context,
 	return make_uniq<DebugFileHandle>(*this, std::move(path), std::move(compressed));
 }
 
-bool DebugFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	return inner_fs->DirectoryExists(ToInner(directory), opener);
+bool DebugFileSystem::DirectoryExists(Context &context, const string &directory) {
+	return inner_fs->DirectoryExists(context, ToInner(directory));
 }
 
-void DebugFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+void DebugFileSystem::CreateDirectory(Context &context, const string &directory) {
+	CreateDirectoryExtended(context, directory, {CreateDirectoryMode::SINGLE});
 }
 
-bool DebugFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
-	return inner_fs->CreateDirectoryExtended(ToInner(directory), options, opener);
+bool DebugFileSystem::CreateDirectoryExtended(Context &context, const string &directory,
+                                              const CreateDirectoryOptions &options) {
+	return inner_fs->CreateDirectoryExtended(context, ToInner(directory), options);
 }
 
-void DebugFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+void DebugFileSystem::CreateDirectoriesRecursive(Context &context, const string &path) {
+	CreateDirectoryExtended(context, path, {CreateDirectoryMode::RECURSIVE});
 }
 
-void DebugFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+void DebugFileSystem::RemoveDirectory(Context &context, const string &directory) {
+	RemoveDirectoryExtended(context, directory, {RemoveDirectoryMode::RECURSIVE});
 }
 
-bool DebugFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                              optional_ptr<FileOpener> opener) {
-	return inner_fs->RemoveDirectoryExtended(ToInner(directory), options, opener);
+bool DebugFileSystem::RemoveDirectoryExtended(Context &context, const string &directory,
+                                              const RemoveDirectoryOptions &options) {
+	return inner_fs->RemoveDirectoryExtended(context, ToInner(directory), options);
 }
 
-void DebugFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	inner_fs->MoveFile(ToInner(source), ToInner(target), opener);
+void DebugFileSystem::MoveFile(Context &context, const string &source, const string &target) {
+	inner_fs->MoveFile(context, ToInner(source), ToInner(target));
 }
 
-bool DebugFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return inner_fs->FileExists(ToInner(filename), opener);
+bool DebugFileSystem::FileExists(Context &context, const string &filename) {
+	return inner_fs->FileExists(context, ToInner(filename));
 }
 
-bool DebugFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	return inner_fs->IsPipe(ToInner(filename), opener);
+bool DebugFileSystem::IsPipe(Context &context, const string &filename) {
+	return inner_fs->IsPipe(context, ToInner(filename));
 }
 
-void DebugFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	inner_fs->RemoveFile(ToInner(filename), opener);
+void DebugFileSystem::RemoveFile(Context &context, const string &filename) {
+	inner_fs->RemoveFile(context, ToInner(filename));
 }
 
-bool DebugFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	return inner_fs->TryRemoveFile(ToInner(filename), opener);
+bool DebugFileSystem::TryRemoveFile(Context &context, const string &filename) {
+	return inner_fs->TryRemoveFile(context, ToInner(filename));
 }
 
-void DebugFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+void DebugFileSystem::RemoveFiles(Context &context, const vector<string> &filenames) {
 	vector<string> inner_filenames;
 	inner_filenames.reserve(filenames.size());
 	for (auto &filename : filenames) {
 		inner_filenames.push_back(ToInner(filename));
 	}
-	inner_fs->RemoveFiles(inner_filenames, opener);
+	inner_fs->RemoveFiles(context, inner_filenames);
 }
 
 string DebugFileSystem::PathSeparator(const string &path) {
 	return inner_fs->PathSeparator(ToInner(path));
 }
 
-vector<OpenFileInfo> DebugFileSystem::Glob(const string &path, FileOpener *opener) {
-	auto result = inner_fs->Glob(ToInner(path), opener);
+vector<OpenFileInfo> DebugFileSystem::Glob(Context &context, const string &path) {
+	auto result = inner_fs->Glob(context, ToInner(path));
 	for (auto &file : result) {
 		file.path = FromInner(file.path);
 	}
@@ -329,29 +329,27 @@ string DebugFileSystem::ExpandPath(const string &path) {
 	return inner_fs->ExpandPath(path);
 }
 
-unique_ptr<MemoryMappedFile> DebugFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-                                                            const MMapOptions &options,
-                                                            optional_ptr<FileOpener> opener) {
-	return inner_fs->MemoryMapFile(ToInner(path), flags, options, opener);
+unique_ptr<MemoryMappedFile> DebugFileSystem::MemoryMapFile(Context &context, const OpenFileInfo &path,
+                                                            FileOpenFlags flags, const MMapOptions &options) {
+	return inner_fs->MemoryMapFile(context, ToInner(path), flags, options);
 }
 
 bool DebugFileSystem::SupportsOpenFileExtended() const {
 	return true;
 }
 
-bool DebugFileSystem::ListFilesExtended(const string &directory,
-                                        const std::function<void(OpenFileInfo &info)> &callback,
-                                        optional_ptr<FileOpener> opener) {
-	return inner_fs->ListFiles(ToInner(directory), callback, opener);
+bool DebugFileSystem::ListFilesExtended(Context &context, const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback) {
+	return inner_fs->ListFiles(context, ToInner(directory), callback);
 }
 
 bool DebugFileSystem::SupportsListFilesExtended() const {
 	return true;
 }
 
-unique_ptr<MultiFileList> DebugFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
-                                                             optional_ptr<FileOpener> opener) {
-	auto files = inner_fs->Glob(ToInner(path), input, opener)->GetAllFiles();
+unique_ptr<MultiFileList> DebugFileSystem::GlobFilesExtended(Context &context, const string &path,
+                                                             const FileGlobInput &input) {
+	auto files = inner_fs->Glob(context, ToInner(path), input)->GetAllFiles();
 	for (auto &file : files) {
 		file.path = FromInner(file.path);
 	}
@@ -362,8 +360,8 @@ bool DebugFileSystem::SupportsGlobExtended() const {
 	return true;
 }
 
-string DebugFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
-	return FromInner(inner_fs->CanonicalizePath(ToInner(path_p), opener));
+string DebugFileSystem::CanonicalizePath(Context &context, const string &path_p) {
+	return FromInner(inner_fs->CanonicalizePath(context, ToInner(path_p)));
 }
 
 } // namespace duckdb

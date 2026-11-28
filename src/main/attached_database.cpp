@@ -1,4 +1,5 @@
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -117,6 +118,10 @@ AttachOptions::AttachOptions(Context &context, const unordered_map<string, Value
 //===--------------------------------------------------------------------===//
 ValidChecker &ValidChecker::Get(AttachedDatabase &db) {
 	return db.GetValidChecker();
+}
+
+Context &AttachedDatabase::GetContext() {
+	return db.GetContext();
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
@@ -348,7 +353,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(context);
+		storage->Initialize(Context::GetOrDatabase(context, db));
 	}
 }
 
@@ -487,7 +492,7 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 			if (should_checkpoint) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
-				storage->CreateCheckpoint(QueryContext(), options);
+				storage->CreateCheckpoint(GetDatabase().GetContext(), options);
 			}
 		}
 	} catch (std::exception &ex) {

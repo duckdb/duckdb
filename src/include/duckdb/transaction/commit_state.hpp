@@ -73,7 +73,7 @@ private:
 
 struct IndexDataRemover {
 public:
-	explicit IndexDataRemover(DuckTransaction &transaction, QueryContext context, IndexRemovalType removal_type);
+	explicit IndexDataRemover(DuckTransaction &transaction, Context &context, IndexRemovalType removal_type);
 
 	//! Removes the deleted rows from the indexes; returns true if they stay in deleted_rows_in_use
 	bool PushDelete(DeleteInfo &info);
@@ -85,7 +85,7 @@ private:
 private:
 	DuckTransaction &transaction;
 	// data for index cleanup
-	QueryContext context;
+	Context &context;
 	//! While committing, we remove data from any indexes that was deleted
 	IndexRemovalType removal_type;
 	DataChunk chunk;

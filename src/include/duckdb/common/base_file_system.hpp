@@ -36,13 +36,12 @@ namespace duckdb {
 
 class AttachedDatabase;
 class DatabaseInstance;
-class FileOpener;
 class BaseFileSystem;
 class FileSystem;
 class Logger;
 class ClientContext;
+class Context;
 class CompressedFileSystem;
-class QueryContext;
 class MemoryMappedFile;
 struct MMapOptions;
 class MultiFileList;
@@ -122,14 +121,14 @@ public:
 	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
 	// File offset will be changed, which advances for number of bytes read.
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
-	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Read(Context &context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
-	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(Context &context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Read(Context &context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(Context &context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
 	DUCKDB_API idx_t SeekPosition();
@@ -138,14 +137,14 @@ public:
 	//! Abandon an incomplete write without publishing any buffered or staged data.
 	DUCKDB_API void AbortWrite();
 	DUCKDB_API string ReadLine();
-	DUCKDB_API string ReadLine(QueryContext context);
+	DUCKDB_API string ReadLine(Context &context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
 	DUCKDB_API virtual bool CanSeek();
 	DUCKDB_API FileWriteMode GetWriteMode();
-	DUCKDB_API bool IsPipe();
+	DUCKDB_API bool IsPipe(Context &context);
 	DUCKDB_API bool OnDiskFile();
 	//! Try to obtain a network throughput estimate (Local files return false).
 	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
@@ -153,7 +152,7 @@ public:
 	DUCKDB_API FileType GetType();
 	DUCKDB_API FileMetadata Stats();
 
-	DUCKDB_API void TryAddLogger(FileOpener &opener);
+	DUCKDB_API void TryAddLogger(Context &context);
 
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
@@ -193,15 +192,12 @@ class BaseFileSystem {
 public:
 	DUCKDB_API virtual ~BaseFileSystem();
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                                   optional_ptr<FileOpener> opener);
-	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
-	                                           optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags);
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(Context &context, const OpenFileInfo &path, const FileOpenFlags &flags);
 
 	//! Open a memory-mapped view of [path]. Throws if not supported by this filesystem.
-	DUCKDB_API virtual unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                                              const MMapOptions &options,
-	                                                              optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual unique_ptr<MemoryMappedFile> MemoryMapFile(Context &context, const OpenFileInfo &path,
+	                                                              FileOpenFlags flags, const MMapOptions &options);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -232,46 +228,45 @@ public:
 	//! Returns the file stats of the attached handle.
 	DUCKDB_API virtual FileMetadata Stats(FileHandle &handle);
 	//! Returns the stats of a file, or nullopt if the file does not exist.
-	DUCKDB_API virtual optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
-	                                                           optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual optional<FileMetadata> GetStatsIfExists(Context &context, const OpenFileInfo &file);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
 	//! Check if a directory exists
-	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool DirectoryExists(Context &context, const string &directory);
 	//! Create a directory if it does not exist
-	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void CreateDirectory(Context &context, const string &directory);
 	//! Create one directory or a directory tree. Returns whether this call is known to have created the target.
-	DUCKDB_API virtual bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                                                optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool CreateDirectoryExtended(Context &context, const string &directory,
+	                                                const CreateDirectoryOptions &options);
 	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
-	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void CreateDirectoriesRecursive(Context &context, const string &path);
 	//! Recursively remove a directory and all files in it
-	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void RemoveDirectory(Context &context, const string &directory);
 	//! Remove an empty directory or a directory tree. Returns whether the target was removed.
-	DUCKDB_API virtual bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                                                optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool RemoveDirectoryExtended(Context &context, const string &directory,
+	                                                const RemoveDirectoryOptions &options);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	DUCKDB_API virtual bool ListFiles(const string &directory,
-	                                  const std::function<void(const string &, bool)> &callback, FileOpener *opener);
-	DUCKDB_API bool ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                          optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool ListFiles(Context &context, const string &directory,
+	                                  const std::function<void(const string &, bool)> &callback);
+	DUCKDB_API bool ListFiles(Context &context, const string &directory,
+	                          const std::function<void(OpenFileInfo &info)> &callback);
 
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	DUCKDB_API virtual void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void MoveFile(Context &context, const string &source, const string &target);
 	//! Check if a file exists
-	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool FileExists(Context &context, const string &filename);
 	//! Check if path is a pipe or character device
-	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool IsPipe(Context &context, const string &filename);
 	//! Remove a file from disk
-	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void RemoveFile(Context &context, const string &filename);
 	//! Remove a file from disk if it exists - if it does not exist, return false
-	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool TryRemoveFile(Context &context, const string &filename);
 	//! Remove multiple files from disk - does not error if any file does not exist
-	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual void RemoveFiles(Context &context, const vector<string> &filenames);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Abandon an incomplete write represented by this file handle.
@@ -301,9 +296,8 @@ public:
 	DUCKDB_API string ExtractName(const string &path);
 
 	//! Runs a glob on the file system, returning a list of matching files
-	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener);
-	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
-	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual vector<OpenFileInfo> Glob(Context &context, const string &path);
+	DUCKDB_API unique_ptr<MultiFileList> Glob(Context &context, const string &path, const FileGlobInput &input);
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
@@ -327,7 +321,7 @@ public:
 	//! Used for file systems
 	DUCKDB_API virtual bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result);
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
 
 	//! Whether this is a LocalFileSystem instance.
@@ -337,20 +331,21 @@ public:
 	DUCKDB_API virtual std::string GetName() const = 0;
 
 	//! Canonicalize a path
-	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual string CanonicalizePath(Context &context, const string &path);
+	//! Canonicalizes a path without consulting the file system: removes "." and ".." segments
+	DUCKDB_API string GenericCanonicalizePath(const string &path);
 
 protected:
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
-	                                                           optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(Context &context, const OpenFileInfo &path,
+	                                                           FileOpenFlags flags);
 	DUCKDB_API virtual bool SupportsOpenFileExtended() const;
 
-	DUCKDB_API virtual bool ListFilesExtended(const string &directory,
-	                                          const std::function<void(OpenFileInfo &info)> &callback,
-	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool ListFilesExtended(Context &context, const string &directory,
+	                                          const std::function<void(OpenFileInfo &info)> &callback);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
 
-	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                                               optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(Context &context, const string &path,
+	                                                               const FileGlobInput &input);
 	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:

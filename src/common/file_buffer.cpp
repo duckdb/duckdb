@@ -111,7 +111,7 @@ void FileBuffer::Resize(BlockManager &block_manager) {
 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 }
 
-void FileBuffer::Read(QueryContext context, FileHandle &handle, uint64_t location) {
+void FileBuffer::Read(Context &context, FileHandle &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	if (handle.file_system.IsLocalFileSystem()) {
 		// Pre-fault local read buffers before the kernel fills them.
@@ -127,7 +127,7 @@ void FileBuffer::ReadFromMemory(const_data_ptr_t source, uint64_t location) {
 	memcpy(internal_buffer, source + location, internal_size);
 }
 
-void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
+void FileBuffer::Read(Context &context, MemoryMappedFile &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	// Zero-copy: adopt a pointer into the mapping.
 	auto src = handle.GetDataMutable(location, internal_size);
@@ -140,12 +140,12 @@ void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t l
 	owns_internal_buffer = false;
 }
 
-void FileBuffer::Write(QueryContext context, FileHandle &handle, const uint64_t location) {
+void FileBuffer::Write(Context &context, FileHandle &handle, const uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Write(context, internal_buffer, internal_size, location);
 }
 
-void FileBuffer::Write(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
+void FileBuffer::Write(Context &context, MemoryMappedFile &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	auto dst = handle.GetDataMutable(location, internal_size);
 	memcpy(dst, internal_buffer, internal_size);

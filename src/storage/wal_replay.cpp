@@ -354,7 +354,7 @@ private:
 //===--------------------------------------------------------------------===//
 struct WriteAheadLogReplayer {
 public:
-	WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager, const string &wal_path);
+	WriteAheadLogReplayer(Context &context, StorageManager &storage_manager, const string &wal_path);
 
 	unique_ptr<WriteAheadLog> Replay();
 
@@ -367,20 +367,20 @@ private:
 	                          const string &recovery_path, unique_ptr<FileHandle> checkpoint_handle);
 
 private:
-	QueryContext context;
+	Context &context;
 	StorageManager &storage_manager;
 	AttachedDatabase &database;
 	const string &main_wal_path;
 	FileSystem &fs;
 };
 
-unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(Context &context, StorageManager &storage_manager,
                                                 const string &main_wal_path) {
 	WriteAheadLogReplayer wal_replay(context, storage_manager, main_wal_path);
 	return wal_replay.Replay();
 }
 
-WriteAheadLogReplayer::WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager,
+WriteAheadLogReplayer::WriteAheadLogReplayer(Context &context, StorageManager &storage_manager,
                                              const string &main_wal_path)
     : context(context), storage_manager(storage_manager), database(storage_manager.GetAttached()),
       main_wal_path(main_wal_path), fs(FileSystem::Get(storage_manager.GetAttached())) {
@@ -412,7 +412,7 @@ void WriteAheadLogReplayer::CopyOverWAL(BufferedFileReader &reader, FileHandle &
 		if (read_count == 0) {
 			break;
 		}
-		reader.ReadData(context, buffer, read_count);
+		reader.ReadData(buffer, read_count);
 
 		target.Write(buffer, read_count);
 	}
@@ -520,7 +520,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 			}
 		}
-		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+		auto profiler = context.TryGetQueryProfiler();
 		if (profiler) {
 			profiler->AddToMetricCounter(MetricStorageWALReplayEntryCount::Name, replay_entry_count);
 		}

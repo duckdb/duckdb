@@ -4,7 +4,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -838,7 +838,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 	try {
 		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
 
-		if (!LocalFileSystem::IsPrivateFile(secret_path, nullptr)) {
+		if (!LocalFileSystem::IsPrivateFile(secret_path)) {
 			throw IOException(
 			    "The secret file '%s' has incorrect permissions! Please set correct permissions or remove file",
 			    secret_path);

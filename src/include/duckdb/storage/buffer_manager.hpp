@@ -58,17 +58,17 @@ public:
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
 	//! Allocate variants that attribute the (possible) eviction/spill I/O to a query. The base implementations
 	//! ignore the context and delegate to the variants above; StandardBufferManager threads it through.
-	virtual BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy = true);
-	virtual BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	virtual BufferHandle Allocate(Context &context, MemoryTag tag, idx_t block_size, bool can_destroy = true);
+	virtual BufferHandle Allocate(Context &context, MemoryTag tag, BlockManager *block_manager,
 	                              bool can_destroy = true);
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
-	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
+	virtual BufferHandle Pin(Context &context, shared_ptr<BlockHandle> &handle) = 0;
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
-	virtual void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) = 0;
+	virtual void Prefetch(Context &context, vector<shared_ptr<BlockHandle>> &handles) = 0;
 	//! Creates one async task per contiguous run of blocks needing load
-	virtual vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	virtual vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(Context &context,
 	                                                          vector<shared_ptr<BlockHandle>> &handles);
 	//! Unpin a block handle.
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
@@ -140,9 +140,9 @@ public:
 	//! Add the block handle to the eviction queue.
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	//! Write a temporary file buffer.
-	virtual void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
+	virtual void WriteTemporaryBuffer(Context &context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
 	//! Read a temporary buffer.
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(Context &context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);
 	//! Delete the temporary file containing the block memory.
 	virtual void DeleteTemporaryFile(BlockMemory &memory);

@@ -21,7 +21,6 @@ class BufferManager;
 class ClientContext;
 struct CatalogTransaction;
 class DatabaseInstance;
-class FileOpener;
 class FileSystem;
 class Logger;
 class MetricsManager;
@@ -41,8 +40,8 @@ public:
 	DUCKDB_API explicit Context(DatabaseInstance &db);
 	DUCKDB_API ~Context();
 
-	//! Turns these into the services of the given client context: creates the client config, the query profiler,
-	//! the file opener and the client file system. The connection logger is set by the context (see SetLogger).
+	//! Turns these into the services of the given client context: creates the client config, the query profiler
+	//! and the client file system. The connection logger is set by the context (see SetLogger).
 	//! The context must own these services - it is kept as a back reference.
 	void InitializeClient(ClientContext &context);
 
@@ -54,6 +53,8 @@ public:
 	//! Null-safe variants for optional services
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<Context> services);
 	DUCKDB_API static optional_ptr<QueryProfiler> TryGetQueryProfiler(optional_ptr<Context> services);
+	//! The services of the client if there is one, otherwise the database-wide services
+	DUCKDB_API static Context &GetOrDatabase(optional_ptr<ClientContext> client, DatabaseInstance &db);
 	//! Checks whether the query was interrupted (or timed out, checked only every 256th call) and throws if so - no-op
 	//! without a client
 	DUCKDB_API void FastInterruptCheck() const;
@@ -92,8 +93,6 @@ public:
 	DUCKDB_API const shared_ptr<Logger> &GetLoggerPtr() const;
 	//! The file system: client-specific for the services of a ClientContext, otherwise the database file system
 	DUCKDB_API FileSystem &GetFileSystem() const;
-	//! The file opener of the client - only present for the services of a ClientContext
-	DUCKDB_API optional_ptr<FileOpener> TryGetFileOpener() const;
 	//! The buffer manager wrapper: forwards to the database buffer manager, tracking the allocations of the services
 	DUCKDB_API BufferManager &GetBufferManager() const;
 	//! The database-wide task scheduler
@@ -115,7 +114,6 @@ private:
 	shared_ptr<Logger> logger;
 	shared_ptr<QueryProfiler> profiler;
 	unique_ptr<RegisteredStateManager> registered_state;
-	unique_ptr<FileOpener> file_opener;
 	unique_ptr<FileSystem> client_file_system;
 	//! The buffer manager wrapper of the services
 	unique_ptr<BufferManager> buffer_manager;

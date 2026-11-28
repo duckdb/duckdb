@@ -71,17 +71,8 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 	}
 }
 
-void LogCacheEvent(QueryContext context, DatabaseInstance &db, const CachingFileHandle &handle, const char *event,
-                   idx_t bytes, idx_t location) {
-	auto client_context = context.GetContext();
-	auto opener = handle.GetOpener();
-	if (client_context) {
-		DUCKDB_LOG(*client_context, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
-	} else if (opener) {
-		DUCKDB_LOG(*opener, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
-	} else {
-		DUCKDB_LOG(db, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
-	}
+void LogCacheEvent(Context &context, const CachingFileHandle &handle, const char *event, idx_t bytes, idx_t location) {
+	DUCKDB_LOG(context, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
 }
 
 //===----------------------------------------------------------------------===//
@@ -90,7 +81,7 @@ void LogCacheEvent(QueryContext context, DatabaseInstance &db, const CachingFile
 
 class FetchBlockTask : public BaseExecutorTask {
 public:
-	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
+	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, Context &context_p,
 	               BufferManager &buffer_manager_p, shared_ptr<CacheBlock> block_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
 	      buffer_manager(buffer_manager_p), block(std::move(block_p)), result_pin(result_pin_p) {
@@ -110,8 +101,8 @@ public:
 					const idx_t nr_bytes = block->nr_bytes;
 					result_pin = std::move(pin);
 					lk.unlock();
-					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
-					              ExternalFileCacheLogType::HIT_EVENT, nr_bytes, block->location);
+					LogCacheEvent(context, caching_file_handle, ExternalFileCacheLogType::HIT_EVENT, nr_bytes,
+					              block->location);
 					return;
 				}
 				// Evicted by buffer manager, need to re-fetch
@@ -137,8 +128,7 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
-					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
-					              ExternalFileCacheLogType::MISS_EVENT, to_read, offset);
+					LogCacheEvent(context, caching_file_handle, ExternalFileCacheLogType::MISS_EVENT, to_read, offset);
 					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
 					lk.lock();
@@ -185,7 +175,7 @@ public:
 
 private:
 	CachingFileHandle &caching_file_handle;
-	QueryContext context;
+	Context &context;
 	BufferManager &buffer_manager;
 	shared_ptr<CacheBlock> block;
 	BufferHandle &result_pin;
@@ -197,7 +187,7 @@ private:
 
 class ReadRangeTask : public BaseExecutorTask {
 public:
-	ReadRangeTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
+	ReadRangeTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, Context &context_p,
 	              data_ptr_t buffer_p, idx_t nr_bytes_p, idx_t location_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p), buffer(buffer_p),
 	      nr_bytes(nr_bytes_p), location(location_p) {
@@ -213,7 +203,7 @@ public:
 
 private:
 	CachingFileHandle &caching_file_handle;
-	QueryContext context;
+	Context &context;
 	data_ptr_t buffer;
 	idx_t nr_bytes;
 	idx_t location;
@@ -236,14 +226,9 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
-                                                          optional_ptr<FileOpener> opener) {
-	return OpenFile(QueryContext(), path, flags, opener);
-}
-
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
-                                                          const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	auto handle = unique_ptr<CachingFileHandle>(new CachingFileHandle(context, *this, path, flags, opener));
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(Context &context, const OpenFileInfo &path,
+                                                          const FileOpenFlags &flags) {
+	auto handle = unique_ptr<CachingFileHandle>(new CachingFileHandle(context, *this, path, flags));
 	if (!handle->Initialize()) {
 		return nullptr;
 	}
@@ -337,13 +322,11 @@ void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file) {
 	external_file_cache.DropBlocks(cached_file);
 }
 
-CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
-                                     const OpenFileInfo &path_p, FileOpenFlags flags_p,
-                                     optional_ptr<FileOpener> opener_p)
+CachingFileHandle::CachingFileHandle(Context &context, CachingFileSystem &caching_file_system_p,
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p)
     : context(context), file_system(caching_file_system_p.file_system), db(caching_file_system_p.db),
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
-      opener(opener_p),
-      validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetContext(), caching_file_system_p.db)),
+      validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context, caching_file_system_p.db)),
       cached_file(external_file_cache.GetOrCreateCachedFile(path_p.path)), position(0) {
 }
 
@@ -453,7 +436,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	if (location >= file_size) {
 		return FileBufferHandleGroup();
 	}
-	LogCacheEvent(context, db, *this, ExternalFileCacheLogType::READ_EVENT, MinValue(nr_bytes, file_size - location),
+	LogCacheEvent(context, *this, ExternalFileCacheLogType::READ_EVENT, MinValue(nr_bytes, file_size - location),
 	              location);
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(current_cached_file->path);
 	const idx_t min_block_size =
@@ -579,10 +562,6 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 
 string CachingFileHandle::GetPath() const {
 	return path.path;
-}
-
-optional_ptr<FileOpener> CachingFileHandle::GetOpener() const {
-	return opener;
 }
 
 idx_t CachingFileHandle::GetFileSize() {
@@ -723,7 +702,7 @@ idx_t CachingFileHandle::GetMaxMemory() const {
 	return external_file_cache.GetBufferManager().GetMaxMemory();
 }
 
-void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
+void CachingFileHandle::ReadAndRecord(Context &context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
 	auto handle = GetFileHandle();
 	if (handle->file_system.IsLocalFileSystem()) {
 		// Pre-fault local read buffers before the kernel fills them.

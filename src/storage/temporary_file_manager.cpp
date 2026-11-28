@@ -238,7 +238,7 @@ FileHandle &TemporaryFileHandle::GetIOHandle(data_ptr_t buffer, const idx_t size
 	return *buffered_handle;
 }
 
-unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext context,
+unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(Context &context,
                                                                 const TemporaryFileIndex &index_in_file,
                                                                 unique_ptr<FileBuffer> buffer) {
 	auto block_index = index_in_file.block_index.GetIndex();
@@ -296,7 +296,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 	return buffer;
 }
 
-void TemporaryFileHandle::WriteTemporaryBuffer(QueryContext context, FileBuffer &buffer, const idx_t block_index,
+void TemporaryFileHandle::WriteTemporaryBuffer(Context &context, FileBuffer &buffer, const idx_t block_index,
                                                AllocatedData &compressed_buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
@@ -535,7 +535,7 @@ TemporaryFileManager::~TemporaryFileManager() {
 TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &mutex) : lock(mutex) {
 }
 
-idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer) {
+idx_t TemporaryFileManager::WriteTemporaryBuffer(Context &context, block_id_t block_id, FileBuffer &buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
@@ -693,7 +693,7 @@ bool TemporaryFileManager::IsEncrypted() const {
 	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
-unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,
+unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(Context &context, block_id_t id,
                                                                  unique_ptr<FileBuffer> reusable_buffer,
                                                                  idx_t *eviction_size) {
 	TemporaryFileIndex index;

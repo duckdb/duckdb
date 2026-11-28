@@ -19,7 +19,6 @@ class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
 class ExpressionRewriter;
-class FileOpener;
 class FileSystem;
 class QueryProfiler;
 class PreparedStatementData;

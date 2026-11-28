@@ -364,17 +364,17 @@ TEST_CASE("Repeated settings still invoke setting callbacks", "[api][settings]")
 
 class FileCleaner {
 public:
-	FileCleaner(LocalFileSystem *fs, string file) : fs(*fs), file(std::move(file)) {
+	FileCleaner(FileSystem *fs, string file) : fs(*fs), file(std::move(file)) {
 	}
 
 	~FileCleaner() {
-		if (fs.FileExists(file, nullptr)) {
-			fs.RemoveFile(file, nullptr);
+		if (fs.FileExists(file)) {
+			fs.RemoveFile(file);
 		}
 	}
 
 private:
-	LocalFileSystem &fs;
+	FileSystem &fs;
 	string file;
 };
 
@@ -549,7 +549,8 @@ TEST_CASE("Test secret_directory configuration", "[api]") {
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration", "[api]") {
-	LocalFileSystem fs;
+	DuckDB fs_db(nullptr);
+	auto &fs = FileSystem::GetLocal(*fs_db.instance);
 	string directory_path = TestDirectoryPath();
 	string my_secret_dir = fs.JoinPath(directory_path, "my_secret_dir");
 	string my_secret_file = fs.JoinPath(my_secret_dir, "my_secret.duckdb_secret");
@@ -571,11 +572,12 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file, nullptr));
+	REQUIRE(fs.FileExists(my_secret_file));
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration update", "[api]") {
-	LocalFileSystem fs;
+	DuckDB fs_db(nullptr);
+	auto &fs = FileSystem::GetLocal(*fs_db.instance);
 	string directory_path = TestDirectoryPath();
 	string my_secret_dir = fs.JoinPath(directory_path, "my_secret_dir");
 	string new_secret_dir = fs.JoinPath(directory_path, "new_secret_dir");
@@ -605,11 +607,12 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_other_secret_file, nullptr));
+	REQUIRE(fs.FileExists(my_other_secret_file));
 }
 
 TEST_CASE("Test secret_directory configuration update after secret creation", "[api]") {
-	LocalFileSystem fs;
+	DuckDB fs_db(nullptr);
+	auto &fs = FileSystem::GetLocal(*fs_db.instance);
 	string directory_path = TestDirectoryPath();
 	string my_secret_dir = fs.JoinPath(directory_path, "my_secret_dir");
 	string my_secret_file = fs.JoinPath(my_secret_dir, "my_secret.duckdb_secret");
@@ -631,7 +634,7 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file, nullptr));
+	REQUIRE(fs.FileExists(my_secret_file));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");

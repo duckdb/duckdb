@@ -68,8 +68,7 @@ private:
 public:
 	DUCKDB_API Session CreateSession(DatabaseInstance &db, const string &path) DUCKDB_EXCLUDES(lock);
 	DUCKDB_API Session CreateSession(ClientContext &context, const string &path) DUCKDB_EXCLUDES(lock);
-	DUCKDB_API Session CreateSession(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info)
-	    DUCKDB_EXCLUDES(lock);
+	DUCKDB_API Session CreateSession(Context &context, optional_ptr<FileLookupInfo> info) DUCKDB_EXCLUDES(lock);
 
 private:
 	using ClientKey = HTTPClientPool::ClientKey;

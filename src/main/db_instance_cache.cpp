@@ -1,4 +1,6 @@
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 
@@ -14,7 +16,7 @@ DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
 static string GetDBAbsolutePath(const string &database_p, VirtualFileSystem &fs) {
-	auto database = FileSystem::ExpandPath(database_p, nullptr);
+	auto database = FileSystem::ExpandPathWithHome(database_p, FileSystem::GetDefaultHomeDirectory());
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
 	}
@@ -26,8 +28,14 @@ static string GetDBAbsolutePath(const string &database_p, VirtualFileSystem &fs)
 		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
-	// canonicalize the path
-	return fs.FindFileSystem(database, nullptr).CanonicalizePath(database, nullptr);
+	auto &path_fs = fs.FindFileSystem(database);
+	if (!path_fs.IsLocalFileSystem()) {
+		// there is no context yet: canonicalize without consulting the file system
+		return path_fs.GenericCanonicalizePath(database);
+	}
+	// there is no database yet, so only the default home directory is available
+	LocalFileSystem local_fs;
+	return local_fs.CanonicalizePathWithHome(database, FileSystem::GetDefaultHomeDirectory());
 }
 
 static string GetCacheKey(const string &database_p, const DBConfig &config) {

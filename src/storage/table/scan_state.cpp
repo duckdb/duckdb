@@ -387,7 +387,7 @@ void CollectionScanState::InitializeColumnScans() {
 
 bool CollectionScanState::InitializeRowGroupScan(SegmentNode<RowGroup> &node, shared_ptr<RowGroup> payload,
                                                  idx_t vector_offset, idx_t end_row) {
-	if (!payload->CheckZonemap(context.GetClientContext(), GetFilterInfo(), node.GetRowStart())) {
+	if (!payload->CheckZonemap(Context::TryGetClientContext(context), GetFilterInfo(), node.GetRowStart())) {
 		return false;
 	}
 	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::NONE);
@@ -432,7 +432,7 @@ bool CollectionScanState::SetAssignment(const RowGroupScanAssignment &assignment
 	D_ASSERT(assignment.pinned_row_group);
 	ReleasePins();
 	if (column_scans.empty()) {
-		Initialize(assignment.context, assignment.pinned_row_group->GetCollection().GetTypes());
+		Initialize(*assignment.context, assignment.pinned_row_group->GetCollection().GetTypes());
 	}
 	AssignSharedPointer(row_groups, assignment.row_groups);
 	auto node = assignment.row_group;
@@ -468,7 +468,7 @@ void CollectionScanState::PrepareAssignmentBlocks(PrefetchState &blocks, vector<
 	InitializeColumnScans();
 	pinned_row_group->CollectAssignmentBlocks(*this, blocks);
 	if (prefetch) {
-		tasks = pinned_row_group->GetBlockManager().buffer_manager.CreatePrefetchTasks(context, blocks.blocks);
+		tasks = pinned_row_group->GetBlockManager().buffer_manager.CreatePrefetchTasks(*context, blocks.blocks);
 	}
 }
 
@@ -556,7 +556,8 @@ bool CollectionScanState::RecheckPreparedRowGroup() {
 	if (!row_group || prepared_vector.prepare_state == VectorPrepareState::NONE) {
 		return true;
 	}
-	if (pinned_row_group->CheckZonemap(context.GetClientContext(), GetFilterInfo(), row_group->GetRowStart())) {
+	if (pinned_row_group->CheckZonemap(Context::TryGetClientContext(context), GetFilterInfo(),
+	                                   row_group->GetRowStart())) {
 		return true;
 	}
 	// the prepared vector was counted as scanned when it was prepared, it is never decoded

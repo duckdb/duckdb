@@ -98,7 +98,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &c
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
-		ColumnScanState scan_state(nullptr);
+		ColumnScanState scan_state(nullptr, col_data.GetDatabase().GetContext());
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 

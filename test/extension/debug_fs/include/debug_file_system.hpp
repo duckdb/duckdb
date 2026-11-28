@@ -58,7 +58,7 @@ public:
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
 	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
+	optional<FileMetadata> GetStatsIfExists(Context &context, const OpenFileInfo &file) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	void FileSync(FileHandle &handle) override;
 	void AbortFileWrite(FileHandle &handle) override;
@@ -69,45 +69,44 @@ public:
 	bool OnDiskFile(FileHandle &handle) override;
 	bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;
-	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override;
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener) override;
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
-	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
-	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
+	unique_ptr<FileHandle> OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle, bool write) override;
+	bool DirectoryExists(Context &context, const string &directory) override;
+	void CreateDirectory(Context &context, const string &directory) override;
+	bool CreateDirectoryExtended(Context &context, const string &directory,
+	                             const CreateDirectoryOptions &options) override;
+	void CreateDirectoriesRecursive(Context &context, const string &path) override;
+	void RemoveDirectory(Context &context, const string &directory) override;
+	bool RemoveDirectoryExtended(Context &context, const string &directory,
+	                             const RemoveDirectoryOptions &options) override;
+	void MoveFile(Context &context, const string &source, const string &target) override;
+	bool FileExists(Context &context, const string &filename) override;
+	bool IsPipe(Context &context, const string &filename) override;
+	void RemoveFile(Context &context, const string &filename) override;
+	bool TryRemoveFile(Context &context, const string &filename) override;
+	void RemoveFiles(Context &context, const vector<string> &filenames) override;
 	string PathSeparator(const string &path) override;
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<OpenFileInfo> Glob(Context &context, const string &path) override;
 	string GetHomeDirectory() override;
 	string ExpandPath(const string &path) override;
-	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
+	unique_ptr<MemoryMappedFile> MemoryMapFile(Context &context, const OpenFileInfo &path, FileOpenFlags flags,
+	                                           const MMapOptions &options) override;
 
 protected:
-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-	                                        optional_ptr<FileOpener> opener) override;
+	unique_ptr<FileHandle> OpenFileExtended(Context &context, const OpenFileInfo &file, FileOpenFlags flags) override;
 
 	bool SupportsOpenFileExtended() const override;
 
-	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                       optional_ptr<FileOpener> opener) override;
+	bool ListFilesExtended(Context &context, const string &directory,
+	                       const std::function<void(OpenFileInfo &info)> &callback) override;
 
 	bool SupportsListFilesExtended() const override;
 
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override;
+	unique_ptr<MultiFileList> GlobFilesExtended(Context &context, const string &path,
+	                                            const FileGlobInput &input) override;
 
 	bool SupportsGlobExtended() const override;
 
-	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
+	string CanonicalizePath(Context &context, const string &path_p) override;
 
 private:
 	// Random engine is initialized lazily on first IO operation, so users could set the random seed for reproduction.

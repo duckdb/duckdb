@@ -82,14 +82,14 @@ CSVWriter::CSVWriter(const CSVReaderOptions &options_p, AsyncFileWriter &file_wr
 }
 
 CSVWriter::CSVWriter(const CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
-                     FileCompressionType compression, QueryContext context, bool shared)
+                     FileCompressionType compression, Context &context, bool shared)
+
     : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                                          options.dialect_options.state_machine_options.quote.GetValue(),
                                          options.write_newline, GetWriteCommentChar(options)),
-      file_writer(make_uniq<BufferedFileWriter>(fs, file_path,
+      file_writer(make_uniq<BufferedFileWriter>(fs, context, file_path,
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
-                                                    FileLockType::WRITE_LOCK | std::move(compression),
-                                                context)),
+                                                    FileLockType::WRITE_LOCK | std::move(compression))),
       write_stream(*file_writer), should_initialize(true), shared(shared) {
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();

@@ -151,7 +151,6 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
 	if (state.expression_state) {
 		auto &expression_state = *state.expression_state;
-		D_ASSERT(state.context.Valid());
 		auto &executor = expression_state.executor;
 		auto &target = expression_state.target;
 		auto &input = expression_state.input;
@@ -352,8 +351,7 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
 			auto &cast_set = CastFunctionSet::Get(GetDatabase());
-			auto context = state.context.GetContext();
-			auto cast_input = context ? GetCastFunctionInput(*context) : GetCastFunctionInput::Default();
+			GetCastFunctionInput cast_input(state.context);
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);
@@ -535,7 +533,7 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 	this->count = validity->count.load();
 }
 
-void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void StructColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                             vector<ColumnSegmentInfo> &result,
                                             const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);

@@ -46,33 +46,33 @@ public:
 		LocalFileSystem::FileSync(handle);
 	}
 
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
+	void MoveFile(Context &context, const string &source, const string &target) override {
 		if (IsSecretFile(target)) {
-			if (LocalFileSystem::FileExists(target, opener)) {
+			if (LocalFileSystem::FileExists(context, target)) {
 				moves_over_existing_file++;
 			}
 			if (fail_secret_move) {
 				throw IOException("Could not rename file \"%s\" to \"%s\": Permission denied", source, target);
 			}
 		}
-		LocalFileSystem::MoveFile(source, target, opener);
+		LocalFileSystem::MoveFile(context, source, target);
 		if (IsSecretFile(target) && on_secret_moved) {
 			on_secret_moved();
 		}
 	}
 
-	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
-		if (fail_secret_remove && IsSecretFile(filename) && LocalFileSystem::FileExists(filename, opener)) {
+	bool TryRemoveFile(Context &context, const string &filename) override {
+		if (fail_secret_remove && IsSecretFile(filename) && LocalFileSystem::FileExists(context, filename)) {
 			throw IOException("Could not remove file \"%s\": Permission denied", filename);
 		}
-		return LocalFileSystem::TryRemoveFile(filename, opener);
+		return LocalFileSystem::TryRemoveFile(context, filename);
 	}
 
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+	void RemoveFile(Context &context, const string &filename) override {
 		if (IsStoredSecretFile(filename)) {
 			stored_secret_files_removed++;
 		}
-		LocalFileSystem::RemoveFile(filename, opener);
+		LocalFileSystem::RemoveFile(context, filename);
 	}
 
 private:
@@ -101,11 +101,11 @@ unique_ptr<DBConfig> ObservedConfig(unique_ptr<SecretFileSystem> fs) {
 vector<string> SecretFiles(const string &secret_dir) {
 	LocalFileSystem local;
 	vector<string> result;
-	if (!local.DirectoryExists(secret_dir, nullptr)) {
+	if (!local.DirectoryExists(TestServicesContext(), secret_dir)) {
 		return result;
 	}
-	local.ListFiles(
-	    secret_dir, [&](const string &name, bool is_dir) { result.push_back(name); }, nullptr);
+	local.ListFiles(TestServicesContext(), secret_dir,
+	                [&](const string &name, bool is_dir) { result.push_back(name); });
 	std::sort(result.begin(), result.end());
 	return result;
 }
@@ -177,7 +177,7 @@ TEST_CASE("A persistent secret whose file cannot be synced is not created", "[ap
 	REQUIRE(StringUtil::StartsWith(files[1], "s1.duckdb_secret.tmp-"));
 	CheckFreshDatabaseReadsToken(secret_dir, "s1", "abc");
 	LocalFileSystem local;
-	local.RemoveFile(local.JoinPath(secret_dir, files[1]), nullptr);
+	local.RemoveFile(TestServicesContext(), local.JoinPath(secret_dir, files[1]));
 
 	// a replacement that succeeds swaps the file
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE PERSISTENT SECRET s1 (TYPE HTTP, BEARER_TOKEN 'xyz')"));
@@ -241,8 +241,8 @@ TEST_CASE("A replaced secret keeps the file it was loaded from", "[api][secrets]
 
 	// a release before names were escaped in file names wrote the file under the plain name
 	LocalFileSystem local;
-	local.MoveFile(local.JoinPath(secret_dir, "legacy%25name.duckdb_secret"),
-	               local.JoinPath(secret_dir, "legacy%name.duckdb_secret"), nullptr);
+	local.MoveFile(TestServicesContext(), local.JoinPath(secret_dir, "legacy%25name.duckdb_secret"),
+	               local.JoinPath(secret_dir, "legacy%name.duckdb_secret"));
 
 	auto observing_fs = make_uniq<SecretFileSystem>();
 	auto &fs = *observing_fs;

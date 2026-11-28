@@ -13,7 +13,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
@@ -102,7 +102,7 @@ public:
 	unique_ptr<StorageLockKey> LockShared();
 	unique_ptr<StorageLockKey> LockAppend();
 	//! Initialize a scan; the context of the scanning query is used for pushed down casts and zonemap checks
-	void InitializeScan(const QueryContext &context, CollectionScanState &state,
+	void InitializeScan(Context &context, CollectionScanState &state,
 	                    optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(Context &context, idx_t flushed_row_group_idx);
@@ -193,7 +193,7 @@ public:
 	static LocalStorage &Get(ClientContext &context, Catalog &catalog);
 
 	//! Initialize a scan of the local storage
-	void InitializeScan(const QueryContext &context, DataTable &table, CollectionScanState &state,
+	void InitializeScan(Context &context, DataTable &table, CollectionScanState &state,
 	                    optional_ptr<TableFilterSet> table_filters);
 	//! Scan
 	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);

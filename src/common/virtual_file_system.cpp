@@ -2,7 +2,6 @@
 #include "duckdb/common/virtual_file_system.hpp"
 
 #include "duckdb/common/compressed_file_system.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -209,41 +208,37 @@ optional_ptr<BaseFileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSy
 	    resolved.ToString(), hint);
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
-                                                   optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(Context &context, const OpenFileInfo &file, FileOpenFlags flags) {
 	const FileCompressionType compression = flags.Compression();
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
 	auto registry = file_system_registry.atomic_load();
-	auto &internal_filesystem = FindFileSystem(registry, file.path, opener);
-	auto file_handle = internal_filesystem.OpenFile(file, flags, opener);
+	auto &internal_filesystem = FindFileSystem(registry, file.path, context.GetDatabase());
+	auto file_handle = internal_filesystem.OpenFile(context, file, flags);
 	if (!file_handle) {
 		return nullptr;
 	}
 	flags.SetCompression(compression);
-	return WrapOpenedFile(std::move(file_handle), file, flags, opener);
+	return WrapOpenedFile(context, std::move(file_handle), file, flags);
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::WrapOpenedFile(unique_ptr<FileHandle> file_handle, const OpenFileInfo &file,
-                                                         const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::WrapOpenedFile(Context &context, unique_ptr<FileHandle> file_handle,
+                                                         const OpenFileInfo &file, const FileOpenFlags &flags) {
 	const auto &compression = flags.Compression();
 	auto registry = file_system_registry.atomic_load();
 	try {
 		// Evaluate and apply compression option then.
-		QueryContext context;
-		auto opener_context = FileOpener::TryGetContext(opener);
-		if (opener_context && !flags.MultiClientAccess()) {
-			context = QueryContext(*opener_context);
-		}
+		// a handle shared between clients must not hold on to the context of the client that opened it
+		auto &handle_context = flags.MultiClientAccess() ? context.GetDatabase().GetContext() : context;
 		if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-			file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
+			file_handle = PipeFileSystem::OpenPipe(handle_context, std::move(file_handle));
 		} else {
 			auto compression_filesystem =
 			    FindCompressionFileSystem(*registry, compression, file.path, flags.OpenForWriting());
 			if (compression_filesystem) {
-				file_handle =
-				    compression_filesystem->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+				file_handle = compression_filesystem->OpenCompressedFile(handle_context, std::move(file_handle),
+				                                                         flags.OpenForWriting());
 			}
 		}
 	} catch (...) {
@@ -338,18 +333,22 @@ bool VirtualFileSystem::IsDisabledForPath(const string &path) {
 	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
 }
 
-BaseFileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
+BaseFileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 	auto registry = file_system_registry.atomic_load();
-	return FindFileSystem(registry, path, opener);
+	return FindFileSystem(registry, path, nullptr);
+}
+
+BaseFileSystem &VirtualFileSystem::FindFileSystem(Context &context, const string &path) {
+	auto registry = file_system_registry.atomic_load();
+	return FindFileSystem(registry, path, context.GetDatabase());
 }
 
 BaseFileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
-                                                  optional_ptr<FileOpener> opener) {
-	auto db_instance = FileOpener::TryGetDatabase(opener);
+                                                  optional_ptr<DatabaseInstance> autoload_db) {
 	auto fs = FindFileSystemInternal(*registry, path);
 
-	if (!fs && db_instance) {
-		ExtensionHelper::AutoLoadExtensionForPath(*db_instance, path);
+	if (!fs && autoload_db) {
+		ExtensionHelper::AutoLoadExtensionForPath(*autoload_db, path);
 		// refresh the registry after loading extensions
 		registry = file_system_registry.atomic_load();
 

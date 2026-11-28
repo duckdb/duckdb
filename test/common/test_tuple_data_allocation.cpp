@@ -19,7 +19,7 @@ TEST_CASE("Integer-partitioned row append respects the source selection", "[tupl
 	vector<LogicalType> types {LogicalType::BIGINT};
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	layout->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	TupleDataCollection source(buffer_manager, layout, MemoryTag::ORDER_BY);
+	TupleDataCollection source(buffer_manager, layout, MemoryTag::ORDER_BY, nullptr, *con.context);
 	TupleDataAppendState source_state;
 	source.InitializeAppend(source_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	DataChunk chunk;
@@ -35,7 +35,8 @@ TEST_CASE("Integer-partitioned row append respects the source selection", "[tupl
 	}
 	source.Append(source_state, chunk);
 
-	IntegerPartitionedTupleData target(buffer_manager, layout, MemoryTag::ORDER_BY, 0, Value::BIGINT(0), 3);
+	IntegerPartitionedTupleData target(buffer_manager, layout, MemoryTag::ORDER_BY, 0, Value::BIGINT(0), 3,
+	                                   *con.context);
 	PartitionedTupleDataAppendState target_state;
 	target.InitializeAppendState(target_state);
 	SelectionVector selection(5);
@@ -74,8 +75,8 @@ TEST_CASE("Tuple data allocation accounting follows retained blocks", "[tuple_da
 	vector<LogicalType> types {LogicalType::BIGINT, LogicalType::VARCHAR};
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	layout->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	TupleDataCollection first(buffer_manager, layout, MemoryTag::HASH_TABLE);
-	TupleDataCollection second(buffer_manager, layout, MemoryTag::HASH_TABLE);
+	TupleDataCollection first(buffer_manager, layout, MemoryTag::HASH_TABLE, nullptr, *con.context);
+	TupleDataCollection second(buffer_manager, layout, MemoryTag::HASH_TABLE, nullptr, *con.context);
 	REQUIRE(first.GetBlockAllocationSize() == 0);
 
 	DataChunk chunk;
@@ -152,7 +153,7 @@ TEST_CASE("Tuple data heap reclamation crosses chunks without heap references", 
 			vector<LogicalType> types {LogicalType::VARCHAR};
 			auto layout = make_shared_ptr<TupleDataLayout>();
 			layout->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			TupleDataCollection collection(buffer_manager, layout, MemoryTag::ORDER_BY);
+			TupleDataCollection collection(buffer_manager, layout, MemoryTag::ORDER_BY, nullptr, *con.context);
 			const auto large_string_size =
 			    MaxValue<idx_t>(1024, 4 * buffer_manager.GetBlockSize() / STANDARD_VECTOR_SIZE);
 			auto payload_for_chunk = [&](idx_t chunk_idx) {
@@ -250,7 +251,7 @@ TEST_CASE("Out-of-memory pin during append does not leave counted rows", "[tuple
 	vector<LogicalType> types {LogicalType::BIGINT};
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	layout->Initialize(types, std::move(aggregates), TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	TupleDataCollection collection(buffer_manager, layout, MemoryTag::HASH_TABLE);
+	TupleDataCollection collection(buffer_manager, layout, MemoryTag::HASH_TABLE, nullptr, *con.context);
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), types);
 	chunk.data[0].Sequence(0, 1, STANDARD_VECTOR_SIZE);

@@ -292,7 +292,7 @@ void LogicalUpdate::BindAllColumns(TableCatalogEntry &table, LogicalGet &get, Lo
 	BindExtraColumns(table, get, proj, update, all_columns, reuse_projected_columns);
 }
 
-vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context,
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(Context &context,
                                                                   const ColumnSegmentInfoScanOptions &options) {
 	return {};
 }
@@ -300,7 +300,7 @@ vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryCon
 void TableCatalogEntry::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
 }
 
-bool TableCatalogEntry::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+bool TableCatalogEntry::ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
                                               vector<ColumnSegmentInfo> &result) {
 	return false;
 }

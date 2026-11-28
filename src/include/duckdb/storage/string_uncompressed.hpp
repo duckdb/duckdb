@@ -113,7 +113,7 @@ public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
-	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(Context &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -270,12 +270,12 @@ public:
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
-	static string_t ReadOverflowString(const QueryContext &context, ColumnSegment &segment, Vector &result,
-	                                   block_id_t block, int32_t offset);
+	static string_t ReadOverflowString(Context &context, ColumnSegment &segment, Vector &result, block_id_t block,
+	                                   int32_t offset);
 	static string_t ReadStringWithLength(CompressionSegmentReader reader, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 
-	inline static string_t FetchStringFromEntry(const QueryContext &context, ColumnSegment &segment, Vector &result,
+	inline static string_t FetchStringFromEntry(Context &context, ColumnSegment &segment, Vector &result,
 	                                            const StringDictionaryEntry &entry) {
 		if (DUCKDB_LIKELY(!entry.is_overflow)) {
 			// regular string - fetch from dictionary

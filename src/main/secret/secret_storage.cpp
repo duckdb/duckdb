@@ -2,7 +2,7 @@
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -252,7 +252,7 @@ bool PersistentSecretFiles::TryGetOtherSecretAt(const string &path, const Identi
 }
 
 //! Reads the name that is stored in a secret file, without loading the secret
-static bool TryReadSecretName(FileSystem &fs, const string &path, string &name) {
+static bool TryReadSecretName(Context &context, FileSystem &fs, const string &path, string &name) {
 	try {
 		BufferedFileReader reader(fs, path.c_str());
 		if (reader.Finished()) {
@@ -272,7 +272,7 @@ static bool TryReadSecretName(FileSystem &fs, const string &path, string &name) 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
                                                const string &secret_path_p)
     : CatalogSetSecretStorage(db_p, name_p, LOCAL_FILE_STORAGE_OFFSET), files(make_shared_ptr<PersistentSecretFiles>()),
-      secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
+      secret_path(FileSystem::ExpandPathWithHome(secret_path_p, FileSystem::GetDefaultHomeDirectory())) {
 	persistent = true;
 
 	// Check existence of persistent secret dir
@@ -288,7 +288,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 					if (secret_name != file_stem) {
 						// the file is either the escaped file of a secret, or a file written before names were
 						// escaped that is named after a secret that looks escaped: the file tells which
-						TryReadSecretName(fs, full_path, secret_name);
+						TryReadSecretName(db.GetContext(), fs, full_path, secret_name);
 					}
 					persistent_secrets.insert(Identifier(secret_name));
 					files->Set(Identifier(secret_name), full_path);
@@ -321,14 +321,14 @@ CatalogTransaction CatalogSetSecretStorage::GetTransactionOrDefault(optional_ptr
 	return CatalogTransaction::GetSystemTransaction(db);
 }
 
-static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const BaseSecret &secret) {
+static void WriteSecretFileToDisk(Context &context, FileSystem &fs, const string &path, const BaseSecret &secret) {
 	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
 	// Ensure we are writing to a private file with 600 permission
 	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
 	// Create the file, which must not exist yet
 	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 
-	auto file_writer = BufferedFileWriter(fs, path, open_flags);
+	auto file_writer = BufferedFileWriter(fs, context, path, open_flags);
 
 	auto serializer = BinarySerializer(file_writer);
 	serializer.Begin();
@@ -421,7 +421,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 
 	// the complete file is renamed over the secret's file in one step, so a crash leaves the old file or the new one
 	try {
-		WriteSecretFileToDisk(fs, temp_path, secret);
+		WriteSecretFileToDisk(db.GetContext(), fs, temp_path, secret);
 		fs.MoveFile(temp_path, file_path);
 	} catch (...) {
 		// the secret is not stored, so the temporary file goes, and its error cannot replace the one being reported

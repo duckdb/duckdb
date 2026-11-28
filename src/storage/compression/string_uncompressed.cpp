@@ -121,8 +121,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	}
 }
 
-unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const QueryContext &context,
-                                                                       ColumnSegment &segment) {
+unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return make_uniq<StringScanState>(std::move(handle));
@@ -524,8 +523,8 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &context, ColumnSegment &segment,
-                                                       Vector &result, block_id_t block, int32_t offset) {
+string_t UncompressedStringStorage::ReadOverflowString(Context &context, ColumnSegment &segment, Vector &result,
+                                                       block_id_t block, int32_t offset) {
 	auto &buffer_manager = segment.GetBlockHandle()->GetMemory().GetBufferManager();
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 

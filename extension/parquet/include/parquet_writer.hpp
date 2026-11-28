@@ -57,7 +57,6 @@ class TProtocol;
 
 namespace duckdb {
 class FileSystem;
-class FileOpener;
 class ParquetEncryptionConfig;
 class ParquetStatsAccumulator;
 class Serializer;

@@ -73,7 +73,7 @@ public:
 	}
 
 private:
-	QueryContext context;
+	Context &context;
 	unique_ptr<FileHandle> file_handle;
 	CSVEncoder encoder;
 	const OpenFileInfo file;

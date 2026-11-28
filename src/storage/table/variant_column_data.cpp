@@ -23,6 +23,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -164,16 +165,16 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	//! Re-initialize the scan state, since VARIANT can have a different shape for every RowGroup
 	state.child_states.clear();
 
-	state.child_states.emplace_back(state.parent);
+	state.child_states.emplace_back(state.parent, state.context);
 	state.child_states[0].scan_options = state.scan_options;
 
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
-	state.child_states.emplace_back(state.parent);
+	state.child_states.emplace_back(state.parent, state.context);
 	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
 
 	if (IsShredded()) {
 		auto &shredded_column = sub_columns[1];
-		state.child_states.emplace_back(state.parent);
+		state.child_states.emplace_back(state.parent, state.context);
 		if (state.storage_index.IsPushdownExtract()) {
 			StorageIndex struct_extract;
 			if (PushdownShreddedFieldExtract(state.storage_index.GetChildIndex(0), struct_extract)) {
@@ -587,8 +588,7 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 
 		//! Need to perform the cast here as well
 		auto &cast_set = CastFunctionSet::Get(GetDatabase());
-		auto context = state.context.GetContext();
-		auto cast_input = context ? GetCastFunctionInput(*context) : GetCastFunctionInput::Default();
+		GetCastFunctionInput cast_input(state.context);
 		auto fetched_row = extracted_variant.GetValue(0).CastAs(cast_set, cast_input, result.GetType());
 		result.SetValue(result_idx, fetched_row);
 	}
@@ -760,7 +760,7 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 	ColumnAppendState shredded_append_state;
 	shredded->InitializeAppend(shredded_append_state);
 
-	ColumnScanState scan_state(nullptr);
+	ColumnScanState scan_state(nullptr, GetDatabase().GetContext());
 
 	InitializeScan(scan_state);
 	//! Scan + transform + append
@@ -795,7 +795,7 @@ LogicalType VariantColumnData::GetShreddedType() {
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
 	auto &scan_vector = scan_chunk.data[0];
 
-	ColumnScanState scan_state(nullptr);
+	ColumnScanState scan_state(nullptr, GetDatabase().GetContext());
 	InitializeScan(scan_state);
 	idx_t total_count = count.load();
 	idx_t vector_index = 0;
@@ -955,7 +955,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	this->count = validity->count.load();
 }
 
-void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void VariantColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                              vector<ColumnSegmentInfo> &result,
                                              const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);

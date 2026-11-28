@@ -416,7 +416,7 @@ void BufferPool::FlushForAllocation(const idx_t extra_memory, const idx_t memory
 	}
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory,
+BufferPool::EvictionResult BufferPool::EvictBlocks(Context &context, MemoryTag tag, idx_t extra_memory,
                                                    idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	for (auto &queue : queues) {
 		auto block_result = EvictBlocksInternal(context, *queue, tag, extra_memory, memory_limit, buffer);
@@ -430,7 +430,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryT
 	return EvictObjectCacheEntries(tag, extra_memory, memory_limit);
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context, EvictionQueue &queue, MemoryTag tag,
+BufferPool::EvictionResult BufferPool::EvictBlocksInternal(Context &context, EvictionQueue &queue, MemoryTag tag,
                                                            idx_t extra_memory, idx_t memory_limit,
                                                            unique_ptr<FileBuffer> *buffer) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
@@ -580,10 +580,10 @@ void BufferPool::PurgeQueue(const BlockHandle &block) {
 	eviction_queue.Purge();
 }
 
-void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
+void BufferPool::SetLimit(Context &context, idx_t limit, const char *exception_postscript) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached
-	if (!EvictBlocks(QueryContext(), MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(context, MemoryTag::EXTENSION, 0, limit).success) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
@@ -592,7 +592,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
 	// evict again
-	if (!EvictBlocks(QueryContext(), MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(context, MemoryTag::EXTENSION, 0, limit).success) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(

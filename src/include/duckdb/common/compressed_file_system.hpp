@@ -12,7 +12,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/base_file_system.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 class CompressedFile;
@@ -35,7 +35,7 @@ struct StreamData {
 struct StreamWrapper {
 	DUCKDB_API virtual ~StreamWrapper();
 
-	DUCKDB_API virtual void Initialize(QueryContext context, CompressedFile &file, bool write) = 0;
+	DUCKDB_API virtual void Initialize(Context &context, CompressedFile &file, bool write) = 0;
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
 	DUCKDB_API virtual void FinalizeRead(StreamData &stream_data);
 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
@@ -80,11 +80,11 @@ public:
 	//! Whether the file is opened for reading or for writing
 	bool write = false;
 	StreamData stream_data;
-	//! The query context, used to attribute the (compressed) on-disk I/O of the child handle to the query
-	QueryContext context;
+	//! The context, used to attribute the (compressed) on-disk I/O of the child handle to the query
+	optional_ptr<Context> context;
 
 public:
-	DUCKDB_API void Initialize(QueryContext context, bool write);
+	DUCKDB_API void Initialize(Context &context, bool write);
 	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 	DUCKDB_API void Close() override;

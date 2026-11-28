@@ -517,6 +517,18 @@ private:
 static thread_local bool thread_local_state_created = false; // NOLINT
 //! The state of the worker thread running on this thread, if any. A pointer needs no thread_local destructor either
 static thread_local BlockAllocatorThreadLocalState *worker_local_state = nullptr; // NOLINT
+
+//! Clears thread_local_state_created when the state is destroyed, e.g. before static destructors run at exit
+struct BlockAllocatorThreadLocalStateHolder {
+	explicit BlockAllocatorThreadLocalStateHolder(const BlockAllocator &block_allocator) : state(block_allocator) {
+		thread_local_state_created = true;
+	}
+	~BlockAllocatorThreadLocalStateHolder() {
+		thread_local_state_created = false;
+	}
+
+	BlockAllocatorThreadLocalState state;
+};
 #endif
 
 BlockAllocatorWorkerState::BlockAllocatorWorkerState() {
@@ -554,10 +566,9 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 		worker_local_state->TryInitialize(block_allocator);
 		return *worker_local_state;
 	}
-	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
-	thread_local_state_created = true;
-	local_state.TryInitialize(block_allocator);
-	return local_state;
+	thread_local BlockAllocatorThreadLocalStateHolder local_state(block_allocator);
+	local_state.state.TryInitialize(block_allocator);
+	return local_state.state;
 #endif
 }
 

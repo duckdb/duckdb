@@ -954,8 +954,9 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths, CatalogSetPathType::SET_SCHEMAS);
 	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
-		runner.con->context->client_data->log_query_writer = make_uniq<BufferedFileWriter>(
-		    FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path, 1 << 1 | 1 << 5);
+		runner.con->context->client_data->log_query_writer =
+		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context),
+		                                  runner.con->context->GetContext(), low_query_writer_path, 1 << 1 | 1 << 5);
 	}
 }
 
@@ -1053,14 +1054,14 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 	// input
 	FileOpenFlags in_flags(FileFlags::FILE_FLAGS_READ);
 	in_flags.SetCompression(FileCompressionType::GZIP);
-	auto compressed_file_handle = vfs.OpenFile(OpenFileInfo(input_path), in_flags, nullptr);
+	auto compressed_file_handle = vfs.OpenFile(TestServicesContext(), OpenFileInfo(input_path), in_flags);
 	if (compressed_file_handle == nullptr) {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
-	auto output_file = vfs.OpenFile(OpenFileInfo(extraction_path), out_flags, nullptr);
+	auto output_file = vfs.OpenFile(TestServicesContext(), OpenFileInfo(extraction_path), out_flags);
 	if (!output_file) {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}

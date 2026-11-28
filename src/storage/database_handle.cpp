@@ -1,6 +1,6 @@
 #include "duckdb/storage/database_handle.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 
 #include <cstring>
 
@@ -12,17 +12,14 @@ DatabaseHandle::DatabaseHandle(unique_ptr<MemoryMappedFile> mmap_handle_p) : mma
 }
 
 //! The file system to open the database file with. The handle outlives the statement that opens it, but file systems
-//! take what they need from the opener when the file is opened: through the client's file system, a remote database
+//! take what they need from the context when the file is opened: through the client's file system, a remote database
 //! file uses the settings of the session that attached it (http_proxy, ca_cert_file, ...) and reports its requests to
 //! that session's logger. Without a client, the database-wide file system only sees global settings.
-static FileSystem &GetDatabaseFileSystem(QueryContext context, AttachedDatabase &db) {
-	if (context.Valid()) {
-		return context.GetContext()->GetFileSystem();
-	}
-	return FileSystem::Get(db);
+static FileSystem &GetDatabaseFileSystem(Context &context, AttachedDatabase &db) {
+	return context.GetFileSystem();
 }
 
-unique_ptr<DatabaseHandle> DatabaseHandle::Open(QueryContext context, AttachedDatabase &db, const string &path,
+unique_ptr<DatabaseHandle> DatabaseHandle::Open(Context &context, AttachedDatabase &db, const string &path,
                                                 const StorageManagerOptions &options, DatabaseOpenMode open_mode) {
 	if (options.io_mode == FileIOMode::MMAP) {
 		// mmap reads are zero-copy from the mapping, so the prefetched header is not needed here.
@@ -32,7 +29,7 @@ unique_ptr<DatabaseHandle> DatabaseHandle::Open(QueryContext context, AttachedDa
 	}
 }
 
-unique_ptr<DatabaseHandle> DatabaseHandle::OpenFile(QueryContext context, AttachedDatabase &db, const string &path,
+unique_ptr<DatabaseHandle> DatabaseHandle::OpenFile(Context &context, AttachedDatabase &db, const string &path,
                                                     const StorageManagerOptions &options, DatabaseOpenMode open_mode) {
 	FileOpenFlags file_flags;
 	if (options.read_only) {
@@ -66,7 +63,7 @@ unique_ptr<DatabaseHandle> DatabaseHandle::OpenFile(QueryContext context, Attach
 	return result;
 }
 
-unique_ptr<DatabaseHandle> DatabaseHandle::OpenMemoryMap(QueryContext context, AttachedDatabase &db, const string &path,
+unique_ptr<DatabaseHandle> DatabaseHandle::OpenMemoryMap(Context &context, AttachedDatabase &db, const string &path,
                                                          const StorageManagerOptions &options,
                                                          DatabaseOpenMode open_mode) {
 	if (options.encryption_options.encryption_enabled) {
@@ -104,7 +101,7 @@ bool DatabaseHandle::OnDiskFile() const {
 	return handle->OnDiskFile();
 }
 
-void DatabaseHandle::CheckMagicBytes(QueryContext context) {
+void DatabaseHandle::CheckMagicBytes(Context &context) {
 	if (mmap_handle) {
 		MainHeader::CheckMagicBytes(*mmap_handle);
 		return;
@@ -121,7 +118,7 @@ void DatabaseHandle::CheckMagicBytes(QueryContext context) {
 	MainHeader::CheckMagicBytes(context, *handle);
 }
 
-void DatabaseHandle::Read(QueryContext context, FileBuffer &block, uint64_t location) const {
+void DatabaseHandle::Read(Context &context, FileBuffer &block, uint64_t location) const {
 	if (mmap_handle) {
 		block.Read(context, *mmap_handle, location);
 		return;
@@ -136,7 +133,7 @@ void DatabaseHandle::Read(QueryContext context, FileBuffer &block, uint64_t loca
 	block.Read(context, *handle, location);
 }
 
-void DatabaseHandle::Write(QueryContext context, FileBuffer &buffer, uint64_t location) {
+void DatabaseHandle::Write(Context &context, FileBuffer &buffer, uint64_t location) {
 	if (mmap_handle) {
 		EnsureMappedSize(location + buffer.AllocSize());
 		buffer.Write(context, *mmap_handle, location);
