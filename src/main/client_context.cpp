@@ -31,6 +31,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/passthrough_statement.hpp"
@@ -535,6 +536,66 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 	return info;
 }
 
+//! Whether the statement reads or changes the connection's prepared statements. Preparing it under a wrapping
+//! PREPARE would freeze that lookup: a prepared EXECUTE p would not see a later re-PREPARE or DEALLOCATE of p,
+//! and a PREPARE below the wrapper's LogicalPrepare would escape the optimizer's data-dependence marking
+static bool ManagesPreparedStatements(const SQLStatement &statement) {
+	switch (statement.type) {
+	case StatementType::PREPARE_STATEMENT:
+	case StatementType::EXECUTE_STATEMENT:
+		return true;
+	case StatementType::DROP_STATEMENT:
+		// DEALLOCATE parses into a DROP of a prepared statement
+		return statement.Cast<DropStatement>().info->type == CatalogType::PREPARED_STATEMENT;
+	case StatementType::EXPLAIN_STATEMENT:
+		return ManagesPreparedStatements(*statement.Cast<ExplainStatement>().stmt);
+	default:
+		return false;
+	}
+}
+
+PreparedStatementInfo ClientContext::BindPreparedStatementInfo(ClientContextLock &lock,
+                                                               unique_ptr<SQLStatement> statement) {
+	PreparedStatementInfo info;
+	info.statement_type = statement->type;
+	info.named_param_map = statement->named_param_map;
+	ErrorData bind_error;
+	RunFunctionInTransactionInternal(
+	    lock,
+	    [&]() {
+		    try {
+			    Planner planner(*this, PlanningMode::BIND_ONLY);
+			    planner.CreatePlan(std::move(statement));
+			    info.names = planner.names;
+			    info.types = planner.types;
+			    info.properties = std::move(planner.properties);
+			    for (auto &entry : info.named_param_map) {
+				    auto it = planner.value_map.find(entry.first);
+				    if (it == planner.value_map.end()) {
+					    continue;
+				    }
+				    auto type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+				                                                                       : it->second->GetValue().type();
+				    info.parameter_types.emplace(entry.first, std::move(type));
+			    }
+		    } catch (const std::exception &ex) {
+			    ErrorData error(ex);
+			    // Binding is read-only: a recoverable bind error changed nothing, so leave
+			    // the caller's transaction intact (rethrow after the wrapper). A database-
+			    // fatal error still propagates so invalidation runs as usual.
+			    if (Exception::InvalidatesDatabase(error.Type())) {
+				    throw;
+			    }
+			    bind_error = std::move(error);
+		    }
+	    },
+	    false);
+	if (bind_error.HasError()) {
+		bind_error.Throw();
+	}
+	return info;
+}
+
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	if (is_connected) {
@@ -566,6 +627,16 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 		return make_uniq<PreparedStatement>(shared_from_this(), std::move(written_statement));
 	}
 	statement = std::move(expanded.statements[0]);
+
+	if (ManagesPreparedStatements(*statement)) {
+		// run the statement as written at each execution, so each execution sees the prepared statements as they
+		// are then - bind it now, so errors and result metadata still surface when preparing
+		if (!written_statement) {
+			written_statement = statement->Copy();
+		}
+		auto info = BindPreparedStatementInfo(lock, std::move(statement));
+		return make_uniq<PreparedStatement>(shared_from_this(), std::move(written_statement), std::move(info));
+	}
 
 	auto statement_query = statement->query;
 	// prepare the statement under a generated name - the returned PreparedStatement only refers to that name

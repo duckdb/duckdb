@@ -706,3 +706,60 @@ TEST_CASE("Planner extension hooks run for EXECUTE", "[api]") {
 	REQUIRE(execute_pre_binds == 1);
 	REQUIRE(post_binds == 2);
 }
+
+TEST_CASE("A prepared EXECUTE follows the prepared statement it names", "[api][prepared]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("PREPARE p AS SELECT 'old' AS v"));
+
+	auto prepared = con.Prepare("EXECUTE p");
+	REQUIRE(!prepared->HasError());
+
+	// the metadata is that of p, known when preparing
+	REQUIRE(prepared->MetadataAvailable());
+	REQUIRE(prepared->GetStatementType() == StatementType::EXECUTE_STATEMENT);
+	REQUIRE(prepared->GetNames() == vector<Identifier> {Identifier("v")});
+	REQUIRE(prepared->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR});
+	// the handle caches no plan - each execution submits the statement anew
+	REQUIRE(prepared->GetStatementProperties().always_require_rebind);
+
+	auto result = prepared->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"old"}));
+
+	REQUIRE_NO_FAIL(con.Query("PREPARE p AS SELECT 'new' AS v"));
+	result = prepared->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"new"}));
+
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE p"));
+	result = prepared->Execute();
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Prepared statement \"p\" does not exist"));
+}
+
+TEST_CASE("Preparing a PREPARE binds it without registering it", "[api][prepared]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT 42 AS i"));
+
+	// binder errors surface when preparing, not at the first execution
+	auto broken = con.Prepare("PREPARE z AS SELECT * FROM nonexistent");
+	REQUIRE(broken->HasError());
+	REQUIRE(StringUtil::Contains(broken->GetError(), "nonexistent"));
+
+	auto prepared = con.Prepare("PREPARE p AS SELECT i FROM t");
+	REQUIRE(!prepared->HasError());
+	REQUIRE(prepared->MetadataAvailable());
+	REQUIRE(prepared->GetNames() == vector<Identifier> {Identifier("Success")});
+	REQUIRE(prepared->GetTypes() == vector<LogicalType> {LogicalType::BOOLEAN});
+
+	// p is registered by each execution, not by the prepare
+	REQUIRE_FAIL(con.Query("EXECUTE p"));
+	REQUIRE_NO_FAIL(prepared->Execute());
+	auto result = con.Query("EXECUTE p");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE p"));
+	REQUIRE_NO_FAIL(prepared->Execute());
+	result = con.Query("EXECUTE p");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}

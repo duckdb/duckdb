@@ -48,6 +48,7 @@ class Context;
 class LogicalOperator;
 class PreparedStatement;
 class PreparedStatementData;
+struct PreparedStatementInfo;
 class StatementIterator;
 struct PreprocessedStatement;
 class BufferedFileWriter;
@@ -401,6 +402,8 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                             const QueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	//! Binds the statement without running it, and returns the metadata of the bind
+	PreparedStatementInfo BindPreparedStatementInfo(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 	//! Run the statements of a query string one after the other
 	unique_ptr<QueryResult> QueryInternal(ClientContextLock &lock, const string &query,

@@ -1049,3 +1049,162 @@ TEST_CASE("Preparing an extracted dynamic PIVOT in the C API", "[capi][expanding
 	REQUIRE(statement_type == DUCKDB_STATEMENT_TYPE_MULTI);
 	RequirePivotRows(*result);
 }
+
+static duckdb::unique_ptr<CAPIResult> RunStatement(CAPITester &tester, const string &sql, bool via_prepare) {
+	if (!via_prepare) {
+		return tester.Query(sql);
+	}
+	CAPIPrepared prepared;
+	REQUIRE(prepared.Prepare(tester, sql));
+	return tester.QueryPrepared(prepared.prepared);
+}
+
+TEST_CASE("A SQL PREPARE issued through duckdb_prepare is rebound after the data changes", "[capi]") {
+	// issue #28776: duckdb_prepare used to wrap a PREPARE in another PREPARE, which kept the
+	// statistics-folded plan of the nested prepared statement alive across data changes
+	for (bool prepare_via_capi : {false, true}) {
+		for (bool execute_via_capi : {false, true}) {
+			CAPITester tester;
+			REQUIRE(tester.OpenDatabase(nullptr));
+			REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t AS SELECT * FROM range(100) r(i)"));
+
+			REQUIRE_NO_FAIL(RunStatement(tester, "PREPARE p AS SELECT count(*) FROM t", prepare_via_capi));
+			REQUIRE_NO_FAIL(
+			    RunStatement(tester, "PREPARE q AS SELECT count(*) FROM t WHERE i = 200", prepare_via_capi));
+
+			auto result = RunStatement(tester, "EXECUTE p", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 100);
+			result = RunStatement(tester, "EXECUTE q", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+
+			REQUIRE_NO_FAIL(tester.Query("INSERT INTO t VALUES (200)"));
+
+			result = RunStatement(tester, "EXECUTE p", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 101);
+			result = RunStatement(tester, "EXECUTE q", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 1);
+		}
+	}
+}
+
+TEST_CASE("A prepared EXECUTE runs the prepared statement as it is at each execution", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("PREPARE p AS SELECT 'old' AS v"));
+
+	CAPIPrepared prepared;
+	REQUIRE(prepared.Prepare(tester, "EXECUTE p"));
+
+	// the metadata is that of p, as it was when preparing
+	REQUIRE(duckdb_prepared_statement_type(prepared.prepared) == DUCKDB_STATEMENT_TYPE_EXECUTE);
+	REQUIRE(duckdb_prepared_statement_column_count(prepared.prepared) == 1);
+	auto column_name = duckdb_prepared_statement_column_name(prepared.prepared, 0);
+	REQUIRE(string(column_name) == "v");
+	duckdb_free(const_cast<char *>(column_name));
+	REQUIRE(duckdb_prepared_statement_column_type(prepared.prepared, 0) == DUCKDB_TYPE_VARCHAR);
+
+	auto result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "old");
+
+	// the next execution sees a re-PREPARE of p
+	REQUIRE_NO_FAIL(tester.Query("PREPARE p AS SELECT 'new' AS v"));
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "new");
+
+	// deallocating p fails the next execution cleanly
+	REQUIRE_NO_FAIL(tester.Query("DEALLOCATE p"));
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE(!result->success);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Prepared statement \"p\" does not exist"));
+
+	// and preparing p anew revives it
+	REQUIRE_NO_FAIL(tester.Query("PREPARE p AS SELECT 'revived' AS v"));
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "revived");
+}
+
+TEST_CASE("A prepared PREPARE registers the statement anew at each execution", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t AS SELECT 42 AS i"));
+
+	CAPIPrepared prepared;
+	REQUIRE(prepared.Prepare(tester, "PREPARE p AS SELECT i FROM t"));
+	REQUIRE(duckdb_prepared_statement_type(prepared.prepared) == DUCKDB_STATEMENT_TYPE_PREPARE);
+	REQUIRE(duckdb_prepared_statement_column_count(prepared.prepared) == 1);
+	auto column_name = duckdb_prepared_statement_column_name(prepared.prepared, 0);
+	REQUIRE(string(column_name) == "Success");
+	duckdb_free(const_cast<char *>(column_name));
+	REQUIRE(duckdb_prepared_statement_column_type(prepared.prepared, 0) == DUCKDB_TYPE_BOOLEAN);
+
+	// preparing the PREPARE does not register p - only executing it does
+	auto result = tester.Query("EXECUTE p");
+	REQUIRE(!result->success);
+
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query("EXECUTE p");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+
+	// executing it again re-registers p after a DEALLOCATE
+	REQUIRE_NO_FAIL(tester.Query("DEALLOCATE p"));
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query("EXECUTE p");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+}
+
+TEST_CASE("A prepared DEALLOCATE drops the statement at each execution", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("PREPARE p AS SELECT 1"));
+
+	CAPIPrepared prepared;
+	REQUIRE(prepared.Prepare(tester, "DEALLOCATE p"));
+	REQUIRE(duckdb_prepared_statement_column_count(prepared.prepared) == 1);
+	REQUIRE(duckdb_prepared_statement_column_type(prepared.prepared, 0) == DUCKDB_TYPE_BOOLEAN);
+
+	auto result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query("EXECUTE p");
+	REQUIRE(!result->success);
+
+	// DEALLOCATE silently ignores a missing statement, also on re-execution
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+
+	// it drops p as p is at execution time, not as it was when preparing
+	REQUIRE_NO_FAIL(tester.Query("PREPARE p AS SELECT 2"));
+	result = tester.QueryPrepared(prepared.prepared);
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query("EXECUTE p");
+	REQUIRE(!result->success);
+}
+
+TEST_CASE("Preparing a PREPARE or EXECUTE still reports bind errors when preparing", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// the statement is bound when prepared, so binder errors do not wait for the execution
+	CAPIPrepared broken_prepare;
+	REQUIRE(!broken_prepare.Prepare(tester, "PREPARE z AS SELECT * FROM nonexistent"));
+	REQUIRE(duckdb_prepare_error(broken_prepare.prepared) != nullptr);
+	REQUIRE(StringUtil::Contains(duckdb_prepare_error(broken_prepare.prepared), "nonexistent"));
+
+	CAPIPrepared broken_execute;
+	REQUIRE(!broken_execute.Prepare(tester, "EXECUTE nope"));
+	REQUIRE(duckdb_prepare_error(broken_execute.prepared) != nullptr);
+	REQUIRE(StringUtil::Contains(duckdb_prepare_error(broken_execute.prepared), "\"nope\" does not exist"));
+
+	// a failed bind leaves the connection usable
+	REQUIRE_NO_FAIL(tester.Query("SELECT 1"));
+}
