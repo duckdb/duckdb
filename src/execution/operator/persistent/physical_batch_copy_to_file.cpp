@@ -86,8 +86,8 @@ public:
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
-	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), rows_copied(0),
+	FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread, bool fsync)
+	    : output_lifecycle(context_p, fsync), memory_manager(context_p, minimum_memory_per_thread), rows_copied(0),
 	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
@@ -152,8 +152,9 @@ public:
 			auto &fs = FileSystem::GetFileSystem(context);
 			path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, file_count);
 		}
-		output_lifecycle.RegisterFile(path);
+		auto fsync = output_lifecycle.RegisterFile(path);
 		auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, path);
+		new_global_state->fsync = fsync;
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*new_global_state, op);
 		}
@@ -377,7 +378,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 		if (use_tmp_file) {
-			PhysicalCopyToFile::MoveTmpFile(context, file_path);
+			gstate.output_lifecycle.MoveFile(file_path, PhysicalCopyToFile::GetNonTmpFile(context, file_path));
 		}
 	}
 	if (gstate.first_file_state) {
@@ -388,6 +389,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 		}
 		gstate.first_file_state.reset();
 	}
+	gstate.output_lifecycle.SyncDirectories();
 	gstate.output_lifecycle.MarkSuccessful();
 	return SinkFinalizeType::READY;
 }
@@ -770,7 +772,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
-	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread);
+	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread, fsync);
 	if (Rotate()) {
 		D_ASSERT(!use_tmp_file);
 		PhysicalCopyToFile::PrepareOutputDirectory(context, file_path, overwrite_mode, result->output_lifecycle);

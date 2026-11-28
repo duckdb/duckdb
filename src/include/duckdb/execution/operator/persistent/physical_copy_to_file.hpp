@@ -48,7 +48,6 @@ public:
 
 public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
-	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	//! Creates or checks the directory a COPY writes several files into
 	static void PrepareOutputDirectory(ClientContext &context, const string &directory,
@@ -150,6 +149,8 @@ public:
 	vector<LogicalType> query_types;
 	//! Whether to write an empty file if there was no data
 	bool write_empty_file;
+	//! Whether to sync the written files and their directories to stable storage
+	bool fsync = false;
 
 	//! Partitioning-related
 	vector<idx_t> partition_columns;

@@ -297,6 +297,9 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	}
 
 	void Close() {
+		if (fsync) {
+			file_writer->Sync();
+		}
 		file_writer->Close();
 	}
 
@@ -454,6 +457,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
 	info.execution_mode = WriteCSVExecutionMode;
+	info.supports_fsync = true;
 
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;

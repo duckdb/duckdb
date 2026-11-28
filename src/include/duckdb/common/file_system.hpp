@@ -118,6 +118,8 @@ public:
 	//! Path-level operations: the access is verified, then forwarded together with the opener
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, const FileOpenFlags &flags);
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags);
+	//! Opens a directory to sync it, with the access verified as that of a directory
+	DUCKDB_API unique_ptr<FileHandle> OpenDirectory(const string &directory);
 	DUCKDB_API unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                      const MMapOptions &options);
 
