@@ -1,5 +1,4 @@
 #include "catch.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "test_helpers.hpp"
@@ -23,7 +22,7 @@ TEST_CASE("Checkpoints must not rewrite metadata blocks the active header refere
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	auto database_path = TestCreatePath("metadata_block_torn_write");
 	DeleteDatabase(database_path);
 
