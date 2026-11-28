@@ -17,6 +17,7 @@
 #include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
+class ClientContext;
 class ColumnSegment;
 class Context;
 class DataTable;

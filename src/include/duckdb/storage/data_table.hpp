@@ -275,6 +275,9 @@ public:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
 	                             optional_ptr<LocalTableStorage> local_storage, optional_ptr<ConflictManager> manager);
+	//! Verify the foreign keys of the rows appended to the transaction-local storage in the given local row ranges
+	void VerifyAppendedForeignKeys(ClientContext &context, const vector<pair<idx_t, idx_t>> &ranges,
+	                               const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 

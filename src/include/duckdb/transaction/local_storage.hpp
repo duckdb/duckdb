@@ -10,11 +10,13 @@
 
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -81,6 +83,12 @@ public:
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows (parallel DELETEs update it concurrently)
 	atomic<idx_t> deleted_rows;
+	//! The local row ranges appended by each statement, keyed by statement number. A statement of a shared
+	//! transaction can interleave its appends with statements of other connections, producing several
+	//! non-contiguous ranges. RecordAppendRange merges adjacent ranges, so a single-connection statement
+	//! keeps exactly one range.
+	mutex append_ranges_lock;
+	unordered_map<transaction_t, vector<pair<idx_t, idx_t>>> append_ranges;
 
 	//! The optimistic row group collections associated with this table.
 	vector<unique_ptr<OptimisticWriteCollection>> optimistic_collections;
@@ -127,6 +135,10 @@ public:
 	//! Removes the rows of this storage that were appended to the indexes of the table at [row_start, row_end)
 	ErrorData RevertAppendToIndexes(DuckTransaction &transaction, row_t row_start, row_t row_end);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
+	//! Records the local row range [start, end) appended by the given statement
+	void RecordAppendRange(transaction_t query_number, idx_t start, idx_t end);
+	//! Removes and returns the local row ranges appended by the given statement. Returns false if there are none.
+	bool TakeAppendRanges(transaction_t query_number, vector<pair<idx_t, idx_t>> &ranges);
 
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
@@ -185,6 +197,12 @@ public:
 		reference_map_t<DataTable, unique_ptr<TableAppendState>> append_states;
 	};
 
+	//! A table that had rows appended to it in a statement, with the appended local row ranges
+	struct AppendedRows {
+		DuckTableEntry &table_entry;
+		vector<pair<idx_t, idx_t>> ranges;
+	};
+
 public:
 	explicit LocalStorage(DuckTransaction &transaction);
 
@@ -201,6 +219,9 @@ public:
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	optional_idx NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
 	                              CollectionScanState &scan_state, bool initialize_columns = true);
+
+	//! The local row ranges appended to under the given statement number
+	vector<AppendedRows> GetAppendedRows(transaction_t query_number);
 
 	//! Begin appending to the local storage
 	void InitializeAppend(Context &context, LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);

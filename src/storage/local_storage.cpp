@@ -501,6 +501,32 @@ RowGroupCollection &LocalTableStorage::GetCollection() {
 	return *row_groups->collection;
 }
 
+void LocalTableStorage::RecordAppendRange(transaction_t query_number, idx_t start, idx_t end) {
+	// appends outside a statement (internal appender, WAL replay) verify their foreign keys eagerly
+	if (start >= end || query_number == MAXIMUM_QUERY_ID) {
+		return;
+	}
+	lock_guard<mutex> guard(append_ranges_lock);
+	auto &ranges = append_ranges[query_number];
+	if (!ranges.empty() && ranges.back().second == start) {
+		// merge adjacent ranges so a single-connection statement keeps exactly one range
+		ranges.back().second = end;
+	} else {
+		ranges.emplace_back(start, end);
+	}
+}
+
+bool LocalTableStorage::TakeAppendRanges(transaction_t query_number, vector<pair<idx_t, idx_t>> &ranges) {
+	lock_guard<mutex> guard(append_ranges_lock);
+	auto it = append_ranges.find(query_number);
+	if (it == append_ranges.end()) {
+		return false;
+	}
+	ranges = std::move(it->second);
+	append_ranges.erase(it);
+	return true;
+}
+
 OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
 	return *row_groups;
 }
@@ -525,6 +551,7 @@ void LocalStorage::InitializeAppend(Context &context, LocalAppendState &state, D
 	state.storage = table_manager.GetOrCreateStorage(context, table);
 	state.append_lock = state.storage->LockAppend();
 	state.storage->table_entry = &table_entry;
+	state.context = context;
 	state.storage->GetCollection().InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
@@ -533,6 +560,7 @@ void LocalStorage::InitializeStorage(Context &context, LocalAppendState &state, 
 	state.context = &context;
 	state.storage = table_manager.GetOrCreateStorage(context, table);
 	state.storage->table_entry = &table_entry;
+	state.context = context;
 }
 
 void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk) {
@@ -574,8 +602,12 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk) {
 	auto storage = state.storage;
 	storage->table_entry = &table_entry;
-	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetNextRowId();
-	idx_t base_id = offset + state.append_state.total_append_count;
+	D_ASSERT(state.context);
+	auto query_number = state.context->TryGetClientContext()->transaction.GetActiveQuery();
+	auto next_row_id = NumericCast<idx_t>(storage->GetCollection().GetNextRowId());
+	auto local_start = next_row_id + state.append_state.total_append_count;
+	idx_t base_id = NumericCast<idx_t>(MAX_ROW_ID) + local_start;
+	storage->RecordAppendRange(query_number, local_start, local_start + table_chunk.size());
 
 	if (!storage->GetAppendIndexes().Empty()) {
 		auto error =
@@ -600,12 +632,34 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.append_lock.reset();
 }
 
+vector<LocalStorage::AppendedRows> LocalStorage::GetAppendedRows(transaction_t query_number) {
+	vector<AppendedRows> result;
+	for (auto &storage : table_manager.GetEntries()) {
+		vector<pair<idx_t, idx_t>> ranges;
+		if (!storage->TakeAppendRanges(query_number, ranges)) {
+			continue;
+		}
+		// The ranges and the entry are set together on the append path and refer to the same table version
+		auto table_entry = storage->table_entry.load();
+		D_ASSERT(table_entry);
+		D_ASSERT(&table_entry->GetStorage() == &storage->table_ref.get());
+		result.push_back({*table_entry, std::move(ranges)});
+	}
+	return result;
+}
+
 void LocalStorage::LocalMerge(Context &context, DataTable &table, DuckTableEntry &table_entry,
                               OptimisticWriteCollection &collection) {
 	auto storage_ptr = table_manager.GetOrCreateStorage(context, table);
 	auto &storage = *storage_ptr;
 	auto append_lock = storage.LockAppend();
 	storage.table_entry = &table_entry;
+	auto client_context = context.TryGetClientContext();
+	D_ASSERT(client_context);
+	auto query_number = client_context->transaction.GetActiveQuery();
+	idx_t merged_start = storage.GetCollection().GetNextRowId();
+	idx_t merged_end = merged_start + collection.collection->GetTotalRows();
+	storage.RecordAppendRange(query_number, merged_start, merged_end);
 	if (!storage.GetAppendIndexes().Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetNextRowId());
