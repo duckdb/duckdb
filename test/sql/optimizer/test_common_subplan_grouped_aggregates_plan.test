@@ -1,0 +1,236 @@
+# name: test/sql/optimizer/test_common_subplan_grouped_aggregates_plan.test
+# description: Plan coverage for aggregates over the same input that are grouped by the same keys
+# group: [optimizer]
+
+statement ok
+CREATE TABLE grouped_plan AS
+SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE (i % 5)::INTEGER END AS k,
+       (i % 3)::INTEGER AS g, i::INTEGER AS a, (i * 10)::BIGINT AS b, (i % 4)::DOUBLE AS d
+FROM range(1000) t(i);
+
+statement ok
+SET explain_output='optimized_only';
+
+# Joined on the group: one aggregate, no join, nothing materialized, and = drops the NULL group.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*SEQ_SCAN.*IS NOT NULL.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|JOIN|CTE).*
+
+# IS NOT DISTINCT FROM keeps the NULL group.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|JOIN|CTE|IS NOT NULL).*
+
+# Every group compared, each side with its own HAVING.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.g, x.total, y.largest
+FROM (SELECT k, g, sum(a) total FROM grouped_plan GROUP BY k, g HAVING sum(a) > 100) x
+JOIN (SELECT k, g, max(b) largest FROM grouped_plan GROUP BY k, g HAVING max(b) < 9000) y
+  ON x.k = y.k AND x.g = y.g;
+----
+logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|JOIN|CTE).*
+
+# A chain of three.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest, z.rows
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k
+JOIN (SELECT k, count(*) rows FROM grouped_plan GROUP BY k) z ON y.k = z.k;
+----
+logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|JOIN|CTE).*
+
+# Ungrouped aggregates keep reading one shared aggregate.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT * FROM (SELECT sum(a) total FROM grouped_plan WHERE g = 1) x,
+              (SELECT max(b) largest FROM grouped_plan WHERE g = 1) y;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*CROSS_PRODUCT.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+# Other joins read one shared aggregate: an outer join, a join on some of the groups, groups compared crosswise.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+LEFT JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+LEFT JOIN (SELECT k, max(b) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<!REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.g, y.g, x.total, y.largest
+FROM (SELECT k, g, sum(a) total FROM grouped_plan GROUP BY k, g) x
+JOIN (SELECT k, g, max(b) largest FROM grouped_plan GROUP BY k, g) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.g, x.total, y.largest
+FROM (SELECT k, g, sum(a) total FROM grouped_plan GROUP BY k, g) x
+JOIN (SELECT k, g, max(b) largest FROM grouped_plan GROUP BY k, g) y ON x.k = y.g AND x.g = y.k;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+# A DOUBLE group is equal to more than itself: the join stays.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.d, x.total, y.largest
+FROM (SELECT d, sum(a) total FROM grouped_plan GROUP BY d) x
+JOIN (SELECT d, max(b) largest FROM grouped_plan GROUP BY d) y ON x.d = y.d;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+# A set operation reads the shared aggregate.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT k, sum(a) FROM grouped_plan GROUP BY k UNION ALL SELECT k, max(b) FROM grouped_plan GROUP BY k;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*UNION.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT k, sum(a) FROM grouped_plan GROUP BY k UNION ALL SELECT k, max(b) FROM grouped_plan GROUP BY k;
+----
+logical_opt	<!REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# Different groups, different inputs, volatile aggregates and aggregates that may throw are computed on their own.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT g, max(b) largest FROM grouped_plan GROUP BY g) y ON x.k = y.g;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan WHERE a < 500 GROUP BY k) x
+JOIN (SELECT k, max(b) largest FROM grouped_plan WHERE a < 600 GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+statement ok
+CREATE SEQUENCE grouped_plan_calls;
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.n, y.n
+FROM (SELECT k, count(nextval('grouped_plan_calls')) n FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(nextval('grouped_plan_calls')) n FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.total, y.largest
+FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max((a - 1000)::UTINYINT) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# An aggregate over a constant that is equal to another value (0.0 and -0.0) is only matched as a whole.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.m, y.m
+FROM (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '0'::DOUBLE END) m FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '-0'::DOUBLE END) m FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# Several grouping sets return a key more than once (the NULL of the data and the NULL of the total): such
+# aggregates are not matched by their groups alone, and a join of two of them on the keys stays a join.
+statement ok
+CREATE TABLE grouping_probe(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO grouping_probe VALUES (1, 10), (NULL, 20);
+
+foreach disabled grouping_sets common_subplan,grouping_sets regex_range
+
+statement ok
+SET disabled_optimizers='{disabled}';
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) x
+JOIN (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	220
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY CUBE(k)) x
+JOIN (SELECT k, max(v) AS s FROM grouping_probe GROUP BY CUBE(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	200
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) x
+JOIN (SELECT k, min(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	180
+
+endloop
+
+foreach disabled grouping_sets regex_range
+
+statement ok
+SET disabled_optimizers='{disabled}';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) x
+JOIN (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY CUBE(k)) x
+JOIN (SELECT k, max(v) AS s FROM grouping_probe GROUP BY CUBE(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) x
+JOIN (SELECT k, min(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+endloop
+
+statement ok
+SET disabled_optimizers='';

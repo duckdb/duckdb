@@ -26,7 +26,7 @@ SELECT (SELECT avg(paid) FROM (SELECT b AS paid, k FROM scan_columns) x WHERE k 
 ----
 20	2.3333333333333335	5
 
-# Grouped and DISTINCT aggregates retain their independent states.
+# Grouped aggregates return their own columns, and DISTINCT aggregates retain their independent states.
 query III rowsort
 SELECT k % 2, count(DISTINCT a), sum(a) FROM scan_columns WHERE k < 5 GROUP BY k % 2
 UNION ALL

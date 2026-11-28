@@ -126,10 +126,23 @@ JOIN (SELECT a FROM plan_fact WHERE k < 990) y USING (a);
 ----
 logical_opt	<!REGEX>:.*__common_subplan_.*
 
-# Grouped aggregate output union is outside this rule.
+# Aggregates that are grouped by the same keys merge their results like ungrouped ones.
 query II
 EXPLAIN (FORMAT JSON) SELECT k, sum(a) FROM plan_fact GROUP BY k
 UNION ALL SELECT k, sum(b) FROM plan_fact GROUP BY k;
+----
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT k, sum(a) FROM plan_fact GROUP BY k
+UNION ALL SELECT k, sum(b) FROM plan_fact GROUP BY k;
+----
+logical_opt	<!REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# Other groups stay outside this rule.
+query II
+EXPLAIN (FORMAT JSON) SELECT k, sum(a) FROM plan_fact GROUP BY k
+UNION ALL SELECT k % 2, sum(b) FROM plan_fact GROUP BY k % 2;
 ----
 logical_opt	<!REGEX>:.*__common_subplan_.*
 

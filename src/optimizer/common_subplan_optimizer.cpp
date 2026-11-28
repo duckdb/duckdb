@@ -14,6 +14,7 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 
@@ -106,6 +107,80 @@ static bool CanShareSubplanExpression(const Expression &expr) {
 		unsafe |= ExpressionFilter::IsOptionalExpression(function);
 	});
 	return !unsafe;
+}
+
+//! Types of which two values are equal exactly when they are the same value. Left out: types with values that
+//! compare equal but are not the same (FLOAT and DOUBLE: 0.0 and -0.0; INTERVAL, TIME WITH TIME ZONE), collated
+//! strings and nested types.
+static bool EqualityIsIdentity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::ENUM:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return StringType::GetCollation(type).empty();
+	default:
+		return false;
+	}
+}
+
+//! Whether every constant of the expression has a type whose equality is identity: expressions that differ only in
+//! such constants are different expressions for Expression::Equals too
+static bool HasOnlyIdentityConstants(const Expression &expr) {
+	bool result = true;
+	ExpressionIterator::VisitExpression<BoundConstantExpression>(expr, [&](const BoundConstantExpression &constant) {
+		result = result && EqualityIsIdentity(constant.GetReturnType());
+	});
+	return result;
+}
+
+//! The same for the projections of a plan, whose expressions are matched with Expression::Equals as well
+static bool ProjectionsHaveOnlyIdentityConstants(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		for (auto &expression : op.expressions) {
+			if (!HasOnlyIdentityConstants(*expression)) {
+				return false;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (!ProjectionsHaveOnlyIdentityConstants(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool ContainsGroupedAggregate(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY && !op.Cast<LogicalAggregate>().groups.empty()) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsGroupedAggregate(*child)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) {
@@ -1152,7 +1227,6 @@ public:
 		const auto sorted_subplans = GetSortedSubplans();
 		CommonSubplanCTEPlacement placement;
 		BindingReplacementGraph pending_replacements;
-		TableIndex first_cte_index;
 		idx_t index = 1;
 		for (auto &entry : sorted_subplans) {
 			auto &subplan_info = entry.get().second;
@@ -1312,17 +1386,34 @@ private:
 	bool CanExpandExpressionOutputs(const LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
+			// A projection over grouped aggregates, which now match although they compute different things, only
+			// matches as a whole when it has a constant that Expression::Equals does not tell from an equal one
+			for (const auto &expression : op.expressions) {
+				if (!HasOnlyIdentityConstants(*expression) && ContainsGroupedAggregate(*op.children[0])) {
+					return false;
+				}
+			}
 			break;
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 			auto &aggregate = op.Cast<LogicalAggregate>();
-			if (!aggregate.groups.empty() || !aggregate.grouping_sets.empty() ||
-			    !aggregate.grouping_functions.empty()) {
+			// The groups stay in the signature: aggregates over the same input match when they are ungrouped, or
+			// grouped by the same keys, and then return the same groups whatever they compute per group.
+			if (aggregate.grouping_sets.size() > 1 || !aggregate.grouping_functions.empty()) {
 				return false;
 			}
 			for (const auto &expression : aggregate.expressions) {
 				if (!CanCombineAggregateState(expression->Cast<BoundAggregateExpression>())) {
 					return false;
 				}
+				// Aggregates are matched with Expression::Equals, for which 0.0 and -0.0 are the same constant, and
+				// equal aggregates of one node are computed once: grouped aggregates over such constants only
+				// match as a whole, by their serialized form
+				if (!aggregate.groups.empty() && !HasOnlyIdentityConstants(*expression)) {
+					return false;
+				}
+			}
+			if (!aggregate.groups.empty() && !ProjectionsHaveOnlyIdentityConstants(*op.children[0])) {
+				return false;
 			}
 			break;
 		}
@@ -1632,6 +1723,11 @@ private:
 	}
 
 public:
+	//! The first CTE this finder generated: every CTE from this index on is one of its shared subplans
+	TableIndex FirstGeneratedCTE() const {
+		return first_cte_index;
+	}
+
 	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
 		return IsSelectiveMultiTablePlan(GetSubplanStats(op), cardinality);
 	}
@@ -1663,6 +1759,8 @@ private:
 	column_binding_map_t<ColumnBinding> generated_binding_map;
 	//! Output expressions in canonical input bindings, indexed by canonical output column.
 	unordered_map<TableIndex, vector<unique_ptr<Expression>>> canonical_expressions;
+	//! The first CTE generated by this optimizer
+	TableIndex first_cte_index;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1902,6 +2000,337 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
+// Joins between the readers of one shared aggregate
+//===--------------------------------------------------------------------===//
+//! Aggregates over the same input that are grouped by the same keys are shared as one aggregate that computes all of
+//! their outputs. When two readers of that aggregate are joined to each other on its groups (an INNER join whose
+//! conditions each compare a column of the aggregate with itself, all groups among them), a row of the aggregate only
+//! ever meets itself, because its groups are unique: the join returns the rows of the aggregate, without the rows that
+//! are NULL in a column compared with =. The join is replaced by one reader that carries the filters and the columns
+//! of both sides, and a shared aggregate left with a single reader is put back in that reader's place instead of
+//! being materialized.
+class SharedAggregateJoins {
+	//! [projection | filter]* over a reference to a shared subplan, in terms of the columns of that reference
+	struct Reader {
+		optional_ptr<unique_ptr<LogicalOperator>> ref_slot;
+		vector<unique_ptr<Expression>> outputs;
+		vector<unique_ptr<Expression>> filters;
+
+		LogicalCTERef &Ref() {
+			return ref_slot->get()->Cast<LogicalCTERef>();
+		}
+	};
+
+public:
+	SharedAggregateJoins(Optimizer &optimizer, TableIndex first_generated_cte)
+	    : optimizer(optimizer), first_generated_cte(first_generated_cte) {
+	}
+
+	void Optimize(unique_ptr<LogicalOperator> &plan) {
+		if (!first_generated_cte.IsValid()) {
+			return;
+		}
+		FindSharedSubplans(*plan);
+		MergeReaders(plan, plan);
+		for (auto &cte_index : merged) {
+			if (CountReferences(*plan, cte_index) == 1) {
+				Inline(plan, cte_index);
+			}
+		}
+	}
+
+private:
+	void FindSharedSubplans(LogicalOperator &op) {
+		for (auto &child : op.children) {
+			FindSharedSubplans(*child);
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &cte = op.Cast<LogicalMaterializedCTE>();
+			if (cte.table_index >= first_generated_cte) {
+				shared_subplans.emplace(cte.table_index, cte);
+			}
+		}
+	}
+
+	//! An expression that both readers' rows can share: evaluated once per row, wherever it sits
+	static bool IsDeterministic(const Expression &expression) {
+		return !expression.IsVolatile() && !expression.CanThrow();
+	}
+
+	//! Rewrites `expression` over the outputs of an operator into an expression over the reader's reference
+	static bool Substitute(unique_ptr<Expression> &expression, const vector<ColumnBinding> &bindings,
+	                       const vector<unique_ptr<Expression>> &outputs) {
+		bool resolved = true;
+		expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+		    std::move(expression), [&](const BoundColumnRefExpression &ref) -> unique_ptr<Expression> {
+			    auto entry = std::find(bindings.begin(), bindings.end(), ref.Binding());
+			    if (ref.Depth() != 0 || entry == bindings.end()) {
+				    resolved = false;
+				    return nullptr;
+			    }
+			    return outputs[NumericCast<idx_t>(entry - bindings.begin())]->Copy();
+		    });
+		return resolved;
+	}
+
+	bool ReadShared(unique_ptr<LogicalOperator> &op, Reader &reader) {
+		switch (op->type) {
+		case LogicalOperatorType::LOGICAL_CTE_REF: {
+			auto &ref = op->Cast<LogicalCTERef>();
+			if (ref.is_recurring || shared_subplans.find(ref.cte_index) == shared_subplans.end()) {
+				return false;
+			}
+			reader.ref_slot = op;
+			auto bindings = ref.GetColumnBindings();
+			for (idx_t i = 0; i < bindings.size(); i++) {
+				reader.outputs.push_back(make_uniq<BoundColumnRefExpression>(ref.chunk_types[i], bindings[i]));
+			}
+			return true;
+		}
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			if (!ReadShared(op->children[0], reader)) {
+				return false;
+			}
+			const auto bindings = op->children[0]->GetColumnBindings();
+			vector<unique_ptr<Expression>> outputs;
+			for (auto &expression : op->expressions) {
+				auto output = expression->Copy();
+				if (!IsDeterministic(*output) || !Substitute(output, bindings, reader.outputs)) {
+					return false;
+				}
+				outputs.push_back(std::move(output));
+			}
+			reader.outputs = std::move(outputs);
+			return true;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			if (!ReadShared(op->children[0], reader)) {
+				return false;
+			}
+			auto &filter = op->Cast<LogicalFilter>();
+			const auto bindings = op->children[0]->GetColumnBindings();
+			for (auto &expression : filter.expressions) {
+				auto predicate = expression->Copy();
+				if (!IsDeterministic(*predicate) || !Substitute(predicate, bindings, reader.outputs)) {
+					return false;
+				}
+				reader.filters.push_back(std::move(predicate));
+			}
+			reader.outputs = Select(std::move(reader.outputs), filter.projection_map);
+			return true;
+		}
+		default:
+			return false;
+		}
+	}
+
+	static vector<unique_ptr<Expression>> Select(vector<unique_ptr<Expression>> outputs,
+	                                             const vector<ProjectionIndex> &projection_map) {
+		if (projection_map.empty()) {
+			return outputs;
+		}
+		vector<unique_ptr<Expression>> result;
+		for (auto &index : projection_map) {
+			result.push_back(outputs[index.GetIndex()]->Copy());
+		}
+		return result;
+	}
+
+	//! The column of the reader's reference that `expression` (over the outputs of the reader) passes through
+	static optional_idx ReferenceColumn(const Expression &expression, const vector<ColumnBinding> &bindings,
+	                                    Reader &reader) {
+		auto column = expression.Copy();
+		if (!Substitute(column, bindings, reader.outputs) ||
+		    column->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return optional_idx();
+		}
+		auto &binding = column->Cast<BoundColumnRefExpression>().Binding();
+		if (binding.table_index != reader.Ref().table_index) {
+			return optional_idx();
+		}
+		return binding.column_index.GetIndex();
+	}
+
+	void MergeReaders(unique_ptr<LogicalOperator> &plan, unique_ptr<LogicalOperator> &op) {
+		for (auto &child : op->children) {
+			MergeReaders(plan, child);
+		}
+		if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			return;
+		}
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::INNER || !join.expressions.empty()) {
+			return;
+		}
+		Reader left;
+		Reader right;
+		if (!ReadShared(op->children[0], left) || !ReadShared(op->children[1], right) ||
+		    left.Ref().cte_index != right.Ref().cte_index) {
+			return;
+		}
+		const auto cte_index = left.Ref().cte_index;
+		auto &definition = *shared_subplans.at(cte_index).get().children[0];
+		// Every condition compares a column of the shared subplan with itself
+		const auto definition_bindings = definition.GetColumnBindings();
+		vector<ColumnBinding> compared;
+		//! The columns of the reference that a condition written with = requires to be non-NULL
+		vector<idx_t> not_null_columns;
+		const auto left_bindings = op->children[0]->GetColumnBindings();
+		const auto right_bindings = op->children[1]->GetColumnBindings();
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				return;
+			}
+			const auto comparison = condition.GetComparisonType();
+			if (comparison != ExpressionType::COMPARE_EQUAL &&
+			    comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				return;
+			}
+			auto left_column = ReferenceColumn(condition.GetLHS(), left_bindings, left);
+			auto right_column = ReferenceColumn(condition.GetRHS(), right_bindings, right);
+			if (!left_column.IsValid() || !right_column.IsValid() ||
+			    left_column.GetIndex() != right_column.GetIndex()) {
+				return;
+			}
+			const auto column = left_column.GetIndex();
+			if (column >= definition_bindings.size() || !EqualityIsIdentity(left.Ref().chunk_types[column])) {
+				return;
+			}
+			compared.push_back(definition_bindings[column]);
+			if (comparison == ExpressionType::COMPARE_EQUAL &&
+			    std::find(not_null_columns.begin(), not_null_columns.end(), column) == not_null_columns.end()) {
+				not_null_columns.push_back(column);
+			}
+		}
+		// ... and the shared subplan is an aggregate that returns one row per value of the compared columns
+		if (!LogicalAggregate::KeysAreUnique(definition, std::move(compared))) {
+			return;
+		}
+
+		// The right reader's rows are the left reader's rows: point its expressions at the left reference
+		auto &left_ref = left.Ref();
+		const auto right_index = right.Ref().table_index;
+		auto to_left = [&](unique_ptr<Expression> &expression) {
+			expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+			    std::move(expression), [&](const BoundColumnRefExpression &ref) -> unique_ptr<Expression> {
+				    if (ref.Binding().table_index != right_index) {
+					    return nullptr;
+				    }
+				    return ref.WithBinding(ColumnBinding(left_ref.table_index, ref.Binding().column_index));
+			    });
+		};
+		auto filters = std::move(left.filters);
+		for (auto &predicate : right.filters) {
+			to_left(predicate);
+			filters.push_back(std::move(predicate));
+		}
+		for (auto &column : not_null_columns) {
+			filters.push_back(make_uniq<BoundOperatorExpression>(
+			    ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN,
+			    make_uniq<BoundColumnRefExpression>(left_ref.chunk_types[column],
+			                                        ColumnBinding(left_ref.table_index, ProjectionIndex(column)))));
+		}
+		// The columns of the join, in the order the join returned them
+		auto columns = Select(std::move(left.outputs), join.left_projection_map);
+		for (auto &output : Select(std::move(right.outputs), join.right_projection_map)) {
+			to_left(output);
+			columns.push_back(std::move(output));
+		}
+		const auto old_bindings = op->GetColumnBindings();
+		D_ASSERT(old_bindings.size() == columns.size());
+		if (columns.empty()) {
+			return;
+		}
+
+		unique_ptr<LogicalOperator> reader = std::move(*left.ref_slot);
+		if (!filters.empty()) {
+			auto filter = make_uniq<LogicalFilter>();
+			filter->expressions = std::move(filters);
+			filter->children.push_back(std::move(reader));
+			if (op->has_estimated_cardinality) {
+				filter->SetEstimatedCardinality(op->estimated_cardinality);
+			}
+			reader = std::move(filter);
+		}
+		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(columns));
+		projection->children.push_back(std::move(reader));
+		if (op->has_estimated_cardinality) {
+			projection->SetEstimatedCardinality(op->estimated_cardinality);
+		}
+		projection->ResolveOperatorTypes();
+
+		ColumnBindingReplacer replacer;
+		for (idx_t i = 0; i < old_bindings.size(); i++) {
+			replacer.replacement_bindings.emplace_back(old_bindings[i],
+			                                           ColumnBinding(projection->table_index, ProjectionIndex(i)));
+		}
+		op = std::move(projection);
+		// Only the operators above the join read its columns
+		replacer.stop_operator = op.get();
+		replacer.VisitOperator(*plan);
+		if (std::find(merged.begin(), merged.end(), cte_index) == merged.end()) {
+			merged.push_back(cte_index);
+		}
+	}
+
+	static idx_t CountReferences(const LogicalOperator &op, TableIndex cte_index) {
+		idx_t count =
+		    op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index;
+		for (auto &child : op.children) {
+			count += CountReferences(*child, cte_index);
+		}
+		return count;
+	}
+
+	static optional_ptr<unique_ptr<LogicalOperator>> Find(unique_ptr<LogicalOperator> &op, LogicalOperatorType type,
+	                                                      TableIndex cte_index) {
+		if (op->type == type) {
+			const auto index = type == LogicalOperatorType::LOGICAL_CTE_REF
+			                       ? op->Cast<LogicalCTERef>().cte_index
+			                       : op->Cast<LogicalMaterializedCTE>().table_index;
+			if (index == cte_index) {
+				return op;
+			}
+		}
+		for (auto &child : op->children) {
+			auto result = Find(child, type, cte_index);
+			if (result) {
+				return result;
+			}
+		}
+		return nullptr;
+	}
+
+	//! Puts the definition of a shared aggregate with one reader in the place of that reader
+	static void Inline(unique_ptr<LogicalOperator> &plan, TableIndex cte_index) {
+		auto cte = Find(plan, LogicalOperatorType::LOGICAL_MATERIALIZED_CTE, cte_index);
+		D_ASSERT(cte);
+		auto ref_slot = Find(cte->get()->children[1], LogicalOperatorType::LOGICAL_CTE_REF, cte_index);
+		D_ASSERT(ref_slot);
+		auto definition = std::move(cte->get()->children[0]);
+		const auto old_bindings = ref_slot->get()->GetColumnBindings();
+		const auto new_bindings = definition->GetColumnBindings();
+		D_ASSERT(old_bindings.size() == new_bindings.size());
+		ColumnBindingReplacer replacer;
+		for (idx_t i = 0; i < old_bindings.size(); i++) {
+			replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
+		}
+		*ref_slot = std::move(definition);
+		auto query = std::move(cte->get()->children[1]);
+		*cte = std::move(query);
+		replacer.VisitOperator(*plan);
+	}
+
+private:
+	Optimizer &optimizer;
+	const TableIndex first_generated_cte;
+	//! The CTEs the finder generated
+	unordered_map<TableIndex, reference<LogicalMaterializedCTE>> shared_subplans;
+	//! The shared aggregates that lost a reader
+	vector<TableIndex> merged;
+};
+
+//===--------------------------------------------------------------------===//
 // CommonSubplanOptimizer
 //===--------------------------------------------------------------------===//
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
@@ -1914,6 +2343,9 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	CommonSubplanFinder finder(optimizer.context);
 	finder.FindCommonSubplans(op);
 	finder.ConvertSubplansToCTEs(optimizer, op);
+	// Readers of one shared aggregate that are joined on its groups read it once
+	SharedAggregateJoins shared_aggregate_joins(optimizer, finder.FirstGeneratedCTE());
+	shared_aggregate_joins.Optimize(op);
 	return op;
 }
 
