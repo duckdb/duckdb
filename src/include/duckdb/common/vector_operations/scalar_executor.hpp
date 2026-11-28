@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -136,8 +137,9 @@ private:
 
 	template <bool PRESERVE_RESULT_VALIDITY, uint64_t CONSTANT_MASK, class RESULT_TYPE, class ADAPTER, class... ARGS,
 	          size_t... Is>
-	static void ExecuteFlat(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
-	                        ADAPTER &adapter, std::index_sequence<Is...> indices) {
+	DUCKDB_AUTOVEC_TARGET static void ExecuteFlatBody(const std::array<VectorRef, sizeof...(ARGS)> &inputs,
+	                                                  Vector &result, idx_t count, ADAPTER &adapter,
+	                                                  std::index_sequence<Is...> indices) {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		if (result.size() != count) {
 			FlatVector::SetSize(result, count);
@@ -165,6 +167,7 @@ private:
 				auto validity_entry = result_validity.GetValidityEntry(entry_idx);
 				auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
+					DUCKDB_UNROLL_FLAT_LOOP
 					for (; base_idx < next; base_idx++) {
 						result_data[base_idx] =
 						    adapter.Operation(result_validity, base_idx,
@@ -184,11 +187,20 @@ private:
 				}
 			}
 		} else {
+			DUCKDB_UNROLL_FLAT_LOOP
 			for (idx_t row = 0; row < count; row++) {
 				result_data[row] = adapter.Operation(result_validity, row,
 				                                     std::get<Is>(input_data)[InputIndex<Is, CONSTANT_MASK>(row)]...);
 			}
 		}
+	}
+
+	template <bool PRESERVE_RESULT_VALIDITY, uint64_t CONSTANT_MASK, class RESULT_TYPE, class ADAPTER, class... ARGS,
+	          size_t... Is>
+	static inline void ExecuteFlat(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
+	                               ADAPTER &adapter, std::index_sequence<Is...> indices) {
+		ExecuteFlatBody<PRESERVE_RESULT_VALIDITY, CONSTANT_MASK, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
+		                                                                                        adapter, indices);
 	}
 
 #if !DUCKDB_SMALLER_BINARY(scalar_executor_constant)
@@ -401,7 +413,7 @@ private:
 			return;
 		}
 		if constexpr (POLICY::SPECIALIZE_FLAT && N <= 3) {
-			if (profile.all_flat_or_constant) {
+			if (profile.all_flat_or_constant && CpuCanRunAutoVecKernels()) {
 				if (profile.any_constant_null) {
 					result.SetVectorType(VectorType::CONSTANT_VECTOR);
 					if (result.size() != count) {
