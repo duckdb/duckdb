@@ -1,0 +1,89 @@
+# name: test/sql/cte/recursive_cte_shared_list_child.test
+# description: Empty or NULL lists selected from a chunk holding a shared list child, followed by more appends into the same chunk
+# group: [cte]
+
+# reading a list child whose chain head hides the appended entries does not terminate, bound it
+statement ok
+SET max_execution_time=30000;
+
+# the k = 0 row selects nothing of the shared 3000-element child, the k = 1 branch appends a new list into the same chunk
+query III
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, CASE WHEN k = 0 THEN NULL ELSE range(3000)::INT[] END FROM (VALUES (0), (1)) v(k)
+	UNION ALL
+	(SELECT i + 1, k, acc FROM r WHERE i < 1 AND k = 0
+	 UNION ALL
+	 SELECT i + 1, 5, [7, 8, 9] FROM r WHERE i < 1 AND k = 1)
+)
+SELECT i, k, acc FROM r WHERE k <> 1 ORDER BY ALL;
+----
+0	0	NULL
+1	0	NULL
+1	5	[7, 8, 9]
+
+query IIIIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, CASE WHEN k = 0 THEN NULL ELSE range(3000)::INT[] END FROM (VALUES (0), (1)) v(k)
+	UNION ALL
+	(SELECT i + 1, k, acc FROM r WHERE i < 1 AND k = 0
+	 UNION ALL
+	 SELECT i + 1, 5, [7, 8, 9] FROM r WHERE i < 1 AND k = 1)
+)
+SELECT i, k, len(acc), acc[1], acc[-1], list_sum(acc) FROM r WHERE k <> 1 ORDER BY ALL;
+----
+0	0	NULL	NULL	NULL	NULL
+1	0	NULL	NULL	NULL	NULL
+1	5	3	7	9	24
+
+query IIIIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, CASE WHEN k = 0 THEN NULL ELSE range(3000)::INT[] END FROM (VALUES (0), (1)) v(k)
+	UNION ALL
+	(SELECT i + 1, k, acc FROM r WHERE i < 1 AND k = 0
+	 UNION ALL
+	 SELECT i + 1, 5, range(2500)::INT[] FROM r WHERE i < 1 AND k = 1)
+)
+SELECT i, k, len(acc), acc[1], acc[-1], list_sum(acc) FROM r WHERE k <> 1 ORDER BY ALL;
+----
+0	0	NULL	NULL	NULL	NULL
+1	0	NULL	NULL	NULL	NULL
+1	5	2500	0	2499	3123750
+
+query IIIIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, CASE WHEN k = 0 THEN []::INT[] ELSE range(3000)::INT[] END FROM (VALUES (0), (1)) v(k)
+	UNION ALL
+	(SELECT i + 1, k, acc FROM r WHERE i < 1 AND k = 0
+	 UNION ALL
+	 SELECT i + 1, 5, [7, 8, 9] FROM r WHERE i < 1 AND k = 1)
+)
+SELECT i, k, len(acc), acc[1], acc[-1], list_sum(acc) FROM r WHERE k <> 1 ORDER BY ALL;
+----
+0	0	0	NULL	NULL	NULL
+1	0	0	NULL	NULL	NULL
+1	5	3	7	9	24
+
+query IIIIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, CASE WHEN k = 0 THEN []::INT[] ELSE range(3000)::INT[] END FROM (VALUES (0), (1)) v(k)
+	UNION ALL
+	(SELECT i + 1, k, acc FROM r WHERE i < 1 AND k = 0
+	 UNION ALL
+	 SELECT i + 1, 5, range(2500)::INT[] FROM r WHERE i < 1 AND k = 1)
+)
+SELECT i, k, len(acc), acc[1], acc[-1], list_sum(acc) FROM r WHERE k <> 1 ORDER BY ALL;
+----
+0	0	0	NULL	NULL	NULL
+1	0	0	NULL	NULL	NULL
+1	5	2500	0	2499	3123750
+
+# a carried list with NULL elements is not shared and copied as before
+query IIIII
+WITH RECURSIVE r(i, acc) AS (
+	SELECT 0, list_transform(range(3000), lambda x: CASE WHEN x % 1000 = 7 THEN NULL ELSE x END)
+	UNION ALL
+	SELECT i + 1, acc FROM r WHERE i < 50
+)
+SELECT count(*), sum(len(acc)), sum(list_count(acc)), sum((acc[8] IS NULL)::INT), sum(acc[-1]) FROM r;
+----
+51	153000	152847	51	152949

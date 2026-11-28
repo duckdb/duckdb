@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/shared_child_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -150,6 +151,43 @@ struct ListConcatInputData {
 	VectorIterator<list_entry_t> list_data;
 };
 
+//! Extend a single-row concat result in the shared storage its first input views instead of copying the prefix.
+//! Returns false if the inputs do not fit that shape.
+bool TryExtendSharedListChild(Context &context, const vector<ListConcatInputData> &input_data, Vector &result,
+                              idx_t count) {
+	if (count != 1 || input_data.size() < 2) {
+		return false;
+	}
+	auto &prefix = input_data[0];
+	auto prefix_val = prefix.list_data[0];
+	if (!prefix_val.IsValid()) {
+		return false;
+	}
+	vector<SharedChildExtra> extras;
+	for (idx_t input_idx = 1; input_idx < input_data.size(); input_idx++) {
+		auto &input = input_data[input_idx];
+		auto entry_val = input.list_data[0];
+		if (!entry_val.IsValid()) {
+			return false;
+		}
+		extras.push_back(SharedChildExtra {input.child_vec, entry_val.GetValue()});
+	}
+	const auto prefix_entry = prefix_val.GetValue();
+	idx_t result_offset;
+	auto &result_child = ListVector::GetChildMutable(result);
+	if (!SharedChildVector::TryExtend(context.GetBufferManager(), prefix.child_vec, prefix_entry, extras, result_child,
+	                                  result_offset)) {
+		return false;
+	}
+	idx_t result_length = prefix_entry.length;
+	for (auto &extra : extras) {
+		result_length += extra.entry.length;
+	}
+	auto writer = FlatVector::Writer<list_entry_t>(result, count);
+	writer.WriteValue(list_entry_t {result_offset, result_length});
+	return true;
+}
+
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
@@ -160,6 +198,21 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 			continue;
 		}
 		input_data.emplace_back(input, count);
+	}
+
+	if (TryExtendSharedListChild(state.GetContext(), input_data, result, count)) {
+		return;
+	}
+
+	// replace a view a previous fast-path result left in the reused result vector, writing it would copy its entries
+	{
+		auto &result_child = ListVector::GetChildMutable(result);
+		auto &child_buffer_ref = result_child.GetBufferRef();
+		if (child_buffer_ref && child_buffer_ref->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER) {
+			const auto child_type_size = GetTypeIdSize(result_child.GetType().InternalType());
+			result_child.SetBuffer(
+			    make_buffer<StandardVectorBuffer>(capacity_t(STANDARD_VECTOR_SIZE), child_type_size));
+		}
 	}
 
 	// the || operator yields NULL whenever any input is NULL, while list_concat skips NULLs

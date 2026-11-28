@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
+class SharedChildStorage;
 
 struct VectorChildIndex {
 	explicit VectorChildIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
@@ -44,8 +46,39 @@ enum class ColumnDataRepresentation : uint8_t {
 	CONSTANT,
 	//! Per-row dictionary codes in block data referencing a per-segment dictionary
 	DICTIONARY,
-	//! Row values of a list child longer than a vector, in block data sized to exactly its count
+	//! Row values of a list child longer than a vector, sized to exactly its count. Stored in block data, or (in
+	//! collections that share list children) in shared child storage (see VectorMetaData::shared_child_slot)
 	LARGE_FLAT
+};
+
+//! The distinct shared child storage the segments of one collection reference, so the collection accounts each
+//! storage once: its allocation (the whole capacity, including room to grow) in AllocationSize, and the bytes the
+//! collection's entries reference (the longest referenced prefix) in UsedSize
+class ColumnDataSharedChildAccounting {
+public:
+	//! A segment references storage 'id' of 'size' bytes, its entries 'used' bytes of it
+	void AddReference(idx_t id, idx_t size, idx_t used);
+	//! The entries of a segment that references storage 'id' now reference 'used' instead of 'previous' bytes of it
+	void UpdateUsed(idx_t id, idx_t previous, idx_t used);
+	//! A segment whose entries referenced 'used' bytes of storage 'id' no longer references it
+	void RemoveReference(idx_t id, idx_t used);
+	idx_t AllocationSize() const {
+		return allocation_size;
+	}
+	idx_t UsedSize() const {
+		return used_size;
+	}
+
+private:
+	struct Entry {
+		idx_t size;
+		//! The number of segments by the bytes their entries reference, the largest key is the used size
+		map<idx_t, idx_t> segments_by_used;
+	};
+	void SetUsed(Entry &entry, idx_t previous_used);
+	unordered_map<idx_t, Entry> entries;
+	idx_t allocation_size = 0;
+	idx_t used_size = 0;
 };
 
 //! The value of a CONSTANT entry
@@ -101,6 +134,8 @@ struct VectorMetaData {
 	ColumnDataConstantValue constant;
 	//! The dictionary slot in the segment (only used for DICTIONARY entries)
 	idx_t dictionary_slot = DConstants::INVALID_INDEX;
+	//! The shared list child slot in the segment (only used for LARGE_FLAT entries without block data)
+	idx_t shared_child_slot = DConstants::INVALID_INDEX;
 	//! Meta data about string pointers
 	vector<SwizzleMetaData> swizzle_data;
 
@@ -132,7 +167,9 @@ struct ChunkMetaData {
 
 class ColumnDataCollectionSegment {
 public:
-	ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types_p);
+	ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types_p,
+	                            shared_ptr<ColumnDataSharedChildAccounting> shared_child_accounting = nullptr);
+	~ColumnDataCollectionSegment();
 
 public:
 	//! The allocator and allocation statistics
@@ -158,6 +195,16 @@ public:
 	vector<SegmentDictionaryData> dictionaries;
 	//! Map from dictionary id to a slot in "dictionaries"
 	unordered_map<string, idx_t> dictionary_map;
+	//! Whether appended large list children reference shared child storage (recursive CTE tables only)
+	bool share_list_children = false;
+	//! Shared child storage referenced by LARGE_FLAT entries, indexed by their 'shared_child_slot'
+	vector<shared_ptr<SharedChildStorage>> shared_child_buffers;
+	//! The allocation and the longest referenced prefix in bytes of each distinct shared child storage this segment
+	//! references, by storage id
+	unordered_map<idx_t, pair<idx_t, idx_t>> shared_child_sizes;
+	//! Accounts the shared child storage of all segments of the collection (not part of the segment sizes), only set
+	//! for segments that share list children
+	shared_ptr<ColumnDataSharedChildAccounting> shared_child_accounting;
 	//! The string heap for the column data collection (only used for IN_MEMORY_ALLOCATOR)
 	shared_ptr<StringHeap> heap;
 
@@ -178,6 +225,9 @@ public:
 	//! Allocate a LARGE_FLAT entry holding exactly 'count' rows of a constant-size type
 	VectorDataIndex AllocateLargeVector(idx_t type_size, idx_t count, ChunkMetaData &chunk_meta,
 	                                    ChunkManagementState *chunk_state);
+	//! Add a LARGE_FLAT entry referencing the first 'count' entries of shared list child storage
+	VectorDataIndex AddSharedLargeVector(shared_ptr<SharedChildStorage> storage, idx_t count, ChunkMetaData &chunk_meta,
+	                                     VectorDataIndex prev_index);
 	//! Allocate block storage for an entry whose allocation was deferred or whose storage is replaced
 	void AllocateVectorStorage(VectorDataIndex index, idx_t allocation_size, ChunkMetaData &chunk_meta,
 	                           ChunkManagementState *chunk_state);
@@ -185,6 +235,18 @@ public:
 	void UnswizzleEntryPointers(ChunkManagementState &state, VectorMetaData &vdata, Vector &result);
 	//! Read the materialized dictionary values of the given slot as a zero-copy vector
 	Vector ReadSegmentDictionary(ChunkManagementState &state, idx_t slot);
+	//! Whether an entry references shared list child storage instead of block data
+	static bool IsSharedListChild(const VectorMetaData &vdata) {
+		return vdata.shared_child_slot != DConstants::INVALID_INDEX;
+	}
+	//! The shared list child storage of an entry for which IsSharedListChild holds
+	const shared_ptr<SharedChildStorage> &GetSharedListChild(const VectorMetaData &vdata) const {
+		D_ASSERT(IsSharedListChild(vdata) && vdata.representation == ColumnDataRepresentation::LARGE_FLAT);
+		D_ASSERT(vdata.shared_child_slot < shared_child_buffers.size());
+		return shared_child_buffers[vdata.shared_child_slot];
+	}
+	//! Account the shared child storage of this segment in 'accounting' (e.g. when moved into another collection)
+	void SetSharedChildAccounting(shared_ptr<ColumnDataSharedChildAccounting> accounting);
 	//! Load the value of a CONSTANT entry, resolving heap-resident string bytes
 	string_t GetConstantString(ChunkManagementState &state, const VectorMetaData &vdata);
 
@@ -207,9 +269,9 @@ public:
 	static idx_t GetVectorCapacity(const VectorMetaData &vdata);
 
 	idx_t ChunkCount() const;
-	//! Get the total *used* size (not cached)
+	//! Get the total *used* size (not cached), without shared child storage (see shared_child_accounting)
 	idx_t SizeInBytes() const;
-	//! Get the currently allocated size in bytes (cached)
+	//! Get the currently allocated size in bytes (cached), without shared child storage
 	idx_t AllocationSize() const;
 	//! Get the allocation size of the chunk
 	idx_t GetChunkAllocationSize(idx_t chunk_index) const;

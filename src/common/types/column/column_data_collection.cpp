@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/shared_child_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -107,7 +108,11 @@ void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
 }
 
 void ColumnDataCollection::CreateSegment() {
-	segments.emplace_back(make_uniq<ColumnDataCollectionSegment>(allocator, types));
+	if (share_list_children && !shared_child_accounting) {
+		shared_child_accounting = make_shared_ptr<ColumnDataSharedChildAccounting>();
+	}
+	segments.emplace_back(make_uniq<ColumnDataCollectionSegment>(allocator, types, shared_child_accounting));
+	segments.back()->share_list_children = share_list_children;
 }
 
 Allocator &ColumnDataCollection::GetAllocator() const {
@@ -115,7 +120,7 @@ Allocator &ColumnDataCollection::GetAllocator() const {
 }
 
 idx_t ColumnDataCollection::SizeInBytes() const {
-	idx_t total_size = 0;
+	idx_t total_size = shared_child_accounting ? shared_child_accounting->UsedSize() : 0;
 	for (const auto &segment : segments) {
 		total_size += segment->SizeInBytes();
 	}
@@ -123,11 +128,16 @@ idx_t ColumnDataCollection::SizeInBytes() const {
 }
 
 idx_t ColumnDataCollection::AllocationSize() const {
-	idx_t total_size = 0;
+	idx_t total_size = shared_child_accounting ? shared_child_accounting->AllocationSize() : 0;
 	for (const auto &segment : segments) {
 		total_size += segment->AllocationSize();
 	}
 	return total_size;
+}
+
+void ColumnDataCollection::EnableSharedListChildren() {
+	D_ASSERT(segments.empty());
+	share_list_children = true;
 }
 
 void ColumnDataCollection::SetPartitionIndex(const idx_t index) {
@@ -439,6 +449,14 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = count;
 	while (remaining > 0) {
+		if (ColumnDataCollectionSegment::IsSharedListChild(segment.GetVectorData(current_index))) {
+			// shared list children are immutable - continue the append on the next entry
+			if (!segment.GetVectorData(current_index).next_data.IsValid()) {
+				segment.AllocateVector(source.GetType(), meta_data.chunk_data, append_state, current_index);
+			}
+			current_index = segment.GetVectorData(current_index).next_data;
+			continue;
+		}
 		EnsureVectorDataAllocated(meta_data, current_index, OP::TypeSize());
 		auto &current_segment = segment.GetVectorData(current_index);
 		const auto capacity = ColumnDataCollectionSegment::GetVectorCapacity(current_segment);
@@ -899,6 +917,82 @@ static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &sourc
 	return true;
 }
 
+//! The shared child storage 'child_vector' presents an unchanged prefix of, if the appended child should reference it
+//! instead of copying. The child must start the storage and cover at least half of it, so a reference retains at most
+//! twice the bytes it covers (the bound capacity doubling in list_concat already accepts). Shorter prefixes, e.g. a
+//! few elements selected from a large list, are copied rather than pinning the whole storage
+static shared_ptr<SharedChildStorage>
+GetReferenceableStorage(Vector &child_vector, const ConsecutiveChildListInfo &info, BufferManager &buffer_manager) {
+	if (info.needs_slicing || info.child_list_info.offset != 0) {
+		return nullptr;
+	}
+	auto storage = SharedChildVector::GetUnchangedStorage(child_vector);
+	const auto length = info.child_list_info.length;
+	if (!storage || length > storage->GetClaimedCount() || 2 * length < storage->Capacity() ||
+	    !storage->IsBackedBy(buffer_manager)) {
+		return nullptr;
+	}
+	return storage;
+}
+
+//! In a collection that shares list children (recursive CTE tables), store a NULL-free list child longer than a vector,
+//! appended to an empty or full child chain, as a LARGE_FLAT entry referencing shared child storage. Children that
+//! arrive as a view of such storage are referenced again without any copy, so large list payloads carried or grown
+//! across recursive CTE iterations cost O(1) per append. Returns false if the child must be appended as on main
+static bool TryShareLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
+                                   const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count,
+                                   VectorDataIndex last_child_index) {
+	auto &segment = meta_data.segment;
+	auto &allocator = *segment.allocator;
+	D_ASSERT(segment.share_list_children);
+	// shared storage is buffer-managed, and managed result sets must fail cleanly after the database closes
+	if (allocator.GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR || allocator.IsManagedResultSet()) {
+		return false;
+	}
+	if (last_child_index.IsValid()) {
+		auto &last_vdata = segment.GetVectorData(last_child_index);
+		if (last_vdata.count != ColumnDataCollectionSegment::GetVectorCapacity(last_vdata)) {
+			// an entry after a partially filled entry would leave reusable space in the middle of the chain, and
+			// later appends into that space would break the child offset order
+			return false;
+		}
+	}
+	const auto internal_type = child_vector.GetType().InternalType();
+	if (!TypeIsConstantSize(internal_type)) {
+		return false;
+	}
+	const auto type_size = GetTypeIdSize(internal_type);
+	const auto length = info.child_list_info.length;
+	// like every LARGE_FLAT entry, the entry count and block size are 32-bit, also for referenced storage
+	if (length <= STANDARD_VECTOR_SIZE ||
+	    ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) >
+	        MAXIMUM_LARGE_LIST_CHILD_SIZE) {
+		return false;
+	}
+	auto &buffer_manager = allocator.GetBufferManager();
+	auto storage = GetReferenceableStorage(child_vector, info, buffer_manager);
+	if (!storage) {
+		// materialize the child once into fresh shared storage, children with NULLs are not shared
+		if (info.needs_slicing) {
+			SelectionVector sel(length);
+			ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+			storage = SharedChildVector::Materialize(buffer_manager, child_vector, sel, 0, length);
+		} else {
+			storage =
+			    SharedChildVector::Materialize(buffer_manager, child_vector, *FlatVector::IncrementalSelectionVector(),
+			                                   info.child_list_info.offset, length);
+		}
+		if (!storage) {
+			return false;
+		}
+	}
+	auto child_index = segment.AddSharedLargeVector(std::move(storage), length, meta_data.chunk_data, last_child_index);
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
+	}
+	return true;
+}
+
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
@@ -908,18 +1002,22 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	auto &child_type = child_vector.GetType();
 	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
 
-	// figure out the current list size by traversing the set of child entries
+	// figure out the current list size and the end of the chain by traversing the set of child entries
 	idx_t current_list_size = 0;
+	VectorDataIndex last_child_index;
 	if (meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto current_child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
 		while (current_child_index.IsValid()) {
 			auto &child_vdata = segment.GetVectorData(current_child_index);
 			current_list_size += child_vdata.count;
+			last_child_index = current_child_index;
 			current_child_index = child_vdata.next_data;
 		}
 	}
 
-	if (!TryAppendLargeListChild(meta_data, source, child_vector, info, offset, copy_count)) {
+	const auto shared = segment.share_list_children && TryShareLargeListChild(meta_data, source, child_vector, info,
+	                                                                          offset, copy_count, last_child_index);
+	if (!shared && !TryAppendLargeListChild(meta_data, source, child_vector, info, offset, copy_count)) {
 		if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 			auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 			meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
@@ -1778,9 +1876,20 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	if (types != other.types) {
 		throw InternalException("Attempting to combine ColumnDataCollections with mismatching types");
 	}
+	if (share_list_children != other.share_list_children) {
+		// moved segments would carry shared list children into a collection that does not share them, or the reverse
+		throw InternalException("Attempting to combine ColumnDataCollections with mismatching list child sharing");
+	}
 	this->count += other.count;
 	this->segments.reserve(segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
+		if (other_seg->shared_child_accounting) {
+			// segments sharing list children move their storage into the accounting of this collection
+			if (!shared_child_accounting) {
+				shared_child_accounting = make_shared_ptr<ColumnDataSharedChildAccounting>();
+			}
+			other_seg->SetSharedChildAccounting(shared_child_accounting);
+		}
 		segments.push_back(std::move(other_seg));
 	}
 	other.Reset();
@@ -1791,10 +1900,15 @@ void ColumnDataCollection::Swap(ColumnDataCollection &other) {
 	if (types != other.types) {
 		throw InternalException("Attempting to swap ColumnDataCollections with mismatching types");
 	}
+	if (share_list_children != other.share_list_children) {
+		throw InternalException("Attempting to swap ColumnDataCollections with mismatching list child sharing");
+	}
 	std::swap(allocator, other.allocator);
 	std::swap(types, other.types);
 	std::swap(count, other.count);
 	std::swap(segments, other.segments);
+	std::swap(shared_child_accounting, other.shared_child_accounting);
+	std::swap(share_list_children, other.share_list_children);
 	std::swap(copy_functions, other.copy_functions);
 	std::swap(finished_append, other.finished_append);
 	std::swap(partition_index, other.partition_index);
@@ -1833,6 +1947,9 @@ void ColumnDataCollection::Truncate(idx_t new_count) {
 		//	If this collection has finished_append true, then calling InitializeAppend is not valid.
 		//	So build the tail into a new collection and Combine it back in.
 		auto tail = make_uniq<ColumnDataCollection>(allocator, types);
+		if (share_list_children) {
+			tail->EnableSharedListChildren();
+		}
 		ColumnDataAppendState append;
 		tail->InitializeAppend(append);
 		idx_t chunk_index = 0;

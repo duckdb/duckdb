@@ -22,6 +22,8 @@ struct RecursiveCTEDistinctPartition {
 //===--------------------------------------------------------------------===//
 RecursiveCTEUnionState::RecursiveCTEUnionState(ClientContext &context, const PhysicalRecursiveCTE &op)
     : RecursiveCTEState(context, op), intermediate_table(context, op.GetTypes()) {
+	// like the working table, so the iterations alternating between them never copy shared large list children
+	intermediate_table.EnableSharedListChildren();
 	if (!op.UnionAll()) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
 	}
@@ -43,6 +45,8 @@ public:
 	    : op(op), hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH), dummy_addresses(LogicalType::POINTER),
 	      new_groups(STANDARD_VECTOR_SIZE) {
 		output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
+		// combined into the working or intermediate table, which share large list children
+		output->EnableSharedListChildren();
 		output->InitializeAppend(append_state);
 		if (!op.UnionAll()) {
 			partition_chunk.Initialize(Allocator::Get(context), op.GetTypes());
