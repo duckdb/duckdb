@@ -44,6 +44,10 @@ class Context;
 class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
+class DeleteFilter;
+class BaseFileReader;
+
+typedef unique_ptr<DeleteFilter> (*create_file_filter_fun_t)(ClientContext &context, BaseFileReader &reader);
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -81,6 +85,8 @@ public:
 	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
 	                                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
 	                                            bool statically_linked);
+	//! Creates the row filter that the open options of the file of a reader describe, see create_file_filter
+	DUCKDB_API unique_ptr<DeleteFilter> CreateFileFilter(ClientContext &context, BaseFileReader &reader);
 
 	idx_t NumberOfThreads();
 
@@ -142,6 +148,9 @@ private:
 	//! links, and which reaches it through autoloading - would therefore keep all of DuckDB alive in extensions that
 	//! link it statically. Only Initialize names it, and nothing that fails to open a database can reach that.
 	invoke_ext_capi_v2_fun_t invoke_capi_v2;
+	//! Set in Initialize. TableFunctionQueryFilter runs a query - naming it from the multi-file scan, which extensions
+	//! instantiate, would link the entire engine into them.
+	create_file_filter_fun_t create_file_filter;
 };
 
 //! A describe function for an extension class, so that loading it by class goes through the same path as linked

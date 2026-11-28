@@ -25,7 +25,18 @@ public:
 	//! produces
 	TableFunctionMultiFileList(ClientContext &context, const Identifier &function_name, vector<Value> inputs,
 	                           named_argument_map_t named_parameters = named_argument_map_t());
+	//! List the files of an already bound table function - no catalog lookup, the bind data is owned by the list
+	TableFunctionMultiFileList(ClientContext &context, TableFunction function, unique_ptr<FunctionData> bind_data,
+	                           vector<LogicalType> return_types);
 	~TableFunctionMultiFileList() override;
+
+	//! The bind data of the function that produces the files
+	optional_ptr<FunctionData> GetBindData() const {
+		return bind_data.get();
+	}
+	ClientContext &GetClientContext() const {
+		return context;
+	}
 
 	//! Displays the files the function was called with (e.g. the globs), rather than the files they expand to
 	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;

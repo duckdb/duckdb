@@ -597,6 +597,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	// the order the filters are best applied in is learned while reading, and carries over to the next file
 	settings.reuses_local_state = true;
 	settings.reports_bytes_scanned = true;
+	settings.supports_deletion_filter = true;
 	return settings;
 }
 

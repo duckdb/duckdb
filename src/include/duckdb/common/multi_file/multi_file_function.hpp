@@ -11,6 +11,7 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -365,8 +366,13 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		return bind_data.multi_file_reader->InitializeReader(reader_data, bind_data, global_columns, global_column_ids,
-		                                                     table_filters, context, global_state);
+		auto result = bind_data.multi_file_reader->InitializeReader(
+		    reader_data, bind_data, global_columns, global_column_ids, table_filters, context, global_state);
+		if (result == ReaderInitializeType::INITIALIZED && !reader.deletion_filter) {
+			// the file list can describe the rows of a file to scan with its options
+			reader.deletion_filter = DatabaseInstance::GetDatabase(context).CreateFileFilter(context, reader);
+		}
+		return result;
 	}
 
 	static bool TrySkipFileFromFilters(ClientContext &context, const MultiFileBindData &bind_data,

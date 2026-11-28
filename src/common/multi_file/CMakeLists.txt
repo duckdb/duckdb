@@ -6,6 +6,7 @@ add_library_unity(
   multi_file_function.cpp
   multi_file_list.cpp
   multi_file_reader.cpp
+  table_function_query_filter.cpp
   table_function_multi_file.cpp
   table_function_multi_file_list.cpp
   multi_file_column_mapper.cpp

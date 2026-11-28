@@ -83,6 +83,16 @@ TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p,
 	}
 }
 
+TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p, TableFunction function_p,
+                                                       unique_ptr<FunctionData> bind_data_p,
+                                                       vector<LogicalType> return_types_p)
+    : LazyMultiFileList(&context_p.GetContext()), context(context_p), function(std::move(function_p)),
+      bind_data(std::move(bind_data_p)), return_types(std::move(return_types_p)) {
+	if (!function.function) {
+		throw BinderException("Table function %s cannot provide a file list", function.name);
+	}
+}
+
 TableFunctionMultiFileList::~TableFunctionMultiFileList() {
 }
 

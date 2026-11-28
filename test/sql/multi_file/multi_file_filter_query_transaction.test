@@ -1,0 +1,191 @@
+# name: test/sql/multi_file/multi_file_filter_query_transaction.test
+# description: Test that the filter query of a file runs in the transaction of the scan
+# group: [multi_file]
+
+require parquet
+
+statement ok
+COPY (SELECT i a FROM range(10) t(i)) TO '{TEST_DIR}/filter_query_transaction.parquet'
+
+statement ok
+CREATE TABLE del(pos BIGINT)
+
+# the rows between the deleted positions
+statement ok
+CREATE MACRO scan_without_del() AS TABLE SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT coalesce(lag(pos) OVER (ORDER BY pos) + 1, 0) AS row_start, pos AS row_end, NULL::BIT AS bits FROM del
+     UNION ALL SELECT coalesce(max(pos) + 1, 0), NULL::BIGINT, NULL::BIT FROM del'}])
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+10
+
+# an uncommitted insert of the scanning transaction
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO del VALUES (3)
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+9
+
+query I
+SELECT sum(a) FROM scan_without_del()
+----
+42
+
+# the transaction can still be committed after its filter queries ran
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+9
+
+# an uncommitted delete of the scanning transaction
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM del
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+10
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+9
+
+# what another connection has not committed is not seen
+statement ok con2
+BEGIN
+
+statement ok con2
+INSERT INTO del VALUES (5)
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+9
+
+query I con2
+SELECT count(*) FROM scan_without_del()
+----
+8
+
+statement ok con2
+ROLLBACK
+
+# temporary tables of the scanning connection
+statement ok
+CREATE TEMP TABLE temp_del AS SELECT 7::BIGINT pos
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query': 'SELECT pos, pos + 1, NULL::BIT FROM temp_del'}])
+----
+7
+
+statement ok
+BEGIN
+
+statement ok
+CREATE TEMP TABLE temp_del2 AS SELECT 8::BIGINT pos
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query': 'SELECT pos, pos + 1, NULL::BIT FROM temp_del2'}])
+----
+8
+
+statement ok
+COMMIT
+
+# a failing filter query fails the statement that scans the file
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO del VALUES (1)
+
+statement error
+SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query': 'SELECT * FROM does_not_exist'}])
+----
+Failed to read the filter query of file
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM del
+----
+1
+
+# interrupting the scan interrupts its filter query
+statement ok
+SET max_execution_time=500
+
+statement error
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query': 'SELECT 0::BIGINT, max(t1.range + t2.range)::BIGINT, NULL::BIT FROM range(1000000) t1, range(1000000) t2'}])
+----
+INTERRUPT Error
+
+statement ok
+SET max_execution_time=0
+
+query I
+SELECT count(*) FROM scan_without_del()
+----
+9
+
+# the filter query resolves names with the search path of the scanning connection, also an unqualified schema
+statement ok
+CREATE SCHEMA filter_query_s
+
+statement ok
+CREATE TABLE filter_query_s.lim AS SELECT 4::BIGINT AS n
+
+statement ok
+USE filter_query_s
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, (SELECT n FROM lim) AS row_end, NULL::BIT AS bits'}])
+----
+4
+
+statement ok
+SET search_path = 'filter_query_s'
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, (SELECT n FROM lim) AS row_end, NULL::BIT AS bits'}])
+----
+4
+
+statement ok
+ATTACH ':memory:' AS filter_query_other
+
+statement ok
+USE filter_query_other
+
+statement ok
+CREATE TABLE other_del(pos BIGINT)
+
+statement ok
+INSERT INTO other_del VALUES (4)
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, min(pos) AS row_end, NULL::BIT AS bits FROM other_del'}])
+----
+4
