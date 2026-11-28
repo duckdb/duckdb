@@ -183,8 +183,23 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
-void CSVReaderOptions::SetRFC4180(bool input) {
-	this->dialect_options.state_machine_options.strict_mode.Set(input);
+void CSVReaderOptions::SetNewlineTerminators(const vector<string> &terminators) {
+	idx_t terminator_bits = 0;
+	for (auto &terminator : terminators) {
+		if (terminator == "\\n") {
+			terminator_bits |= 1;
+		} else if (terminator == "\\r") {
+			terminator_bits |= 2;
+		} else if (terminator == "\\r\\n") {
+			terminator_bits |= 4;
+		} else {
+			throw InvalidInputException("This is not accepted as a newline: " + terminator);
+		}
+	}
+	if (terminator_bits == 0) {
+		throw InvalidInputException("NEW_LINE requires at least one line break in its list");
+	}
+	dialect_options.state_machine_options.new_line_terminators.Set(terminator_bits);
 }
 
 bool CSVReaderOptions::IgnoreErrors() const {
@@ -336,6 +351,45 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
+	} else if (loption == "escape_mode") {
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "quoted") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTED);
+		} else if (mode == "anywhere") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::ANYWHERE);
+		} else if (mode == "quotes_only") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTES_ONLY);
+		} else {
+			throw BinderException("ESCAPE_MODE must be quoted, anywhere or quotes_only");
+		}
+	} else if (loption == "embedded_quotes") {
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "none") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::NONE);
+		} else if (mode == "doubled") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::DOUBLED);
+		} else if (mode == "toggle") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::TOGGLE);
+		} else if (mode == "doubled_toggle") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::DOUBLED_TOGGLE);
+		} else {
+			throw BinderException("EMBEDDED_QUOTES must be none, doubled, toggle or doubled_toggle");
+		}
+	} else if (loption == "unterminated_quote") {
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "error") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::THROW);
+		} else if (mode == "value") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::VALUE);
+		} else if (mode == "null_at_line_end") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::NULL_AT_LINE_END);
+		} else {
+			throw BinderException("UNTERMINATED_QUOTE must be error, value or null_at_line_end");
+		}
+	} else if (loption == "ignore_extra_columns") {
+		ignore_extra_columns.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "allow_unescaped_quotes") {
+		dialect_options.state_machine_options.allow_unescaped_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -392,7 +446,15 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 	} else if (loption == "comment") {
 		SetComment(ParseString(value, loption));
 	} else if (loption == "new_line") {
-		SetNewline(ParseString(value, loption));
+		if (!write_option && value.type().id() == LogicalTypeId::LIST && !value.IsNull()) {
+			vector<string> terminators;
+			for (auto &child : ListValue::GetChildren(value)) {
+				terminators.push_back(ParseString(child, loption));
+			}
+			SetNewlineTerminators(terminators);
+		} else {
+			SetNewline(ParseString(value, loption));
+		}
 	} else if (loption == "escape") {
 		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {
@@ -414,24 +476,20 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 				auto &list_grandchild = ListType::GetChildType(list_child);
 				auto &children_ref = ListValue::GetChildren(value);
 				if (list_grandchild.id() != LogicalTypeId::VARCHAR || children_ref.size() != 1) {
-					throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+					throw BinderException("CSV Reader function option %s requires a list of possible null "
 					                      "strings (varchar) as input",
 					                      loption);
 				}
 				children = &ListValue::GetChildren(children_ref.back());
-			} else if (list_child.id() != LogicalTypeId::VARCHAR) {
-				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+			} else if (list_child.id() != LogicalTypeId::VARCHAR && !ListValue::GetChildren(value).empty()) {
+				throw BinderException("CSV Reader function option %s requires a list of possible null "
 				                      "strings (varchar) as input",
 				                      loption);
 			}
 			if (!children) {
 				children = &ListValue::GetChildren(value);
 			}
-			if (children->empty()) {
-				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
-				                      "strings (varchar) as input",
-				                      loption);
-			}
+			// an empty list means no string reads as NULL, so an empty field is an empty string
 			for (auto &child : *children) {
 				if (child.IsNull()) {
 					throw BinderException(
@@ -442,14 +500,12 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 		} else {
 			null_str.push_back(StringValue::Get(ParseString(value, loption)));
 		}
-		if (null_str.size() > 1 && write_option) {
-			throw BinderException("CSV Writer function option %s only accepts one nullstr value.", loption);
+		if (null_str.size() != 1 && write_option) {
+			throw BinderException("CSV Writer function option %s accepts exactly one nullstr value.", loption);
 		}
 
 	} else if (loption == "compression") {
 		SetCompression(ParseString(value, loption));
-	} else if (loption == "strict_mode") {
-		SetRFC4180(ParseBoolean(context, value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -469,13 +525,61 @@ bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	return was_type_manually_set[i];
 }
 
+static string EscapeModeValue(CSVEscapeMode mode) {
+	switch (mode) {
+	case CSVEscapeMode::ANYWHERE:
+		return "anywhere";
+	case CSVEscapeMode::QUOTES_ONLY:
+		return "quotes_only";
+	default:
+		return "quoted";
+	}
+}
+
+static string EmbeddedQuotesValue(CSVEmbeddedQuotes mode) {
+	switch (mode) {
+	case CSVEmbeddedQuotes::DOUBLED:
+		return "doubled";
+	case CSVEmbeddedQuotes::TOGGLE:
+		return "toggle";
+	case CSVEmbeddedQuotes::DOUBLED_TOGGLE:
+		return "doubled_toggle";
+	default:
+		return "none";
+	}
+}
+
+static string UnterminatedQuoteValue(CSVUnterminatedQuote mode) {
+	switch (mode) {
+	case CSVUnterminatedQuote::VALUE:
+		return "value";
+	case CSVUnterminatedQuote::NULL_AT_LINE_END:
+		return "null_at_line_end";
+	default:
+		return "error";
+	}
+}
+
+static string NewLineTerminatorsValue(idx_t terminators) {
+	vector<string> breaks;
+	if (terminators & 1) {
+		breaks.push_back("'\\n'");
+	}
+	if (terminators & 2) {
+		breaks.push_back("'\\r'");
+	}
+	if (terminators & 4) {
+		breaks.push_back("'\\r\\n'");
+	}
+	return "[" + StringUtil::Join(breaks, ", ") + "]";
+}
+
 string CSVReaderOptions::ToString(const String &current_file_path) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
-	auto &strict_mode = dialect_options.state_machine_options.strict_mode;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -495,8 +599,6 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// comment
 	error += FormatOptionLine("comment", comment);
-	// strict_mode
-	error += FormatOptionLine("strict_mode", strict_mode);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -509,6 +611,26 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += "sample_size = " + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
 	error += "ignore_errors = " + ignore_errors.FormatValue() + "\n  ";
+	// the parsing rule options print when the user set them
+	auto &sm_options = dialect_options.state_machine_options;
+	if (sm_options.escape_mode.IsSetByUser()) {
+		error += "escape_mode = '" + EscapeModeValue(sm_options.escape_mode.GetValue()) + "'\n  ";
+	}
+	if (sm_options.embedded_quotes.IsSetByUser()) {
+		error += "embedded_quotes = '" + EmbeddedQuotesValue(sm_options.embedded_quotes.GetValue()) + "'\n  ";
+	}
+	if (sm_options.unterminated_quote.IsSetByUser()) {
+		error += "unterminated_quote = '" + UnterminatedQuoteValue(sm_options.unterminated_quote.GetValue()) + "'\n  ";
+	}
+	if (sm_options.new_line_terminators.IsSetByUser()) {
+		error += "new_line = " + NewLineTerminatorsValue(sm_options.new_line_terminators.GetValue()) + "\n  ";
+	}
+	if (sm_options.allow_unescaped_quotes.IsSetByUser()) {
+		error += "allow_unescaped_quotes = " + sm_options.allow_unescaped_quotes.FormatValue() + "\n  ";
+	}
+	if (ignore_extra_columns.IsSetByUser()) {
+		error += "ignore_extra_columns = " + ignore_extra_columns.FormatValue() + "\n  ";
+	}
 	// all_varchar
 	error += "all_varchar = " + std::to_string(all_varchar) + "\n";
 
@@ -575,6 +697,20 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	}
 	if (rejects_limit != 0 && !store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+	}
+	{
+		// the rules a user set directly need the characters they act on
+		const auto &state_machine_options = dialect_options.state_machine_options;
+		const auto quote = state_machine_options.quote.GetValue();
+		const auto escape = state_machine_options.escape.GetValue();
+		if (state_machine_options.EscapeQuotesOnly() && (escape == '\0' || escape == quote)) {
+			throw BinderException(
+			    "ESCAPE_MODE 'quotes_only' requires an ESCAPE character other than the QUOTE character");
+		}
+		if (state_machine_options.embedded_quotes.GetValue() != CSVEmbeddedQuotes::NONE &&
+		    (quote == '\0' || quote == escape)) {
+			throw BinderException("EMBEDDED_QUOTES requires a QUOTE character other than the ESCAPE character");
+		}
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
 	if (buffer_size_option.IsSetByUser() && maximum_line_size.IsSetByUser()) {

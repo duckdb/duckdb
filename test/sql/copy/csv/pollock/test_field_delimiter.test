@@ -5,4 +5,4 @@
 statement ok
 FROM read_csv('{DATA_DIR}/csv/pollock/file_field_delimiter_0x20.csv', delim = ' ', escape = '"', quote='"', header = false, skip=1,
 columns = {'Date':'VARCHAR','TIME':'VARCHAR','Qty':'VARCHAR','PRODUCTID':'VARCHAR','Price':'VARCHAR'
-,'ProductType':'VARCHAR','ProductDescription':'VARCHAR','URL':'VARCHAR','Comments':'VARCHAR'}, auto_detect = false, strict_mode=FALSE, null_padding = true)
+,'ProductType':'VARCHAR','ProductDescription':'VARCHAR','URL':'VARCHAR','Comments':'VARCHAR'}, auto_detect = false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', null_padding = true)

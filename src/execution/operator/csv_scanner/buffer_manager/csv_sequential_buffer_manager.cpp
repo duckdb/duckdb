@@ -36,26 +36,31 @@ bool CSVSequentialBufferManager::ReadNextAndCacheIt() {
 }
 
 shared_ptr<CSVBufferHandle> CSVSequentialBufferManager::GetBuffer(const idx_t pos) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (pos == 0 && done && cached_buffers.empty()) {
-		if (is_pipe) {
-			throw InvalidInputException("Recursive CTEs are not allowed when using piped csv files");
+	shared_ptr<CSVBufferHandle> handle;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (pos == 0 && done && cached_buffers.empty()) {
+			if (is_pipe) {
+				throw InvalidInputException("Recursive CTEs are not allowed when using piped csv files");
+			}
+			// This is a recursive CTE, we have to reset out whole buffer
+			done = false;
+			file_handle->Reset();
+			Initialize();
 		}
-		// This is a recursive CTE, we have to reset out whole buffer
-		done = false;
-		file_handle->Reset();
-		Initialize();
+		while (pos >= cached_buffers.size()) {
+			if (done) {
+				return nullptr;
+			}
+			if (!ReadNextAndCacheIt()) {
+				done = true;
+			}
+		}
+		UnpinPrevious(pos);
+		handle = cached_buffers[pos]->Pin(*file_handle);
 	}
-	while (pos >= cached_buffers.size()) {
-		if (done) {
-			return nullptr;
-		}
-		if (!ReadNextAndCacheIt()) {
-			done = true;
-		}
-	}
-	UnpinPrevious(pos);
-	return cached_buffers[pos]->Pin(*file_handle);
+	RememberBufferEnd(pos, *handle);
+	return handle;
 }
 
 void CSVSequentialBufferManager::UnpinPrevious(const idx_t pos) {

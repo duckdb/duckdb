@@ -383,13 +383,14 @@ int Utf8Proc::CodepointLength(int cp) {
 	throw InternalException("invalid code point detected in Utf8Proc::CodepointLength, likely due to invalid UTF-8");
 }
 
-int32_t Utf8Proc::UTF8ToCodepoint(const char *u_input, int &sz, const size_t length) {
+bool Utf8Proc::TryUTF8ToCodepoint(const char *u_input, int &sz, const size_t length, int32_t &codepoint) {
 	// from http://www.zedwood.com/article/cpp-utf8-char-to-codepoint
 	auto u = reinterpret_cast<const unsigned char *>(u_input);
 	unsigned char u0 = u[0];
 	if (u0 <= 127) {
 		sz = 1;
-		return u0;
+		codepoint = u0;
+		return true;
 	}
 	// work out the sequence length from the lead byte and make sure the continuation bytes are present before
 	// reading them, otherwise a truncated trailing sequence reads past the end of the buffer
@@ -401,27 +402,42 @@ int32_t Utf8Proc::UTF8ToCodepoint(const char *u_input, int &sz, const size_t len
 	} else if (u0 >= 192 && u0 <= 223) {
 		needed = 2;
 	} else {
-		throw InvalidInputException("invalid lead byte detected in Utf8Proc::UTF8ToCodepoint, likely due to invalid UTF-8");
+		// an invalid lead byte
+		return false;
 	}
 	if (length < needed) {
-		throw InvalidInputException("truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint");
+		// a truncated sequence
+		return false;
 	}
-	unsigned char u1 = u[1];
-	if (needed == 2) {
-		sz = 2;
-		return (u0 - 192) * 64 + (u1 - 128);
+	int32_t result = u0 & (0x7F >> needed);
+	for (size_t i = 1; i < needed; i++) {
+		if ((u[i] & 0xC0) != 0x80) {
+			// not a continuation byte
+			return false;
+		}
+		result = (result << 6) | (u[i] & 0x3F);
 	}
-	if (u0 == 0xed && (u1 & 0xa0) == 0xa0) {
-		throw InvalidInputException("invalid code point detected in Utf8Proc::UTF8ToCodepoint (0xd800 to 0xdfff), likely due to invalid UTF-8");
+	if (result >= 0xD800 && result <= 0xDFFF) {
+		// a surrogate is not a valid code point
+		return false;
 	}
-	unsigned char u2 = u[2];
-	if (needed == 3) {
-		sz = 3;
-		return (u0 - 224) * 4096 + (u1 - 128) * 64 + (u2 - 128);
+	static constexpr int32_t MIN_CODEPOINT_FOR_LENGTH[5] {0, 0, 0x80, 0x800, 0x10000};
+	if (result < MIN_CODEPOINT_FOR_LENGTH[needed] || result > 0x10FFFF) {
+		// an overlong encoding or a code point past the Unicode range
+		return false;
 	}
-	unsigned char u3 = u[3];
-	sz = 4;
-	return (u0 - 240) * 262144 + (u1 - 128) * 4096 + (u2 - 128) * 64 + (u3 - 128);
+	sz = static_cast<int>(needed);
+	codepoint = result;
+	return true;
+}
+
+int32_t Utf8Proc::UTF8ToCodepoint(const char *u_input, int &sz, const size_t length) {
+	int32_t codepoint;
+	if (!TryUTF8ToCodepoint(u_input, sz, length, codepoint)) {
+		throw InvalidInputException(
+		    "invalid or truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint, likely due to invalid UTF-8");
+	}
+	return codepoint;
 }
 
 size_t Utf8Proc::RenderWidth(const char *s, size_t len, size_t pos) {
@@ -519,9 +535,14 @@ bool Utf8Proc::FindNextLegalUTF8(string &str) {
 			return true;
 		}
 		int codepoint_size;
-		auto codepoint =
-		    Utf8Proc::UTF8ToCodepoint(str.c_str() + last_codepoint_start, codepoint_size, str.size() - last_codepoint_start) +
-		    1;
+		int32_t decoded;
+		if (!Utf8Proc::TryUTF8ToCodepoint(str.c_str() + last_codepoint_start, codepoint_size,
+		                                  str.size() - last_codepoint_start, decoded)) {
+			// an undecodable fill from ValidUpperBound; pop it and increment the preceding one
+			str = str.substr(0, last_codepoint_start);
+			continue;
+		}
+		auto codepoint = decoded + 1;
 		if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
 			// incremented codepoint falls within surrogate range; skip to next valid character
 			codepoint = 0xE000;

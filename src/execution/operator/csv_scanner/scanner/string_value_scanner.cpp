@@ -25,6 +25,17 @@ namespace duckdb {
 
 constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 
+//! Whether a carriage return at buffer_pos ends the row on its own, a buffer end after it hides its line feed
+static bool LoneCarriageReturn(const char *buffer, const idx_t buffer_size, const idx_t buffer_pos) {
+	return buffer_pos + 1 < buffer_size && buffer[buffer_pos] == '\r' && buffer[buffer_pos + 1] != '\n';
+}
+
+//! The size of a quoted value the end of the file left open, a line break as its last byte is not part of it
+static idx_t OpenQuotedValueSize(const char *value_ptr, const idx_t size) {
+	const bool ends_in_line_break = size > 0 && (value_ptr[size - 1] == '\n' || value_ptr[size - 1] == '\r');
+	return ends_in_line_break ? size - 1 : size;
+}
+
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
@@ -34,6 +45,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
+      tolerate_extra_columns(state_machine.options.ignore_extra_columns.GetValue()),
+      allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.GetValue()),
+      allow_unterminated_quotes(state_machine.state_machine_options.UnterminatedAsValue()),
+      line_record_rows(state_machine.state_machine_options.LineRecords()),
+      embedded_quote_fields(state_machine.state_machine_options.ToggleQuotes()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -172,7 +188,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
 	if (cur_col_id >= number_of_columns) {
-		if (state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (!tolerate_extra_columns) {
 			bool error = true;
 			if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 				// we make an exception if the first over-value is null
@@ -255,17 +271,19 @@ static bool ParseDecimal(const char *value_ptr, idx_t size, const ParseTypeInfo 
 	return true;
 }
 
-void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
+void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate, bool escape_and_character) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
 	}
+	const bool policy_quoted = quoted || was_quoted;
 	if (cur_col_id >= number_of_columns) {
-		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (tolerate_extra_columns) {
 			used_unstrictness = true;
 			return;
 		}
 		bool error = true;
-		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		if (cur_col_id == number_of_columns &&
+		    ((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
@@ -287,14 +305,20 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		return;
 	}
 
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
-		// Check for the occurrence of escaped null string like \N only if strict_mode is disabled
+	if (((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
+		// an escaped null string like \N applies when the escape works outside quoted values
 		const bool check_unquoted_escaped_null =
-		    state_machine.state_machine_options.strict_mode.GetValue() == false && escaped && !quoted && size == 1;
+		    state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::ANYWHERE && escaped &&
+		    !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
-			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
-				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
+			if (state_machine.state_machine_options.UnquotedEscapes() && null_str_size[i] == 2 &&
+			    null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
+				// with the escape active the NULL string only matches as the escaped character
+				// under quotes_only that is a plain field of just the escape and the character
+				const bool escaped_character =
+				    check_unquoted_escaped_null || (escape_and_character && !policy_quoted && size == 1);
+				is_null = escaped_character && null_str_ptr[i][1] == value_ptr[0];
 			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
 				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
 			}
@@ -588,6 +612,61 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.quoted = false;
 }
 
+bool StringValueResult::IsEscapedNullString(const char *value_ptr, const idx_t size) const {
+	const auto &options = state_machine.state_machine_options;
+	if (size != 2 || quoted || was_quoted || !options.UnquotedEscapes() || value_ptr[0] != options.escape.GetValue()) {
+		return false;
+	}
+	for (idx_t i = 0; i < null_str_count; i++) {
+		if (null_str_size[i] == 2 && null_str_ptr[i][0] == value_ptr[0] && null_str_ptr[i][1] == value_ptr[1]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void StringValueResult::AddUnterminatedQuoteNull() {
+	quoted = false;
+	escaped = false;
+	was_quoted = false;
+	if (cur_col_id >= number_of_columns) {
+		if (tolerate_extra_columns) {
+			used_unstrictness = true;
+		} else {
+			// the field left open holds content beyond the declared columns
+			current_errors.Insert(TOO_MANY_COLUMNS, cur_col_id, chunk_col_id, last_position);
+			cur_col_id++;
+		}
+		return;
+	}
+	if (projecting_columns && !projected_columns[cur_col_id]) {
+		cur_col_id++;
+		return;
+	}
+	bool empty = false;
+	if (cur_col_id < state_machine.options.force_not_null.size()) {
+		empty = state_machine.options.force_not_null[cur_col_id];
+	}
+	if (empty && parse_types[chunk_col_id].type_id == LogicalTypeId::VARCHAR) {
+		static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+	} else if (empty) {
+		// a forced empty string does not convert into another type
+		current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+	} else {
+		validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
+	}
+	cur_col_id++;
+	chunk_col_id++;
+}
+
+void StringValueResult::AddOpenQuotedValue(const idx_t buffer_pos) {
+	const char *value_ptr = buffer_ptr + quoted_position + 1;
+	const idx_t length = OpenQuotedValueSize(value_ptr, buffer_pos - quoted_position - 1);
+	AddPossiblyEscapedValue(*this, buffer_pos, value_ptr, length, length == 0);
+	quoted = false;
+	last_position.buffer_pos = buffer_pos + 1;
+}
+
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
@@ -598,15 +677,24 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
-		if (result.cur_col_id >= result.number_of_columns &&
-		    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 			result.used_unstrictness = true;
 			return;
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
-			// If it's an escaped value we have to remove all the escapes, this is not really great
-			// If we are going to escape, this vector must be a varchar vector
-			if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+			const auto &sm_opts = result.state_machine.dialect_options.state_machine_options;
+			if (sm_opts.ToggleQuotes()) {
+				// normalize the raw bytes first and convert the result into the column's type as any plain value
+				auto value = StringValueScanner::ResolveEmbeddedQuotes(
+				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
+				    sm_opts.delimiter.GetValue(), sm_opts.escape_mode.GetValue(), sm_opts.DoubledQuotes(),
+				    result.units_before_field, result.value_scratch);
+				result.AddValueToVector(value.GetData(), value.GetSize(), true,
+				                        sm_opts.EscapeAndCharacter(value_ptr, length));
+			} else if (result.IsEscapedNullString(value_ptr, length)) {
+				result.AddValueToVector(value_ptr + 1, 1, false, sm_opts.EscapeAndCharacter(value_ptr, length));
+			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
 				result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id, result.last_position);
 				if (!result.state_machine.options.IgnoreErrors()) {
 					// We have to write the cast error message.
@@ -622,11 +710,11 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				result.chunk_col_id++;
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
-				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
-				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
-				    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-				    result.parse_chunk.data[result.chunk_col_id]);
-				result.AddValueToVector(value.GetData(), value.GetSize());
+				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
+				    sm_opts.EscapeWorksIn(result.quoted), !result.quoted && sm_opts.EscapeQuotesOnly(),
+				    sm_opts.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
+				result.AddValueToVector(value.GetData(), value.GetSize(), false,
+				                        sm_opts.EscapeAndCharacter(value_ptr, length));
 			}
 		}
 	} else {
@@ -639,6 +727,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 	}
 	result.escaped = false;
+	result.was_quoted = false;
 }
 
 inline idx_t StringValueResult::HandleMultiDelimiter(const idx_t buffer_pos) const {
@@ -662,6 +751,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
+	if (result.embedded_quote_fields) {
+		result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+		                                   result.HandleMultiDelimiter(buffer_pos));
+	}
 	if (result.quoted) {
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
@@ -670,6 +763,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
+	}
+	if (result.embedded_quote_fields) {
+		result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+		                              result.HandleMultiDelimiter(buffer_pos));
 	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
@@ -874,6 +971,7 @@ void StringValueResult::StoreLinePosition() {
 }
 
 bool StringValueResult::AddRowInternal() {
+	units_before_field = 0;
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
 	current_line_position.begin = current_line_position.end;
@@ -966,8 +1064,7 @@ bool StringValueResult::AddRowInternal() {
 }
 
 void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
-	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
-	    states.states[1] != CSVState::RECORD_SEPARATOR) {
+	if (states.IsCarriageReturn() && !LoneCarriageReturn(buffer_ptr, buffer_size, buffer_pos)) {
 		last_position.buffer_pos = buffer_pos + 2;
 	} else {
 		last_position.buffer_pos = buffer_pos + 1;
@@ -977,8 +1074,20 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.quoted) {
-			AddQuotedValue(result, buffer_pos);
+		if (result.line_record_rows && result.RecordEndsInsideQuotes()) {
+			// the line break ended the record inside an open quote
+			result.AddUnterminatedQuoteNull();
+		} else if (result.quoted) {
+			if (result.embedded_quote_fields) {
+				result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+				                                   buffer_pos - result.last_position.buffer_pos);
+			}
+			if (result.quoted) {
+				AddQuotedValue(result, buffer_pos);
+			} else {
+				AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
+				                        buffer_pos - result.last_position.buffer_pos, false);
+			}
 		} else {
 			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
@@ -1004,7 +1113,7 @@ bool StringValueResult::AddRowWithoutValue(StringValueResult &result, const idx_
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	if (result.quoted) {
+	if (result.quoted || result.FileEndsInsideQuotes()) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	} else {
 		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
@@ -1020,11 +1129,19 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	}
 }
 
+bool StringValueResult::CarriageReturnPair() const {
+	if (!states.IsCarriageReturn()) {
+		return false;
+	}
+	// the buffer of the result lags behind the iterator while a value that spans two buffers is read
+	auto &buffer = *buffer_handles.at(iterator.pos.buffer_idx);
+	return !LoneCarriageReturn(buffer.Ptr(), buffer.actual_size, iterator.pos.buffer_pos);
+}
+
 void StringValueResult::StartLineAfterEmptyLine() {
 	// The empty lines before a row are not part of its size: the next line starts at the last byte of this line break
 	idx_t line_break_pos = iterator.pos.buffer_pos;
-	if (states.IsCarriageReturn() &&
-	    state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (CarriageReturnPair()) {
 		line_break_pos++;
 	}
 	current_line_position.begin = current_line_position.end;
@@ -1034,8 +1151,7 @@ void StringValueResult::StartLineAfterEmptyLine() {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos + 1, result.buffer_size};
-	if (result.states.IsCarriageReturn() &&
-	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (result.CarriageReturnPair()) {
 		result.last_position.buffer_pos++;
 	}
 	result.StartLineAfterEmptyLine();
@@ -1335,11 +1451,16 @@ void StringValueScanner::ProcessExtraRow() {
 				lines_read++;
 				return;
 			}
-			lines_read++;
+			// the line feed closes the pair of the carriage return that ended the row
 			iterator.pos.buffer_pos++;
+			if (state_machine->transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::STANDARD)] ==
+			    CSVState::RECORD_SEPARATOR) {
+				// the row behind it is the next scanner's when a line feed of its own ends a row
+				return;
+			}
 			break;
 		case CSVState::CARRIAGE_RETURN:
-			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
+			if (states.states[0] != CSVState::RECORD_SEPARATOR && states.states[0] != CSVState::CARRIAGE_RETURN) {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
@@ -1360,12 +1481,17 @@ void StringValueScanner::ProcessExtraRow() {
 			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::QUOTED:
-			if (states.states[0] == CSVState::UNQUOTED) {
+		case CSVState::QUOTED_NO_FIELD:
+			if (states.states[0] == CSVState::FIELD_START) {
+				// the inert escapes before the opening quote are not part of the quoted value
+				result.escaped = false;
+			}
+			if (states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::UNQUOTED_IN_FIELD) {
 				result.SetEscaped(result);
 			}
 			result.SetQuoted(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
-			while (iterator.pos.buffer_pos < to_pos - 1 &&
+			while (states.states[1] == CSVState::QUOTED && iterator.pos.buffer_pos < to_pos - 1 &&
 			       state_machine->transition_array
 			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])]) {
 				iterator.pos.buffer_pos++;
@@ -1374,6 +1500,9 @@ void StringValueScanner::ProcessExtraRow() {
 		case CSVState::ESCAPE:
 		case CSVState::UNQUOTED_ESCAPE:
 		case CSVState::ESCAPED_RETURN:
+		case CSVState::FIELD_START:
+		case CSVState::FIELD_QUOTE:
+		case CSVState::ESCAPE_NO_FIELD:
 			result.SetEscaped(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1385,7 +1514,8 @@ void StringValueScanner::ProcessExtraRow() {
 				iterator.pos.buffer_pos++;
 			}
 			break;
-		case CSVState::UNQUOTED: {
+		case CSVState::UNQUOTED:
+		case CSVState::UNQUOTED_IN_FIELD: {
 			result.SetUnquoted(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1411,51 +1541,154 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
-                                          Vector &vector) {
-	// Figure out the exact size
-	idx_t str_pos = 0;
-	bool just_escaped = false;
-	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
-		if (str_ptr[cur_pos] == escape && !just_escaped) {
-			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !strict_mode) {
-				str_pos++;
-			}
-			just_escaped = false;
-		} else {
-			just_escaped = false;
-			str_pos++;
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool escape_works,
+                                          bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector) {
+	idx_t start = 0;
+	if (escape_inert_at_field_start) {
+		// every escape before the field's first content is inert and drops without escaping anything
+		while (start < end && str_ptr[start] == escape) {
+			start++;
 		}
 	}
-
-	auto removed_escapes = StringVector::EmptyString(vector, str_pos);
+	auto removed_escapes = StringVector::EmptyString(vector, end - start);
 	auto removed_escapes_ptr = removed_escapes.GetDataWriteable();
-	// Allocate string and copy it
-	str_pos = 0;
-	just_escaped = false;
-	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
+	idx_t str_pos = 0;
+	bool just_escaped = false;
+	for (idx_t cur_pos = start; cur_pos < end; cur_pos++) {
 		const char c = str_ptr[cur_pos];
-		if (c == escape && !just_escaped) {
+		if (escape_works && c == escape && !just_escaped) {
 			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !strict_mode) {
-				removed_escapes_ptr[str_pos++] = c;
+		} else if (c == quote) {
+			if (doubled_quotes && !just_escaped && cur_pos + 1 < end && str_ptr[cur_pos + 1] == quote) {
+				// a doubled quote is one quote
+				cur_pos++;
 			}
+			removed_escapes_ptr[str_pos++] = c;
 			just_escaped = false;
 		} else {
 			just_escaped = false;
 			removed_escapes_ptr[str_pos++] = c;
 		}
 	}
-	removed_escapes.Finalize();
+	removed_escapes.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(str_pos), end - start);
 	return removed_escapes;
 }
 
+static bool IsUnicodeWhitespace(int32_t code_point) {
+	// Java's isWhitespace, the space separators except the non breaking ones plus the line and paragraph separators
+	return (code_point >= 0x09 && code_point <= 0x0D) || code_point == 0x20 ||
+	       (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x1680 ||
+	       (code_point >= 0x2000 && code_point <= 0x200A && code_point != 0x2007) || code_point == 0x2028 ||
+	       code_point == 0x2029 || code_point == 0x205F || code_point == 0x3000;
+}
+
+string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
+                                                   const string &separator, CSVEscapeMode escape_mode,
+                                                   bool doubled_quotes, idx_t units_before, vector<char> &scratch) {
+	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
+	auto prev_is_separator = [&](idx_t pos) {
+		return pos >= separator.size() &&
+		       memcmp(str_ptr + pos - separator.size(), separator.data(), separator.size()) == 0;
+	};
+	auto next_is_separator = [&](idx_t pos) {
+		return pos + 1 + separator.size() <= size && memcmp(str_ptr + pos + 1, separator.data(), separator.size()) == 0;
+	};
+	if (size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException("Cannot create a string of size: '%d', the maximum supported string size is: '%d'",
+		                          size, string_t::MAX_STRING_SIZE);
+	}
+	// the normalized text is at most as long as the raw bytes and is copied or converted before the next field
+	if (scratch.size() < size) {
+		scratch.resize(size);
+	}
+	auto result_ptr = scratch.data();
+	idx_t result_pos = 0;
+	idx_t units = units_before;
+	auto add_units = [&units](idx_t count) {
+		units = units < 3 ? units + count : units;
+	};
+	bool in_quotes = false;
+	bool in_field = false;
+	bool all_whitespace = true;
+	bool just_escaped = false;
+	for (idx_t pos = 0; pos < size;) {
+		const char c = str_ptr[pos];
+		const bool has_next = pos + 1 < size;
+		if (c == escape && escape != '\0' && !just_escaped) {
+			if (escape_mode == CSVEscapeMode::QUOTES_ONLY) {
+				if ((in_quotes || in_field) && has_next && (str_ptr[pos + 1] == quote || str_ptr[pos + 1] == escape)) {
+					// an escaped quote or escape character, while any other escape is consumed without effect
+					result_ptr[result_pos++] = str_ptr[pos + 1];
+					all_whitespace = false;
+					add_units(2);
+					pos += 2;
+					continue;
+				}
+				add_units(1);
+				pos++;
+				continue;
+			}
+			if (escape_mode == CSVEscapeMode::ANYWHERE || in_quotes) {
+				// the escape consumes itself and keeps the next character as plain content
+				just_escaped = true;
+				add_units(1);
+				pos++;
+				continue;
+			}
+			// outside quotes the quoted rule reads the escape as plain content
+		}
+		if (c == quote && !just_escaped) {
+			if (doubled_quotes && (in_quotes || in_field) && has_next && str_ptr[pos + 1] == quote) {
+				// a doubled quote is one quote
+				result_ptr[result_pos++] = quote;
+				all_whitespace = false;
+				in_field = !in_field;
+				add_units(2);
+				pos += 2;
+				continue;
+			}
+			// a lone quote toggles the quote state and is a kept literal away from the line start and separators
+			if (units > 2 && pos > 0 && !prev_is_separator(pos) && has_next && !next_is_separator(pos)) {
+				if (all_whitespace && result_pos > 0) {
+					// a kept literal discards a field of only whitespace before it
+					result_pos = 0;
+				} else {
+					result_ptr[result_pos++] = quote;
+					all_whitespace = false;
+				}
+			}
+			in_quotes = !in_quotes;
+			in_field = !in_field;
+			add_units(1);
+			pos++;
+			continue;
+		}
+		// a plain character sets the field flag and counts one UTF-16 unit, or two beyond the basic plane
+		just_escaped = false;
+		int decoded_len = 1;
+		int32_t code_point = -1;
+		if (!Utf8Proc::TryUTF8ToCodepoint(str_ptr + pos, decoded_len, size - pos, code_point)) {
+			// an invalid byte stands alone, as the field may hold any bytes
+			decoded_len = 1;
+			code_point = -1;
+		}
+		const auto char_len = UnsafeNumericCast<idx_t>(decoded_len);
+		all_whitespace = all_whitespace && IsUnicodeWhitespace(code_point);
+		for (idx_t i = 0; i < char_len; i++) {
+			result_ptr[result_pos++] = str_ptr[pos + i];
+		}
+		in_field = true;
+		add_units(code_point >= 0x10000 ? 2 : 1);
+		pos += char_len;
+	}
+	return string_t(scratch.data(), UnsafeNumericCast<uint32_t>(result_pos));
+}
+
 void StringValueScanner::ProcessOverBufferValue() {
+	// a carriage return that ended the previous buffer stays the current state, its line feed may start this one
+	const bool carriage_return_pending = states.IsCarriageReturn();
 	// Process first string
-	if (result.last_position.buffer_pos != previous_buffer_handle->actual_size) {
+	if (result.last_position.buffer_pos < previous_buffer_handle->actual_size) {
 		states.Initialize();
 	}
 
@@ -1463,6 +1696,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	idx_t j = 0;
 	result.quoted = false;
+	// a quote inside a field marks its value as escaped without an escape character as well
+	const bool has_escape = result.state_machine.dialect_options.state_machine_options.escape != '\0';
 	for (idx_t i = result.last_position.buffer_pos; i < previous_buffer_handle->actual_size; i++) {
 		state_machine->Transition(states, previous_buffer[i]);
 		if (states.EmptyLine() || states.IsCurrentNewRow()) {
@@ -1473,13 +1708,17 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else if (!result.comment) {
 			over_buffer_string += previous_buffer[i];
 		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
+		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
 		}
 		if (states.IsUnquoted()) {
 			result.SetUnquoted(result);
 		}
-		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
+		if (states.IsEscaped() && (has_escape || states.IsState(CSVState::FIELD_QUOTE))) {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
@@ -1490,15 +1729,66 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		j++;
 	}
-	if (over_buffer_string.empty() &&
-	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (over_buffer_string.empty() && carriage_return_pending) {
 		if (!iterator.IsBoundarySet()) {
 			// Skip the line feed of a \r\n that the buffer end split, a line feed of its own ends a line
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
 			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
-				iterator.pos.buffer_pos++;
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+				return;
 			}
 		} else {
+			const auto &transitions = state_machine->transition_array;
+			const bool line_feed_ends_row =
+			    transitions[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::STANDARD)] ==
+			    CSVState::RECORD_SEPARATOR;
+			const bool carriage_return_ends_row =
+			    transitions[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] ==
+			    CSVState::CARRIAGE_RETURN;
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				// the line feed closes the pair the buffer end split
+				const CSVStates before_line_feed = states;
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				const bool at_end = iterator.pos.buffer_pos >= cur_buffer_handle->actual_size;
+				if (line_feed_ends_row || at_end) {
+					// the rows behind it are the next scanner's
+					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+					return;
+				}
+				const bool empty_line_follows =
+				    buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' &&
+				    (carriage_return_ends_row || (iterator.pos.buffer_pos + 1 < cur_buffer_handle->actual_size &&
+				                                  buffer_handle_ptr[iterator.pos.buffer_pos + 1] == '\n'));
+				if (empty_line_follows) {
+					// an empty line behind the pair is read here, the next scanner starts behind the first row end
+					state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+					result.EmptyLine(result, iterator.pos.buffer_pos);
+					lines_read++;
+					iterator.pos.buffer_pos++;
+					if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+					    buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+						state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+					}
+					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+					return;
+				}
+				// anything else behind the pair is read as before, from the line feed on
+				states = before_line_feed;
+				iterator.pos.buffer_pos--;
+			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' && carriage_return_ends_row) {
+				// a carriage return right behind the one that ended the previous buffer is an empty line
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				lines_read++;
+				iterator.pos.buffer_pos++;
+				if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+				    buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+					state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				}
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+				return;
+			}
 			idx_t pre_carry_pos = iterator.pos.buffer_pos;
 			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
 			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
@@ -1541,18 +1831,17 @@ void StringValueScanner::ProcessOverBufferValue() {
 	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		if (states.EmptyLine()) {
-			if (state_machine->dialect_options.num_cols == 1) {
-				break;
-			}
-			if (result.cur_col_id == 0) {
-				result.StartLineAfterEmptyLine();
-			}
-			continue;
+			// an empty line at the start of the buffer ends the value read over the buffers
+			break;
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
 		} else if (!result.comment && !states.IsComment()) {
 			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
+		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1560,7 +1849,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsComment()) {
 			result.SetComment(result, j);
 		}
-		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
+		if (states.IsEscaped() && (has_escape || states.IsState(CSVState::FIELD_QUOTE))) {
 			result.escaped = true;
 		}
 		if (states.IsInvalid()) {
@@ -1568,32 +1857,50 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		j++;
 	}
-	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-	    states.IsQuotedCurrent() && state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-		// the file ended inside a quoted value: record that before the value itself is added
+	const bool file_ended =
+	    cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size;
+	if (file_ended && result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes &&
+	    !result.RecordEndsInsideQuotes()) {
+		// the file ended inside a quoted value, recorded before the value itself is added, while line records
+		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
-	// With a single column, a record separator read right after a state reset is an empty line only when it does not
-	// end an open row or comment
-	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
-	const bool empty_line = single_column_empty_line && result.cur_col_id == 0 && !result.comment;
+	// a record separator read right after a state reset is an empty line only when it does not end an open row or
+	// comment
+	const bool leading_empty_line = states.EmptyLine();
+	const bool empty_line = leading_empty_line && result.cur_col_id == 0 && !result.comment;
 	bool skip_value = false;
-	if (result.projecting_columns) {
+	if (result.projecting_columns && !leading_empty_line) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
 			result.cur_col_id++;
 			skip_value = true;
 		}
 	}
-	if (!skip_value) {
+	if (!skip_value && !result.comment && result.line_record_rows && result.RecordEndsInsideQuotes()) {
+		// the line break ended the record inside an open quote
+		result.AddUnterminatedQuoteNull();
+	} else if (!skip_value) {
 		string_t value;
 		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;
 		bool removed_extra_delimiter_bytes = false;
+		if (result.embedded_quote_fields && !result.comment && over_buffer_string.size() >= extra_delimiter_bytes) {
+			result.DemoteUnenclosedQuotedValue(over_buffer_string.c_str(),
+			                                   over_buffer_string.size() - extra_delimiter_bytes);
+		}
+		bool cast_errored = false;
 		if (result.quoted && !result.comment) {
-			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
-			while (length > 0 && result.ignore_empty_values &&
-			       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
-				length--;
+			idx_t length;
+			if (file_ended && result.FileEndsInOpenValue()) {
+				// the value left open has no closing quote to remove
+				length = OpenQuotedValueSize(over_buffer_string.c_str() + result.quoted_position,
+				                             over_buffer_string.size() - result.quoted_position);
+			} else {
+				length = over_buffer_string.size() - 1 - result.quoted_position;
+				while (length > 0 && result.ignore_empty_values &&
+				       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
+					length--;
+				}
 			}
 			// remove the extra delimiter bytes before removing escapes, which can change the length of the value
 			if (extra_delimiter_bytes > length) {
@@ -1604,8 +1911,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			removed_extra_delimiter_bytes = true;
 			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
@@ -1624,23 +1930,39 @@ void StringValueScanner::ProcessOverBufferValue() {
 							FullLinePosition::SanitizeError(error_string);
 							result.current_errors.ModifyErrorMessageOfLastError(error_string);
 						}
-						return;
+						result.cur_col_id++;
+						result.chunk_col_id++;
+						cast_errored = true;
+					} else {
+						value = RemoveEscape(
+						    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						    state_machine->dialect_options.state_machine_options.EscapeWorksIn(result.quoted), false,
+						    result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
+						    result.parse_chunk.data[result.chunk_col_id]);
 					}
-					value = RemoveEscape(
-					    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					    state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
+					if (sm_options.ToggleQuotes()) {
+						// normalize the raw bytes without the trailing delimiter prefix, through the scratch heap
+						value = ResolveEmbeddedQuotes(
+						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
+						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
+						    sm_options.escape_mode.GetValue(), sm_options.DoubledQuotes(), result.units_before_field,
+						    result.value_scratch);
+						removed_extra_delimiter_bytes = true;
+					} else if (result.IsEscapedNullString(over_buffer_string.c_str(),
+					                                      over_buffer_string.size() - extra_delimiter_bytes)) {
+						value = string_t(over_buffer_string.c_str() + 1,
+						                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1));
+					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
@@ -1655,22 +1977,25 @@ void StringValueScanner::ProcessOverBufferValue() {
 							FullLinePosition::SanitizeError(error_string);
 							result.current_errors.ModifyErrorMessageOfLastError(error_string);
 						}
-						return;
+						result.cur_col_id++;
+						result.chunk_col_id++;
+						cast_errored = true;
+					} else {
+						value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
+						                     sm_options.EscapeWorksIn(result.quoted),
+						                     !result.quoted && sm_options.EscapeQuotesOnly(),
+						                     sm_options.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 					}
-					value =
-					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
-		if (single_column_empty_line) {
+		if (leading_empty_line) {
 			if (empty_line) {
 				result.EmptyLine(result, iterator.pos.buffer_pos);
+				lines_read++;
 			}
-		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
+		} else if (!cast_errored && !states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
 				if (extra_delimiter_bytes > value_size) {
@@ -1679,12 +2004,24 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 				value_size -= extra_delimiter_bytes;
 			}
-			result.AddValueToVector(value.GetData(), value_size, true);
+			const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
+			result.AddValueToVector(value.GetData(), value_size, true,
+			                        sm_options.EscapeAndCharacter(over_buffer_string.c_str(),
+			                                                      over_buffer_string.size() - extra_delimiter_bytes));
 		}
 	} else if (empty_line) {
 		result.EmptyLine(result, iterator.pos.buffer_pos);
+		lines_read++;
 	}
 
+	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
+	const idx_t tail_extra_bytes = states.IsDelimiter() && !delimiter_tail.empty() ? delimiter_tail.size() - 1 : 0;
+	// an empty line has no field to count
+	if (result.embedded_quote_fields && !empty_line) {
+		result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
+		                                                              ? over_buffer_string.size() - tail_extra_bytes
+		                                                              : 0);
+	}
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
@@ -1698,7 +2035,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		result.added_last_line = true;
 	}
 	if (states.IsCarriageReturn() &&
-	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	    !LoneCarriageReturn(buffer_handle_ptr, cur_buffer_handle->actual_size, iterator.pos.buffer_pos)) {
 		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos + 1, result.buffer_size};
 	} else {
 		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos, result.buffer_size};
@@ -1706,6 +2043,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	// Be sure to reset the quoted and escaped variables
 	result.quoted = false;
 	result.escaped = false;
+	result.was_quoted = false;
 }
 
 StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
@@ -1761,9 +2099,8 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
 		lines_read++;
-	} else if (states.IsQuotedCurrent() &&
-	           state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-		// Unterminated quote
+	} else if (result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+		// Unterminated quote, while line records read the field left open as NULL instead
 		LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 		result.current_line_position.begin = result.current_line_position.end;
 		result.current_line_position.end = current_line_start;
@@ -1780,10 +2117,13 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
 		} else {
-			if (result.quoted && states.IsDelimiterBytes() &&
-			    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			if (result.quoted && states.IsDelimiterBytes() && !result.allow_unterminated_quotes) {
 				result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 				                             result.last_position);
+			}
+			if (result.FileEndsInOpenValue()) {
+				// AddRow then only ends the row
+				result.AddOpenQuotedValue(previous_buffer_handle->actual_size);
 			}
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
@@ -1848,14 +2188,27 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 }
 
 bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
-                                        bool &quoted) const {
+                                        bool &quoted, bool exact) const {
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
 	bool first_column = true;
+	// a carriage return before the start is not a row end of this search
+	bool first_byte = true;
+	const auto carriage_return = static_cast<uint8_t>(CSVState::CARRIAGE_RETURN);
+	const bool lone_carriage_returns =
+	    state_machine_strict->transition_array[static_cast<uint8_t>('\r')][carriage_return] ==
+	    CSVState::CARRIAGE_RETURN;
 	const idx_t to_pos = current_iterator.GetEndPos();
 	skipper.SetBuffer(*cur_buffer_handle);
 	while (current_iterator.pos.buffer_pos < to_pos) {
 		state_machine_strict->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
+		if (lone_carriage_returns && !first_byte && current_state.WasState(CSVState::CARRIAGE_RETURN) &&
+		    !current_state.IsState(CSVState::RECORD_SEPARATOR) && !current_state.IsInvalid()) {
+			// a carriage return of its own ended the row, the byte after it starts the next line
+			current_iterator.pos.buffer_pos--;
+			return true;
+		}
+		first_byte = false;
 		if (current_state.IsState(CSVState::STANDARD) || current_state.IsState(CSVState::STANDARD_NEWLINE)) {
 			skipper.SkipToStop(state_machine_strict->transition_array.skip_standard, to_pos,
 			                   current_iterator.pos.buffer_pos);
@@ -1878,11 +2231,13 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 		if (current_state.IsState(until_state)) {
 			return true;
 		}
-		if (current_state.IsState(CSVState::INVALID)) {
+		if (current_state.IsState(CSVState::INVALID) && !exact) {
+			// from an exact state the row itself is broken, the scanner before reads on to its end as well
 			return false;
 		}
 	}
-	return false;
+	// a carriage return as the last byte of the range ends the row where a lone carriage return is one
+	return lone_carriage_returns && !first_byte && current_state.IsState(CSVState::CARRIAGE_RETURN);
 }
 
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
@@ -1942,12 +2297,12 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 	return true;
 }
 
-ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const {
+ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos, bool exact) const {
 	auto current_iterator = iterator;
 	current_iterator.SetStart(start_pos);
 	current_iterator.SetEnd(end_pos);
 	bool quoted = false;
-	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR, current_iterator, quoted)) {
+	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR, current_iterator, quoted, exact)) {
 		auto iterator_start = current_iterator;
 		idx_t current_pos = current_iterator.pos.buffer_pos;
 		current_iterator.SetEnd(iterator.GetEndPos());
@@ -1962,6 +2317,34 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 	        quoted};
 }
 
+bool StringValueScanner::BytesBeforeStart(CSVBufferEnd &before_start) const {
+	const idx_t buffer_idx = iterator.pos.buffer_idx;
+	const idx_t buffer_pos = iterator.pos.buffer_pos;
+	if (buffer_pos == 0) {
+		return buffer_idx > 0 && buffer_manager->GetBufferEnd(buffer_idx - 1, before_start) && before_start.known;
+	}
+	if (buffer_manager->GetRangeStart(buffer_idx, buffer_pos, before_start)) {
+		before_start.last_byte = buffer_handle_ptr[buffer_pos - 1];
+		return true;
+	}
+	before_start = CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, buffer_pos,
+	                                               buffer_manager->ScanStartIn(buffer_idx), *state_machine);
+	if (!before_start.exact && buffer_idx > 0) {
+		if (!before_start.known && buffer_manager->GetRangeStart(buffer_idx, buffer_pos, before_start, true)) {
+			// escapes that settle nothing, the buffer is read on from an exact end before it
+			before_start.last_byte = buffer_handle_ptr[buffer_pos - 1];
+			return true;
+		}
+		// the line of the bytes starts in the buffer before, they are read on from its end
+		CSVBufferEnd previous;
+		if (buffer_manager->GetBufferEnd(buffer_idx - 1, previous) && previous.exact) {
+			before_start =
+			    CSVBufferManager::ReadBufferEnd(buffer_handle_ptr, 0, buffer_pos, previous.state, *state_machine);
+		}
+	}
+	return before_start.known;
+}
+
 void StringValueScanner::SetStart() {
 	start_pos = iterator.GetGlobalCurrentPos();
 	if (iterator.first_one) {
@@ -1974,18 +2357,89 @@ void StringValueScanner::SetStart() {
 		// We need to initialize our strict state machine
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
-		// To set the state machine to be strict we ensure that strict_mode is set to true
-		if (!state_options.strict_mode.IsSetByUser()) {
-			state_options.strict_mode = true;
+		// the boundary search uses the strict reading rules unless set otherwise
+		if (!state_options.escape_mode.IsSetByUser()) {
+			state_options.escape_mode = CSVEscapeMode::QUOTED;
+		}
+		if (!state_options.new_line_terminators.IsSetByUser()) {
+			state_options.new_line_terminators = 0;
+		}
+		if (!state_options.allow_unescaped_quotes.IsSetByUser()) {
+			state_options.allow_unescaped_quotes = false;
 		}
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
 	}
+	const auto &transitions = state_machine_strict->transition_array;
+	auto unquoted_start = CSVState::STANDARD_NEWLINE;
+	bool exact_start = false;
+	CSVBufferEnd before_start;
+	if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size && BytesBeforeStart(before_start)) {
+		// the escapes and the carriage return right before the start decide how its first byte reads, at a buffer
+		// start they ended the previous buffer
+		exact_start = before_start.exact;
+		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
+		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
+		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
+		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
+		if (exact_start && !after_carriage_return) {
+			// the search starts in the exact state, a row start as the row end state
+			switch (before_start.state) {
+			case CSVState::RECORD_SEPARATOR:
+			case CSVState::NOT_SET:
+			case CSVState::STANDARD_NEWLINE:
+				unquoted_start = CSVState::RECORD_SEPARATOR;
+				break;
+			default:
+				unquoted_start = before_start.state;
+				break;
+			}
+		} else {
+			// the state those bytes leave an unquoted value in
+			CSVState before;
+			switch (before_start.state) {
+			case CSVState::STANDARD:
+			case CSVState::STANDARD_NEWLINE:
+			case CSVState::RECORD_SEPARATOR:
+			case CSVState::CARRIAGE_RETURN:
+			case CSVState::NOT_SET:
+			case CSVState::INVALID:
+				before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+				break;
+			default:
+				// the rules of the exact state read the line feed, data behind an escape or inside quotes
+				before = before_start.state;
+				break;
+			}
+			switch (before) {
+			case CSVState::CARRIAGE_RETURN:
+				if (!ends_row) {
+					// the scanner before this one reads on past the pair, the search starts behind its line feed
+					iterator.pos.buffer_pos++;
+					unquoted_start = CSVState::RECORD_SEPARATOR;
+				} else {
+					unquoted_start = CSVState::CARRIAGE_RETURN;
+				}
+				break;
+			case CSVState::STANDARD:
+				if (leading_line_feed && ends_row) {
+					// the line feed ends the row of the scanner before this one or an empty line
+					unquoted_start = CSVState::STANDARD;
+				}
+				break;
+			case CSVState::INVALID:
+				break;
+			default:
+				unquoted_start = before;
+				break;
+			}
+		}
+	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
-	ValidRowInfo best_row = TryRow(CSVState::STANDARD_NEWLINE, iterator.pos.buffer_pos, iterator.GetEndPos());
-	// 2. We are in the middle of a quoted value
-	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos(), exact_start);
+	// 2. We are in the middle of a quoted value, a search from an exact state needs no guess
+	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' && !exact_start) {
 		idx_t end_pos = iterator.GetEndPos();
 		if (best_row.is_valid && best_row.end_buffer_idx == iterator.pos.buffer_idx) {
 			// If we got a valid row from the standard state, we limit our search up to that.
@@ -2003,7 +2457,8 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	// 3. We are in an escaped value
-	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (!best_row.is_valid && !exact_start &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
 		if (escape_row.is_valid) {
 			best_row = escape_row;
@@ -2021,7 +2476,7 @@ void StringValueScanner::SetStart() {
 			iterator.done = true;
 		} else {
 			bool mock;
-			if (!SkipUntilState(CSVState::STANDARD_NEWLINE, CSVState::RECORD_SEPARATOR, iterator, mock)) {
+			if (!SkipUntilState(unquoted_start, CSVState::RECORD_SEPARATOR, iterator, mock, exact_start)) {
 				iterator.CheckIfDone();
 			}
 		}
@@ -2091,7 +2546,8 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 	const bool found_error =
 	    result.current_errors.HasErrorType(UNTERMINATED_QUOTES) || result.current_errors.HasErrorType(INVALID_STATE);
 	if (states.IsQuotedCurrent() && !found_error) {
-		if (!state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+		if (result.allow_unterminated_quotes || result.RecordEndsInsideQuotes()) {
+			// line records read the field left open at the end of the file as NULL instead
 			used_unstrictness = true;
 		} else if (cur_buffer_handle) {
 			// a row still open in a quoted state after its buffer has unterminated quotes; once the file has ended,

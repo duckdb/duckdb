@@ -118,7 +118,13 @@ enum class BufferedIndexReplay : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
+enum class CSVEmbeddedQuotes : uint8_t;
+
+enum class CSVEscapeMode : uint8_t;
+
 enum class CSVState : uint8_t;
+
+enum class CSVUnterminatedQuote : uint8_t;
 
 enum class CTEExecutionMode : uint8_t;
 
@@ -861,7 +867,16 @@ template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
 
 template<>
+const char* EnumUtil::ToChars<CSVEmbeddedQuotes>(CSVEmbeddedQuotes value);
+
+template<>
+const char* EnumUtil::ToChars<CSVEscapeMode>(CSVEscapeMode value);
+
+template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value);
+
+template<>
+const char* EnumUtil::ToChars<CSVUnterminatedQuote>(CSVUnterminatedQuote value);
 
 template<>
 const char* EnumUtil::ToChars<CTEExecutionMode>(CTEExecutionMode value);
@@ -1909,7 +1924,16 @@ template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
 
 template<>
+CSVEmbeddedQuotes EnumUtil::FromString<CSVEmbeddedQuotes>(const char *value);
+
+template<>
+CSVEscapeMode EnumUtil::FromString<CSVEscapeMode>(const char *value);
+
+template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value);
+
+template<>
+CSVUnterminatedQuote EnumUtil::FromString<CSVUnterminatedQuote>(const char *value);
 
 template<>
 CTEExecutionMode EnumUtil::FromString<CTEExecutionMode>(const char *value);

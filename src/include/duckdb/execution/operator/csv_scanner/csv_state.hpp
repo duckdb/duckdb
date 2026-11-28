@@ -34,6 +34,13 @@ enum class CSVState : uint8_t {
 	STANDARD_NEWLINE = 15, //! State used for figuring out a new line.
 	UNQUOTED_ESCAPE = 16,  //! State when encountering an escape character (e.g., \) in an unquoted field
 	ESCAPED_RETURN = 17, //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
-	MAYBE_QUOTED = 18    //! We are potentially in a quoted value or the end of an unquoted value
+	MAYBE_QUOTED = 18,   //! We are potentially in a quoted value or the end of an unquoted value
+	FIELD_START = 19,    //! At the start of a field after an inert escape under escape_mode 'quotes_only'
+	FIELD_QUOTE = 20,    //! A quote inside an unquoted field, under doubled_quotes a doubled quote is one quote
+	//! The NO_FIELD and IN_FIELD states track the embedded quote field flag, flipped by every quote event
+	STANDARD_NO_FIELD = 21, //! Outside quotes with the field flag off, so escapes are inert and a quote opens quotes
+	QUOTED_NO_FIELD = 22,   //! Inside quotes with the field flag off, so the next close leaves the flag on
+	ESCAPE_NO_FIELD = 23,   //! An escape inside quotes while the field flag is off
+	UNQUOTED_IN_FIELD = 24  //! Left a quoted section with the field flag on, so escapes escape and a quote is a pair
 };
 } // namespace duckdb

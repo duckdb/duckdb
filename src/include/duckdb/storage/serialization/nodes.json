@@ -1203,8 +1203,8 @@
       {
         "id": 140,
         "name": "strict_mode",
-        "property": "options.dialect_options.state_machine_options.strict_mode",
-        "type": "CSVOption<bool>"
+        "type": "CSVOption<bool>",
+        "status": "deleted"
       },
       {
         "id": 141,
@@ -1231,6 +1231,55 @@
         "type": "idx_t",
         "property": "options.rejects_line_size_limit",
         "default": "10000"
+      },
+      {
+        "id": 145,
+        "version": "v2.1.0",
+        "name": "escape_mode",
+        "property": "options.dialect_options.state_machine_options.escape_mode",
+        "type": "CSVOption<CSVEscapeMode>",
+        "default": "CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED)"
+      },
+      {
+        "id": 146,
+        "version": "v2.1.0",
+        "name": "unterminated_quote",
+        "property": "options.dialect_options.state_machine_options.unterminated_quote",
+        "type": "CSVOption<CSVUnterminatedQuote>",
+        "default": "CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::THROW)"
+      },
+
+      {
+        "id": 149,
+        "version": "v2.1.0",
+        "name": "embedded_quotes",
+        "property": "options.dialect_options.state_machine_options.embedded_quotes",
+        "type": "CSVOption<CSVEmbeddedQuotes>",
+        "default": "CSVOption<CSVEmbeddedQuotes>(CSVEmbeddedQuotes::NONE)"
+      },
+      {
+        "id": 150,
+        "version": "v2.1.0",
+        "name": "new_line_terminators",
+        "property": "options.dialect_options.state_machine_options.new_line_terminators",
+        "type": "CSVOption<idx_t>",
+        "default": "CSVOption<idx_t>(0)"
+      },
+      {
+        "id": 151,
+        "version": "v2.1.0",
+        "name": "ignore_extra_columns",
+        "property": "options.ignore_extra_columns",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 152,
+        "version": "v2.1.0",
+        "name": "allow_unescaped_quotes",
+        "property": "options.dialect_options.state_machine_options.allow_unescaped_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       }
     ],
     "constructor": [

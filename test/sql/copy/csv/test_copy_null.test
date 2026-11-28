@@ -91,11 +91,17 @@ COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (DELIMITER
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
-# no parameter type
-statement error
-COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL);
+# a bare NULL option is an empty list, so no string reads as NULL
+statement ok
+CREATE TABLE test_null_option_bare AS SELECT * FROM test_null_option LIMIT 0;
+
+statement ok
+COPY test_null_option_bare FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL);
+
+query II
+SELECT count(*), count(*) FILTER (col_d IS NULL OR col_b IS NULL) FROM test_null_option_bare;
 ----
-CSV Reader function option "null" requires a non-empty list of possible null strings (varchar) as input
+3	0
 
 # empty integer column with non-default NULL string
 statement ok

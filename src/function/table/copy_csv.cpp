@@ -97,8 +97,7 @@ void BaseCSVData::Finalize() {
 			const char escape = options.dialect_options.state_machine_options.escape.GetValue();
 			// Allow nullstr to be escape character + some non-special character, e.g., "\N" (MySQL default).
 			// In this case, only unquoted occurrences of the nullstr will be recognized as null values.
-			if (options.dialect_options.state_machine_options.strict_mode == false && null_str.size() == 2 &&
-			    null_str[0] == escape && null_str[1] != '\0') {
+			if (null_str.size() == 2 && null_str[0] == escape && null_str[1] != '\0') {
 				continue;
 			}
 			SubstringDetection(escape, null_str, "ESCAPE", "NULL");
@@ -205,7 +204,7 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["prefix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["suffix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 
-	copy_options["new_line"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["new_line"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["date_format"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["dateformat"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["timestamp_format"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
@@ -221,7 +220,11 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["nullstr"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
-	copy_options["strict_mode"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["escape_mode"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["embedded_quotes"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["unterminated_quote"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["ignore_extra_columns"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_unescaped_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 }
 
 //===--------------------------------------------------------------------===//

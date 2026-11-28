@@ -1,0 +1,739 @@
+# name: test/sql/copy/csv/test_escape_range_start.test
+# description: A scanner starting behind escapes reads its first bytes the way the scanner before it left them
+# group: [csv]
+
+statement ok
+SET threads = 4
+
+# an odd run of escapes, longer than any cached tail, escapes the pair a buffer end splits, the pair is data
+statement ok
+COPY (SELECT repeat('p' || chr(10), 2041) || 'abcd' || repeat('\', 4105) || chr(13) || chr(10) || 'x' || chr(10)
+|| 'z') TO '{TEST_DIR}/escape_run_pair.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_pair.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 8192, max_line_size = 8192)
+----
+2043	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_pair.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 8192, max_line_size = 8192, parallel = false)
+----
+2043	0
+
+# the same run before a line feed of its own that starts a buffer
+statement ok
+COPY (SELECT repeat('p' || chr(10), 2041) || 'abc' || repeat('\', 4107) || chr(10) || 'x' || chr(10)
+|| 'z') TO '{TEST_DIR}/escape_run_lf.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_lf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 8192, max_line_size = 8192)
+----
+2043	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_lf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 8192, max_line_size = 8192, parallel = false)
+----
+2043	0
+
+# an even run that long escapes nothing, the line feed ends the row
+statement ok
+COPY (SELECT repeat('p' || chr(10), 2041) || 'abcd' || repeat('\', 4106) || chr(10) || 'x' || chr(10)
+|| 'z') TO '{TEST_DIR}/escape_run_even.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_even.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 8192, max_line_size = 8192)
+----
+2044	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_run_even.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 8192, max_line_size = 8192, parallel = false)
+----
+2044	1
+
+# an escape ending a comment line right before a buffer start escapes nothing
+statement ok
+COPY (SELECT 'p' || chr(10) || '#abcd\' || chr(10) || 'x' || chr(10) || 'y') TO '{TEST_DIR}/escape_comment_start.csv'
+(HEADER false, QUOTE '', ESCAPE '')
+
+query I
+SELECT string_agg(a, ',' ORDER BY a) FROM read_csv('{TEST_DIR}/escape_comment_start.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', comment = '#', buffer_size = 8,
+max_line_size = 8)
+----
+p,x,y
+
+query I
+SELECT string_agg(a, ',' ORDER BY a) FROM read_csv('{TEST_DIR}/escape_comment_start.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', comment = '#', buffer_size = 8,
+max_line_size = 8, parallel = false)
+----
+p,x,y
+
+query I
+SELECT string_agg(a, ',' ORDER BY a) FROM read_csv('{TEST_DIR}/escape_comment_start.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', comment = '#', buffer_size = 8,
+max_line_size = 8, new_line = '\n')
+----
+p,x,y
+
+# a comment line ending in an escape right before a range that starts inside the buffer
+statement ok
+COPY (SELECT repeat('p' || chr(10), 1020) || '#abcdef\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_range.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_range.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 8192, max_line_size = 2048)
+----
+1022	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_range.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 8192, max_line_size = 2048, parallel = false)
+----
+1022	1
+
+# a comment opened behind an escaped line feed, the escape ending it at the buffer end escapes nothing
+statement ok
+COPY (SELECT repeat('p' || chr(10), 4) || 'ab\' || chr(10) || '#cd\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_data.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_data.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+7	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_data.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+7	1
+
+# an escaped pair, whose line feed is not a line break, before a quote inside the value and the next buffer
+statement ok
+COPY (SELECT encode('pppppp' || chr(10) || 'ab\' || chr(13) || chr(10) || '"cd\' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_pair_quote.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_pair_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_pair_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	0
+
+# a comment line longer than max_line_size, which comments may be, ending in an even run before a range start
+statement ok
+COPY (SELECT 'p' || chr(10) || 'p' || chr(10) || 'p' || chr(10) || '#ccccccc\\' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10)) TO '{TEST_DIR}/escape_long_comment.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_long_comment.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_long_comment.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, parallel = false)
+----
+6	1
+
+# a comment line that starts in the buffer before, ending in escapes right before a range inside the next one
+statement ok
+COPY (SELECT repeat('p' || chr(10), 30) || '#' || repeat('c', 17) || '\\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_buffers.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffers.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4)
+----
+32	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffers.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, parallel = false)
+----
+32	1
+
+# a comment line whose escapes a buffer end splits, the one behind the buffer start escapes nothing either
+statement ok
+COPY (SELECT repeat('p' || chr(10), 4) || '#abcdef\\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_split.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+6	1
+
+# a comment line that fills a whole buffer, the buffer behind it starts on its line feed
+statement ok
+COPY (SELECT repeat('p' || chr(10), 4) || '#ccccccc' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_buffer.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffer.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 8, max_line_size = 8)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffer.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 8, max_line_size = 8, parallel = false)
+----
+6	1
+
+# a byte order mark before a quoted value is skipped when the end of the first buffer is read, as the scanner skips it
+statement ok
+COPY (SELECT encode(chr(65279) || '"aaaaaaaaaa#\' || chr(10) || 'x"')) TO '{TEST_DIR}/escape_bom_quoted.csv'
+(FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_bom_quoted.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+1	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_bom_quoted.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+1	0
+
+# an escaped carriage return inside a quoted value right before a buffer end, its line feed is data
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaa\' || chr(13) || chr(10) || 'x"'))
+TO '{TEST_DIR}/escape_quoted_cr.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quoted_cr.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16)
+----
+2	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quoted_cr.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16, parallel = false)
+----
+2	0
+
+# an escape right before a buffer end escaping the quote behind it, the search from that state needs no quoted guess
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaaa\"' || chr(10) || 'x"' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_quote_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	0
+
+# the same split with the quoted value closing at the end of the file, no row behind it for the next range
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaaa\"' || chr(10) || 'x"')) TO '{TEST_DIR}/escape_quote_eof.csv'
+(FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_eof.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+2	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_eof.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+2	0
+
+# a quote inside a field that toggles the quote state right before a buffer end
+statement ok
+COPY (SELECT encode('pppppppppppp' || chr(10) || 'aa"' || chr(10) || 'x""' || chr(10) || 'z"' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_field_quote.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_field_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_field_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	1
+
+# a range starting inside a value on an escape under quotes_only, where an escape at a field start is inert
+statement ok
+COPY (SELECT encode('ppppppp' || chr(10) || 'aaaaaaaa\"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_quotes_only_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_quotes_only_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+4	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_quotes_only_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+4	1
+
+# a quoted value opening right at a buffer start, behind a row that ended with the buffer before
+statement ok
+COPY (SELECT encode(repeat('p', 15) || chr(10) || '"a' || chr(10) || 'x,z"' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_quote_opens.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_quote_opens.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_quote_opens.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	1
+
+# a range starting on an escape behind an invalid row, the rows behind the invalid one are read
+statement ok
+COPY (SELECT encode(repeat('p', 11) || chr(10) || '"a"x\"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_invalid_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true,
+parallel = false)
+----
+3	1
+
+# a range starting right behind a closing quote on the data that breaks the row, the rows behind it are read
+statement ok
+COPY (SELECT encode(repeat('p', 12) || chr(10) || '"a"x\"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_unquoted_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_unquoted_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_unquoted_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true,
+parallel = false)
+----
+3	1
+
+# a range starting on a quote behind a broken row, which the toggle rule reads as the broken row does
+statement ok
+COPY (SELECT encode(repeat('p', 10) || chr(10) || '"a"b' || chr(13) || '"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_invalid_toggle.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_toggle.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_toggle.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true,
+parallel = false)
+----
+3	1
+
+# lines that fill a buffer each are counted once, with and without the buffer ends read
+statement ok
+COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/escape_full_lines.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = '\n', buffer_size = 8192, max_line_size = 8192, parallel = false)
+----
+64
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/escape_full_lines.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = '\n', buffer_size = 8192, max_line_size = 8192)
+----
+64
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/escape_full_lines.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', new_line = '\n', buffer_size = 8192,
+max_line_size = 8192)
+----
+64
+
+# a line break inside a quoted value is no line start for the range behind it, which reads on in the quoted state
+statement ok
+COPY (SELECT 'ppppppppp' || chr(10) || '"a' || chr(10) || 'bbb' || chr(10) || 'xz"' || chr(10) || 'y')
+TO '{TEST_DIR}/quoted_anchor.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 64, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 64, max_line_size = 16, parallel = false)
+----
+3	0
+
+# the same value with pairs as line breaks
+statement ok
+COPY (SELECT encode('ppppppppp' || chr(13) || chr(10) || '"a' || chr(13) || chr(10) || 'bbb' || chr(13) || chr(10)
+|| 'xz"' || chr(13) || chr(10) || 'y')) TO '{TEST_DIR}/quoted_anchor_crlf.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor_crlf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\r\n', buffer_size = 64, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor_crlf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\r\n', buffer_size = 64, max_line_size = 16, parallel = false)
+----
+3	0
+
+# a quoted value with line breaks spanning two buffers, the range behind the buffer end starts inside it on a line
+# that looks like a row of its own
+foreach buffer_size 32 64 128
+
+statement ok
+COPY (SELECT repeat('p', {buffer_size} // 2 - 2) || chr(10) || '"a' || chr(10)
+|| repeat('b' || chr(10), {buffer_size} // 4 + 1) || 'xz"' || chr(10) || 'y' || chr(10) || repeat('q' || chr(10), 3))
+TO '{TEST_DIR}/quoted_span_{buffer_size}.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size})
+----
+7	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size}, parallel = false)
+----
+7	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size})
+----
+7	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size}, parallel = false)
+----
+7	1	1
+
+statement ok
+COPY (SELECT encode(repeat('p', {buffer_size} // 2 - 3) || chr(13) || chr(10) || '"a' || chr(13) || chr(10)
+|| repeat('b' || chr(13) || chr(10), ({buffer_size} // 2 + 1) // 3) || 'xz"' || chr(13) || chr(10) || 'y' || chr(13)
+|| chr(10) || repeat('q' || chr(13) || chr(10), 3))) TO '{TEST_DIR}/quoted_span_crlf_{buffer_size}.csv' (FORMAT BLOB)
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(13) || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_crlf_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size})
+----
+6	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(13) || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_crlf_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size}, parallel = false)
+----
+6	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(13) || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_crlf_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\r\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size})
+----
+6	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(13) || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_span_crlf_{buffer_size}.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\r\n',
+buffer_size = {buffer_size}, max_line_size = {buffer_size}, parallel = false)
+----
+6	1	1
+
+endloop
+
+# a range inside the second buffer that starts inside a quoted value, read on from the end of the first buffer
+statement ok
+COPY (SELECT repeat('ppppppp' || chr(10), 33) || '"a' || chr(10) || repeat('b' || chr(10), 26) || 'ccc' || chr(10)
+|| 'xz"' || chr(10) || 'y' || chr(10) || 'q' || chr(10)) TO '{TEST_DIR}/quoted_range.csv'
+(HEADER false, QUOTE '', ESCAPE '')
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_range.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n', buffer_size = 256, max_line_size = 64)
+----
+37	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_range.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\n', buffer_size = 256, max_line_size = 64)
+----
+37	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a' || chr(10) || '%xz')
+FROM read_csv('{TEST_DIR}/quoted_range.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n', buffer_size = 256, max_line_size = 64,
+parallel = false)
+----
+37	1	1
+
+# a line break inside a quoted value as the last byte of a buffer, the next buffer starts inside the value
+statement ok
+COPY (SELECT 'pppppp' || chr(10) || '"' || repeat('a', 23) || chr(10) || 'bb' || chr(10) || 'xz"' || chr(10) || 'y'
+|| chr(10) || 'q' || chr(10)) TO '{TEST_DIR}/quoted_buffer_end.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_buffer_end.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n', buffer_size = 32, max_line_size = 32)
+----
+5	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_buffer_end.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'quotes_only', new_line = '\n', buffer_size = 32, max_line_size = 32)
+----
+5	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_buffer_end.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\n', buffer_size = 32, max_line_size = 32,
+parallel = false)
+----
+5	1	1
+
+# the same with a pair as the line break
+statement ok
+COPY (SELECT encode('pppppppp' || chr(13) || chr(10) || '"' || repeat('a', 19) || chr(13) || chr(10) || 'bb' || chr(13)
+|| chr(10) || 'xz"' || chr(13) || chr(10) || 'y' || chr(13) || chr(10) || 'q' || chr(13) || chr(10)))
+TO '{TEST_DIR}/quoted_buffer_end_crlf.csv' (FORMAT BLOB)
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(13) || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_buffer_end_crlf.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n', buffer_size = 32,
+max_line_size = 32)
+----
+4	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(13) || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_buffer_end_crlf.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n', buffer_size = 32,
+max_line_size = 32, parallel = false)
+----
+4	1	1
+
+# the buffer end splits the pair inside the quoted value
+statement ok
+COPY (SELECT encode('ppppppppp' || chr(13) || chr(10) || '"' || repeat('a', 19) || chr(13) || chr(10) || 'bb' || chr(13)
+|| chr(10) || 'xz"' || chr(13) || chr(10) || 'y' || chr(13) || chr(10) || 'q' || chr(13) || chr(10)))
+TO '{TEST_DIR}/quoted_split_pair.csv' (FORMAT BLOB)
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(13) || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_split_pair.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n', buffer_size = 32, max_line_size = 32)
+----
+4	1	1
+
+query III
+SELECT count(*), count(*) FILTER (WHERE a = 'y'), count(*) FILTER (WHERE a LIKE 'a%' || chr(13) || chr(10) || 'xz')
+FROM read_csv('{TEST_DIR}/quoted_split_pair.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+quote = '"', escape = '\', escape_mode = 'anywhere', new_line = '\r\n', buffer_size = 32, max_line_size = 32,
+parallel = false)
+----
+4	1	1
+
+# without a quote character the line break behind an even run of escapes is a line start, the quotes are data
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'xz"') FROM read_csv('{TEST_DIR}/quoted_anchor.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 64, max_line_size = 16)
+----
+5	1
+
+query I
+SELECT string_agg(a, ',' ORDER BY a) FROM read_csv('{TEST_DIR}/quoted_anchor.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', new_line = '\n',
+buffer_size = 64, max_line_size = 16)
+----
+"a,bbb,ppppppppp,xz",y
+
+query I
+SELECT string_agg(a, ',' ORDER BY a) FROM read_csv('{TEST_DIR}/quoted_anchor.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere', new_line = '\n',
+buffer_size = 64, max_line_size = 16, parallel = false)
+----
+"a,bbb,ppppppppp,xz",y
+
+# a comment line ending in an escape at a buffer end with a quote character, the escape is inert, the line feed ends it
+statement ok
+COPY (SELECT 'ppppppp' || chr(10) || '#abcdef\' || chr(10) || 'x' || chr(10) || 'y' || chr(10))
+TO '{TEST_DIR}/quoted_comment_end.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_comment_end.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+4	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_comment_end.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+4	1
+
+# the same comment line ending the second buffer, and a data line ending in an escape there, which escapes its line feed
+statement ok
+COPY (SELECT repeat('ppppppp' || chr(10), 3) || '#abcdef\' || chr(10) || 'x' || chr(10) || 'y' || chr(10))
+TO '{TEST_DIR}/quoted_comment_end2.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+statement ok
+COPY (SELECT repeat('ppppppp' || chr(10), 3) || 'abcdefg\' || chr(10) || 'x' || chr(10) || 'y' || chr(10))
+TO '{TEST_DIR}/quoted_escape_end2.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_comment_end2.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_comment_end2.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_escape_end2.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+6	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/quoted_escape_end2.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+6	0

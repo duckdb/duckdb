@@ -8,6 +8,6 @@ statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 query I
-insert into test select * from read_csv_auto('{DATA_DIR}/csv/test/mixed_line_endings.csv', strict_mode=false);
+insert into test select * from read_csv_auto('{DATA_DIR}/csv/test/mixed_line_endings.csv', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 3

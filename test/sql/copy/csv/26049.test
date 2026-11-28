@@ -3,11 +3,11 @@
 # group: [csv]
 
 query I
-SELECT col1 FROM read_csv('data/csv/26049.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, escape='\', header=true, auto_detect=false, strict_mode=false);
+SELECT col1 FROM read_csv('data/csv/26049.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, escape='\', header=true, auto_detect=false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 a
 
 statement error
-SELECT col1 FROM read_csv('data/csv/26049.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, escape='\', header=true, auto_detect=false, strict_mode=true);
+SELECT col1 FROM read_csv('data/csv/26049.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, escape='\', header=true, auto_detect=false);
 ----
 Expected Number of Columns: 2 Found: 3

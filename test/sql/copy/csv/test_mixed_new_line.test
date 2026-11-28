@@ -5,86 +5,96 @@
 require notwindows
 
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')
 ----
 1	2	3
 4	5	6
 7	8	9
 
-foreach newline '\r' '\n' '\r\n'
-
+# listing only the line breaks the file uses reads the same records
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = {newline}, strict_mode = false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n', '\r\n'])
 ----
 1	2	3
 4	5	6
 7	8	9
 
+# without the pair in the list the carriage return ends the record and the line feed opens an empty line
+query III
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n', '\r'], columns = {'a':'integer', 'b':'integer', 'c':'integer'}, header = false, delim = ',', auto_detect = false)
+----
+1	2	3
+4	5	6
+7	8	9
 
-endloop
+# a line break outside the list is an invalid state
+statement error
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n'], columns = {'a':'integer', 'b':'integer', 'c':'integer'}, header = false, delim = ',', auto_detect = false)
+----
+The CSV Parser state machine reached an invalid state.
 
 statement error
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',')
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, delim = ',')
 ----
 Error when sniffing file "{DATA_DIR}/csv/mixed_new_line.csv".
 
 statement error
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',', auto_detect= false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, delim = ',', auto_detect= false)
 ----
 The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line=['\n', '\r', '\r\n'], escape_mode='anywhere', ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
 statement error
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line=['\n', '\r', '\r\n'], escape_mode='anywhere', ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r\n', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\n', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 query I
-SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r', HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r\n', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 query I
-SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\n', HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\r', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\n', HEADER = FALSE)
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 

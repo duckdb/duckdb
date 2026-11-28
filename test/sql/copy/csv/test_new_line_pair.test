@@ -1,0 +1,617 @@
+# name: test/sql/copy/csv/test_new_line_pair.test
+# description: A \r\n in the new_line list is one record terminator next to \r and \n, also across buffer boundaries
+# group: [csv]
+
+# a single column file, where an empty line is a NULL row
+statement ok
+COPY (SELECT ('a' || chr(13) || chr(10) || 'b' || chr(13) || chr(10)
+|| 'c')::BLOB) TO '{TEST_DIR}/pair_crlf.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_crlf.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+a
+b
+c
+
+statement ok
+COPY (SELECT ('a' || chr(13) || chr(10) || 'b' || chr(13) || chr(10) || 'c' || chr(13)
+|| chr(10))::BLOB) TO '{TEST_DIR}/pair_crlf_trail.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_crlf_trail.csv', columns = {'a': 'VARCHAR'}, header = false,
+new_line = ['\n', '\r', '\r\n'], auto_detect = false)
+----
+a
+b
+c
+
+# the lenient preset on a CRLF file COPY wrote
+statement ok
+COPY (SELECT 'a' || chr(13) || chr(10) || 'b' || chr(13) || chr(10)
+|| 'c') TO '{TEST_DIR}/pair_review.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(x) FROM read_csv('{TEST_DIR}/pair_review.csv', columns={'x': 'VARCHAR'}, header=false,
+auto_detect=false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true,
+allow_unescaped_quotes=true, unterminated_quote='value')
+----
+3	3
+
+# a pair behind a line feed, which the detection picks, keeps its line feed out of the next value
+statement ok
+COPY (SELECT 'a' || chr(10) || 'b' || chr(13) || chr(10) || 'c') TO '{TEST_DIR}/pair_lfcrlf.csv' (HEADER false,
+QUOTE '', ESCAPE '')
+
+query II
+SELECT x, strlen(x) FROM read_csv('{TEST_DIR}/pair_lfcrlf.csv', columns={'x': 'VARCHAR'}, header=false,
+auto_detect=false, quote='"', escape='\', parallel=false, new_line=['\n', '\r\n'])
+----
+a	1
+b	1
+c	1
+
+# every listed line break ends a record once
+statement ok
+COPY (SELECT ('a' || chr(13) || 'b' || chr(13) || chr(10) || 'c' || chr(10) || 'd' || chr(13) || chr(10)
+|| 'e')::BLOB) TO '{TEST_DIR}/pair_mixed.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_mixed.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+a
+b
+c
+d
+e
+
+# an empty line after a pair is still an empty line
+statement ok
+COPY (SELECT ('a' || chr(13) || chr(10) || chr(13) || chr(10) || 'b' || chr(13) || chr(10) || chr(10)
+|| 'c')::BLOB) TO '{TEST_DIR}/pair_empty.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_empty.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+a
+NULL
+b
+NULL
+c
+
+# a carriage return terminator followed by a pair is an empty line
+statement ok
+COPY (SELECT ('a' || chr(13) || chr(13) || chr(10) || 'b' || chr(13) || chr(10)
+|| 'c')::BLOB) TO '{TEST_DIR}/pair_rrn.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_rrn.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+a
+NULL
+b
+c
+
+# the pair is one terminator whichever line break the file starts with
+statement ok
+COPY (SELECT ('x' || chr(10) || 'y' || chr(13) || chr(10) || 'z')::BLOB) TO '{TEST_DIR}/pair_after_n.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_after_n.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r\n'],
+auto_detect = false)
+----
+x
+y
+z
+
+statement ok
+COPY (SELECT ('x' || chr(13) || 'y' || chr(13) || chr(10) || 'z')::BLOB) TO '{TEST_DIR}/pair_after_r.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_after_r.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\r', '\r\n'],
+auto_detect = false)
+----
+x
+y
+z
+
+# a line feed of its own is not in that list
+statement error
+FROM read_csv('{TEST_DIR}/pair_empty.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\r', '\r\n'],
+auto_detect = false)
+----
+The CSV Parser state machine reached an invalid state.
+
+# a carriage return followed by data ends the record alone
+statement ok
+COPY (SELECT ('x' || chr(13) || chr(10) || 'y' || chr(13) || 'z' || chr(13)
+|| chr(10))::BLOB) TO '{TEST_DIR}/pair_lone_r.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_lone_r.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+x
+y
+z
+
+# a delimiter right after a lone carriage return opens an empty value
+statement ok
+COPY (SELECT ('a,b' || chr(13) || ',c' || chr(13) || chr(10))::BLOB) TO '{TEST_DIR}/pair_cr_delim.csv' (FORMAT BLOB)
+
+query II
+FROM read_csv('{TEST_DIR}/pair_cr_delim.csv', columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, header = false, delim = ',',
+new_line = ['\n', '\r', '\r\n'], auto_detect = false)
+----
+a	b
+NULL	c
+
+# skipped rows whose pair a buffer end splits
+statement ok
+COPY (SELECT ('p' || chr(10) || 'h1234' || chr(13) || chr(10) || 'v'
+|| chr(10))::BLOB) TO '{TEST_DIR}/pair_skip.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_skip.csv', columns = {'a': 'VARCHAR'}, header = false, skip = 2,
+new_line = ['\n', '\r', '\r\n'], auto_detect = false, buffer_size = 8, parallel = false)
+----
+v
+
+# an empty line at the start of a buffer, before a row whose first column is not read
+statement ok
+COPY (SELECT ('aaaaa,1' || chr(10) || chr(10) || 'b,2'
+|| chr(10))::BLOB) TO '{TEST_DIR}/pair_empty_projected.csv' (FORMAT BLOB)
+
+query I
+SELECT b FROM read_csv('{TEST_DIR}/pair_empty_projected.csv', columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+header = false, delim = ',', new_line = '\n', auto_detect = false, buffer_size = 8, parallel = false)
+----
+1
+2
+
+query I
+SELECT b FROM read_csv('{TEST_DIR}/pair_empty_projected.csv', columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+header = false, delim = ',', new_line = ['\n', '\r', '\r\n'], auto_detect = false, buffer_size = 8, parallel = false)
+----
+1
+2
+
+# an empty line behind a pair a buffer end splits, without a line feed of its own in the list
+statement ok
+COPY (SELECT ('aaaa' || chr(13) || chr(10) || 'bbbb' || chr(13) || chr(10) || 'cccc' || chr(13) || chr(10) || 'dddd'
+|| chr(13) || chr(10) || 'eeeee' || chr(13) || chr(10) || chr(13) || chr(10) || 'ffff' || chr(13) || chr(10) || 'gggg'
+|| chr(13) || chr(10))::BLOB) TO '{TEST_DIR}/pair_split_empty.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/pair_split_empty.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\r', '\r\n'],
+auto_detect = false, buffer_size = 30)
+----
+aaaa
+bbbb
+cccc
+dddd
+eeeee
+NULL
+ffff
+gggg
+
+query I
+FROM read_csv('{TEST_DIR}/pair_split_empty.csv', columns = {'a': 'VARCHAR'}, header = false, new_line = ['\r', '\r\n'],
+auto_detect = false, buffer_size = 30, parallel = false)
+----
+aaaa
+bbbb
+cccc
+dddd
+eeeee
+NULL
+ffff
+gggg
+
+# a carriage return of its own that ends a buffer is still not in the list without it
+statement ok
+COPY (SELECT ('a' || chr(10) || 'bbbb' || chr(13) || 'z' || chr(10) || 'q'
+|| chr(10))::BLOB) TO '{TEST_DIR}/pair_lone_cr_buffer_end.csv' (FORMAT BLOB)
+
+statement error
+FROM read_csv('{TEST_DIR}/pair_lone_cr_buffer_end.csv', columns = {'a': 'VARCHAR'}, header = false,
+new_line = ['\n', '\r\n'], auto_detect = false, buffer_size = 7, parallel = false)
+----
+The CSV Parser state machine reached an invalid state.
+
+query I
+FROM read_csv('{TEST_DIR}/pair_lone_cr_buffer_end.csv', columns = {'a': 'VARCHAR'}, header = false,
+new_line = ['\n', '\r', '\r\n'], auto_detect = false, buffer_size = 7, parallel = false)
+----
+a
+bbbb
+z
+q
+
+# an escaped line break at the start of a buffer continues the value
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'abc\' || chr(13) || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_crlf.csv' (FORMAT BLOB)
+
+query I
+SELECT replace(replace(a, chr(10), '<LF>'), chr(13), '<CR>') FROM read_csv('{TEST_DIR}/pair_escaped_crlf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 9)
+----
+p
+q
+abc<CR><LF>z
+c
+
+statement ok
+COPY (SELECT encode('p' || chr(13) || chr(10) || 'q' || chr(13) || chr(10) || '123\' || chr(13) || chr(10) || '"b'
+|| chr(13) || chr(10) || 'c' || chr(13) || chr(10) || 'd' || chr(13)
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_crlf_quote.csv' (FORMAT BLOB)
+
+query I
+SELECT replace(replace(a, chr(10), '<LF>'), chr(13), '<CR>') FROM read_csv('{TEST_DIR}/pair_escaped_crlf_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere',
+new_line = '\r\n', buffer_size = 11)
+----
+p
+q
+123<CR><LF>"b
+c
+d
+
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'abcde\' || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_lf.csv' (FORMAT BLOB)
+
+query I
+SELECT replace(a, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/pair_escaped_lf.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere', new_line = ['\n', '\r', '\r\n'],
+buffer_size = 10)
+----
+p
+q
+abcde<LF>z
+c
+
+# an escaped escape before the line break does not escape it, also when a buffer end splits the two
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'abcd\\' || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_escape.csv' (FORMAT BLOB)
+
+loop buffer_size 9 10
+
+query I
+FROM read_csv('{TEST_DIR}/pair_escaped_escape.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+escape = '\', escape_mode = 'anywhere', new_line = ['\n', '\r', '\r\n'], buffer_size = {buffer_size})
+----
+p
+q
+abcd\
+z
+c
+
+endloop
+
+# an escaped escape before a pair, the pair ends the row
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'ab\\' || chr(13) || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_escape_crlf.csv' (FORMAT BLOB)
+
+loop buffer_size 8 12
+
+query I
+SELECT replace(replace(a, chr(10), '<LF>'), chr(13), '<CR>') FROM read_csv('{TEST_DIR}/pair_escaped_escape_crlf.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r', '\r\n'], buffer_size = {buffer_size})
+----
+p
+q
+ab\
+z
+c
+
+endloop
+
+# an escaped carriage return is data when the pair is not in the list, the line feed ends the row
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'ab\' || chr(13) || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_cr_lf_only.csv' (FORMAT BLOB)
+
+loop buffer_size 7 11
+
+query I
+SELECT replace(replace(a, chr(10), '<LF>'), chr(13), '<CR>') FROM read_csv('{TEST_DIR}/pair_escaped_cr_lf_only.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = {buffer_size})
+----
+p
+q
+ab<CR>
+z
+c
+
+endloop
+
+# an even escape run before a pair at a buffer end, the pair ends the row
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'ab' || repeat('\', 8) || chr(13) || chr(10) || 'z' || chr(10)
+|| 'c' || chr(10))) TO '{TEST_DIR}/pair_escape_run_crlf.csv' (FORMAT BLOB)
+
+loop buffer_size 13 17
+
+query I
+FROM read_csv('{TEST_DIR}/pair_escape_run_crlf.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+escape = '\', escape_mode = 'anywhere', new_line = ['\n', '\r\n'], buffer_size = {buffer_size})
+----
+p
+q
+ab\\\\
+z
+c
+
+endloop
+
+# a comment character configured does not make an escaped line break a row end
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'abcde\' || chr(10) || 'z' || chr(10) || 'c'
+|| chr(10))) TO '{TEST_DIR}/pair_escaped_lf_comment.csv' (FORMAT BLOB)
+
+loop buffer_size 9 12
+
+query I
+SELECT replace(a, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/pair_escaped_lf_comment.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere', comment = '#', new_line = ['\n', '\r\n'],
+buffer_size = {buffer_size})
+----
+p
+q
+abcde<LF>z
+c
+
+endloop
+
+# a quote after a carriage return inside a quoted value, with the pair alone in the list
+statement ok
+COPY (SELECT encode('p,0' || chr(13) || chr(10) || 'q,0' || chr(13) || chr(10) || '"' || repeat('a', 22) || chr(13)
+|| '",1' || chr(13) || chr(10) || 'b",2' || chr(13) || chr(10) || 'c,3' || chr(13)
+|| chr(10))) TO '{TEST_DIR}/pair_quoted_cr.csv' (FORMAT BLOB)
+
+loop buffer_size 30 34
+
+query II
+SELECT replace(a, chr(13), '<CR>'), b FROM read_csv('{TEST_DIR}/pair_quoted_cr.csv',
+columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, header = false, delim = ',', quote = '"', escape = '"', auto_detect = false,
+new_line = '\r\n', buffer_size = {buffer_size})
+----
+p	0
+q	0
+aaaaaaaaaaaaaaaaaaaaaa<CR>	1
+b"	2
+c	3
+
+endloop
+
+# a pair split by a buffer end with a comment character configured
+statement ok
+COPY (SELECT encode('p' || chr(13) || chr(10) || 'q' || chr(13) || chr(10) || 'abcdefghijklmnop' || chr(13) || chr(10)
+|| 'x' || chr(10) || 'y' || chr(10))) TO '{TEST_DIR}/pair_split_comment.csv' (FORMAT BLOB)
+
+loop buffer_size 21 25
+
+query I
+FROM read_csv('{TEST_DIR}/pair_split_comment.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false,
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = {buffer_size})
+----
+p
+q
+abcdefghijklmnop
+x
+y
+
+endloop
+
+# an empty line read at a buffer start counts as a line, single threaded as a cast error at a chunk start is read apart
+statement ok
+COPY (SELECT encode('1' || chr(13) || chr(10) || '222' || chr(13) || chr(10) || chr(13) || chr(10) || 'x' || chr(13)
+|| chr(10) || '3' || chr(13) || chr(10))) TO '{TEST_DIR}/pair_empty_line_count.csv' (FORMAT BLOB)
+
+loop buffer_size 7 9
+
+statement error
+FROM read_csv('{TEST_DIR}/pair_empty_line_count.csv', columns = {'a': 'INTEGER'}, header = false, auto_detect = false,
+new_line = '\r\n', buffer_size = {buffer_size}, parallel = false)
+----
+CSV Error on Line: 4
+
+endloop
+
+# a long escape run before a line break keeps its length across a buffer end
+statement ok
+COPY (SELECT encode('p' || chr(10) || 'q' || chr(10) || 'ab' || repeat('\', 9) || chr(10) || 'x' || chr(10) || 'z'
+|| chr(10))) TO '{TEST_DIR}/pair_escape_run.csv' (FORMAT BLOB)
+
+loop buffer_size 14 18
+
+query I
+SELECT replace(a, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/pair_escape_run.csv', columns = {'a': 'VARCHAR'},
+header = false, auto_detect = false, escape = '\', escape_mode = 'anywhere', new_line = ['\n', '\r\n'],
+buffer_size = {buffer_size})
+----
+p
+q
+ab\\\\<LF>x
+z
+
+endloop
+
+# a carriage return of its own behind a split pair is still invalid with the pair alone in the list
+statement ok
+COPY (SELECT encode('p' || chr(13) || chr(10) || 'q' || chr(13) || chr(10) || '123' || chr(13) || chr(10) || chr(13)
+|| 'a' || chr(13) || chr(10) || 'b' || chr(13) || chr(10))) TO '{TEST_DIR}/pair_lone_cr_behind_pair.csv' (FORMAT BLOB)
+
+loop buffer_size 9 11
+
+statement error
+FROM read_csv('{TEST_DIR}/pair_lone_cr_behind_pair.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = '\r\n', buffer_size = {buffer_size})
+----
+The CSV Parser state machine reached an invalid state.
+
+statement error
+FROM read_csv('{TEST_DIR}/pair_lone_cr_behind_pair.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = '\r\n', buffer_size = {buffer_size}, parallel = false)
+----
+The CSV Parser state machine reached an invalid state.
+
+endloop
+
+# chunks ending right behind a carriage return of its own, with the carriage return in the list
+statement ok
+COPY (SELECT encode(repeat('a' || chr(13), 15) || chr(13) || 'b' || chr(13) || 'c' || chr(13) || 'd'
+|| chr(13))) TO '{TEST_DIR}/pair_cr_chunks.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(a) FROM read_csv('{TEST_DIR}/pair_cr_chunks.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = ['\r', '\r\n'], buffer_size = 31, max_line_size = 5)
+----
+19	18
+
+query II
+SELECT count(*), count(a) FROM read_csv('{TEST_DIR}/pair_cr_chunks.csv', columns = {'a': 'VARCHAR'}, header = false,
+auto_detect = false, new_line = ['\n', '\r', '\r\n'], buffer_size = 31, max_line_size = 5)
+----
+19	18
+
+# the pair counts as one line
+statement ok
+COPY (SELECT ('1' || chr(13) || chr(10) || '2' || chr(13) || chr(10) || 'x' || chr(13) || chr(10)
+|| '4')::BLOB) TO '{TEST_DIR}/pair_lines.csv' (FORMAT BLOB)
+
+statement error
+FROM read_csv('{TEST_DIR}/pair_lines.csv', columns = {'a': 'INTEGER'}, header = false, new_line = ['\n', '\r', '\r\n'],
+auto_detect = false)
+----
+CSV Error on Line: 3
+
+# files of mixed line breaks read the same rows for every buffer size, in parallel and single threaded
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+COPY (
+    SELECT string_agg(lpad(CAST(id AS VARCHAR), 4, '0') || ',v' ||
+        CASE id % 5 WHEN 0 THEN chr(10) WHEN 1 THEN chr(13) || chr(10) WHEN 2 THEN chr(13)
+             WHEN 3 THEN chr(13) || chr(13) || chr(10) ELSE chr(13) || chr(10) END, '' ORDER BY id)::BLOB
+    FROM generate_series(1, 60) t(id)
+) TO '{TEST_DIR}/pair_mix_two.csv' (FORMAT BLOB)
+
+statement ok
+COPY (
+    SELECT string_agg(lpad(CAST(id AS VARCHAR), 4, '0') ||
+        CASE id % 4 WHEN 0 THEN chr(10) WHEN 1 THEN chr(13) || chr(10) WHEN 2 THEN chr(13) ELSE chr(13) || chr(10) END,
+        '' ORDER BY id)::BLOB
+    FROM generate_series(1, 60) t(id)
+) TO '{TEST_DIR}/pair_mix_one.csv' (FORMAT BLOB)
+
+# a Windows checkout of a line feed file
+statement ok
+COPY (
+    SELECT string_agg(lpad(CAST(id AS VARCHAR), 4, '0') || chr(13) || chr(10), '' ORDER BY id)::BLOB
+    FROM generate_series(1, 60) t(id)
+) TO '{TEST_DIR}/pair_crlf_one.csv' (FORMAT BLOB)
+
+# rows ending in a carriage return and a pair, an empty line each
+statement ok
+COPY (
+    SELECT string_agg(lpad(CAST(id AS VARCHAR), 4, '0') || chr(13) || chr(13) || chr(10), '' ORDER BY id)::BLOB
+    FROM generate_series(1, 60) t(id)
+) TO '{TEST_DIR}/pair_rrn_one.csv' (FORMAT BLOB)
+
+# a line feed file with five empty lines, read with the whole list
+statement ok
+COPY (
+    SELECT string_agg(lpad(CAST(id AS VARCHAR), 4, '0') || chr(10) || CASE WHEN id % 12 = 0 THEN chr(10) ELSE '' END,
+        '' ORDER BY id)::BLOB
+    FROM generate_series(1, 60) t(id)
+) TO '{TEST_DIR}/pair_lf_one.csv' (FORMAT BLOB)
+
+loop buffer_size 27 100
+
+query IIII
+SELECT count(*), count(DISTINCT a), max(length(a)),
+count(*) FILTER (WHERE b <> 'v') FROM read_csv('{TEST_DIR}/pair_mix_two.csv',
+columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, header = false, delim = ',', new_line = ['\n', '\r', '\r\n'],
+auto_detect = false, buffer_size = {buffer_size})
+----
+60	60	4	0
+
+query IIII
+SELECT count(*), count(DISTINCT a), max(length(a)),
+count(*) FILTER (WHERE b <> 'v') FROM read_csv('{TEST_DIR}/pair_mix_two.csv',
+columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, header = false, delim = ',', new_line = ['\n', '\r', '\r\n'],
+auto_detect = false, buffer_size = {buffer_size}, parallel = false)
+----
+60	60	4	0
+
+query III
+SELECT count(*), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_mix_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size})
+----
+60	60	4
+
+query III
+SELECT count(*), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_mix_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size}, parallel = false)
+----
+60	60	4
+
+query III
+SELECT count(*), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_crlf_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size})
+----
+60	60	4
+
+query III
+SELECT count(*), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_crlf_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size}, parallel = false)
+----
+60	60	4
+
+query IIII
+SELECT count(*), count(a), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_rrn_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size})
+----
+120	60	60	4
+
+query IIII
+SELECT count(*), count(a), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_rrn_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size}, parallel = false)
+----
+120	60	60	4
+
+# the five empty lines are NULL rows
+query IIII
+SELECT count(*), count(a), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_lf_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size})
+----
+65	60	60	4
+
+query IIII
+SELECT count(*), count(a), count(DISTINCT a), max(length(a)) FROM read_csv('{TEST_DIR}/pair_lf_one.csv',
+columns = {'a': 'VARCHAR'}, header = false, new_line = ['\n', '\r', '\r\n'], auto_detect = false,
+buffer_size = {buffer_size}, parallel = false)
+----
+65	60	60	4
+
+endloop

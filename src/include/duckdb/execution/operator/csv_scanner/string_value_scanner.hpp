@@ -204,6 +204,16 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
+	//! Fields beyond the last column are ignored rather than an error
+	const bool tolerate_extra_columns;
+	//! Content after a closing quote is tolerated rather than an error
+	const bool allow_unescaped_quotes;
+	//! A quote that is never closed reads as a value rather than an error
+	const bool allow_unterminated_quotes;
+	//! Whether a line break ends the record even inside quotes, reading a field left open as NULL
+	const bool line_record_rows;
+	//! Whether fields follow the embedded quote toggle rule
+	const bool embedded_quote_fields;
 
 	const idx_t extra_delimiter_bytes = 0;
 
@@ -268,6 +278,13 @@ public:
 
 	bool ignore_empty_values = true;
 
+	//! The current field's UTF-16 offset from the line start, clamped at three units
+	idx_t units_before_field = 0;
+	//! Whether the current field was quoted before DemoteUnenclosedQuotedValue rerouted it
+	bool was_quoted = false;
+	//! Scratch buffer for normalized field text before its conversion into the column's type, reused by every field
+	vector<char> value_scratch;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Specialized code for possibly escaped values, makes sure to remove escapes
@@ -282,6 +299,7 @@ public:
 		return result.projecting_columns && result.cur_col_id < result.number_of_columns &&
 		       !result.projected_columns[result.cur_col_id];
 	}
+	//! Called by the block scan only, which reads the standard rules, see BlockScanEligible
 	static inline void SkipValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool AddRowWithoutValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool TracksAscii(const StringValueResult &result) {
@@ -296,9 +314,98 @@ public:
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	//! Moves the start of the current line behind an empty line
 	void StartLineAfterEmptyLine();
+	//! Whether the carriage return the iterator is on opens a \r\n pair, assumed when it ends its buffer
+	bool CarriageReturnPair() const;
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();
+	//! Whether the record ended while a quote was still open, under line records
+	inline bool RecordEndsInsideQuotes() const {
+		if (!state_machine.state_machine_options.LineRecords()) {
+			return false;
+		}
+		const auto toggle = state_machine.state_machine_options.ToggleQuotes();
+		const auto inside = [toggle](CSVState state) {
+			return state == CSVState::QUOTED || state == CSVState::ESCAPE ||
+			       (toggle && (state == CSVState::FIELD_QUOTE || state == CSVState::QUOTED_NO_FIELD ||
+			                   state == CSVState::ESCAPE_NO_FIELD));
+		};
+		const auto current_inside = inside(states.states[1]);
+		const auto previous_inside = inside(states.states[0]);
+		const auto record_end =
+		    states.states[1] == CSVState::RECORD_SEPARATOR || states.states[1] == CSVState::CARRIAGE_RETURN;
+		return current_inside || (previous_inside && record_end);
+	}
+	//! Whether the file ended inside an open quote, also one the embedded quote toggle opened with its last byte
+	inline bool FileEndsInsideQuotes() const {
+		// an escape that is the last byte of the file was read inside quotes as well
+		return states.IsQuotedCurrent() || states.IsState(CSVState::ESCAPE) ||
+		       states.IsState(CSVState::ESCAPE_NO_FIELD) ||
+		       (embedded_quote_fields && states.IsState(CSVState::FIELD_QUOTE));
+	}
+	//! Reads the field a record end inside an open quote left in progress as NULL
+	void AddUnterminatedQuoteNull();
+	//! Whether the file ended inside a quoted value that reads as a value, the embedded quote toggle has its own pass
+	inline bool FileEndsInOpenValue() const {
+		return allow_unterminated_quotes && quoted && !embedded_quote_fields && FileEndsInsideQuotes();
+	}
+	//! Adds the quoted value the end of the file left open, which has no closing quote to remove
+	void AddOpenQuotedValue(idx_t buffer_pos);
+	//! Whether a plain field is the escape and a character that spell a NULL string, which reads as NULL in any type
+	bool IsEscapedNullString(const char *value_ptr, idx_t size) const;
+	//! Routes a quoted field through the embedded quote text pass when that pass could change it
+	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
+		if (!quoted || size == 0 || !state_machine.state_machine_options.ToggleQuotes()) {
+			return;
+		}
+		const auto quote_character = state_machine.state_machine_options.quote.GetValue();
+		const auto escape_character = state_machine.state_machine_options.escape.GetValue();
+		// inert escapes before the opening quote are not part of the value
+		idx_t start = 0;
+		if (state_machine.state_machine_options.EscapeQuotesOnly()) {
+			while (start < size && value_ptr[start] == escape_character) {
+				start++;
+			}
+		}
+		const bool enclosed =
+		    size - start >= 2 && value_ptr[start] == quote_character && value_ptr[size - 1] == quote_character;
+		// an enclosed field with a plain inside and a dropped opening quote reads as the plain quoted value
+		if (enclosed && (start == 0 || units_before_field + start <= 2)) {
+			bool plain_inside = true;
+			for (idx_t i = start + 1; i + 1 < size; i++) {
+				if (value_ptr[i] == quote_character || value_ptr[i] == escape_character) {
+					plain_inside = false;
+					break;
+				}
+			}
+			if (plain_inside) {
+				return;
+			}
+		}
+		was_quoted = true;
+		quoted = false;
+		// the raw bytes run through the embedded quote text pass on the escaped path
+		escaped = true;
+	}
+	//! Counts the UTF-16 units of the bytes onto units, clamped at cap, as the embedded quote position rule counts
+	static inline idx_t ClampedUtf16Units(const char *str, idx_t size, idx_t units, idx_t cap) {
+		for (idx_t i = 0; i < size && units < cap; i++) {
+			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
+			if ((static_cast<uint8_t>(str[i]) & 0xC0) != 0x80) {
+				units += static_cast<uint8_t>(str[i]) >= 0xF0 ? 2 : 1;
+			}
+		}
+		return units < cap ? units : cap;
+	}
+	//! Advances the line offset past the field just consumed and its separator
+	inline void UpdateUnitsBeforeField(const char *value_ptr, idx_t size) {
+		if (!state_machine.state_machine_options.ToggleQuotes()) {
+			return;
+		}
+		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();
+		const idx_t units = ClampedUtf16Units(delimiter.data(), delimiter.size(), units_before_field, 3);
+		units_before_field = ClampedUtf16Units(value_ptr, size, units, 3);
+	}
 	//! Moves last_position past the newline that ends the row at buffer_pos
 	inline void SetLastPositionAfterNewline(idx_t buffer_pos);
 	//! Keeps the position of the current row for the error messages of Flush
@@ -308,7 +415,8 @@ public:
 	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
-	inline void AddValueToVector(const char *value_ptr, idx_t size, bool allocate = false);
+	inline void AddValueToVector(const char *value_ptr, idx_t size, bool allocate = false,
+	                             bool escape_and_character = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
@@ -365,9 +473,15 @@ public:
 
 	bool FinishedIterator() const;
 
-	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
-	                             Vector &vector);
+	//! Creates a new string with all escaped values removed, an escape that does not work in the value stays data
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool escape_works,
+	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
+
+	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
+	//! The returned value borrows the scratch buffer until the next call, so it must be copied or converted first
+	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
+	                                      const string &separator, CSVEscapeMode escape_mode, bool doubled_quotes,
+	                                      idx_t units_before, vector<char> &scratch);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
@@ -422,12 +536,15 @@ private:
 	//! -------- Functions used to figure out where lines start ---------!//
 	//! Main function, sets the correct start
 	void SetStart();
-	//! From a given initial state, it skips until we reach the until_state
-	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
-	                    bool &quoted) const;
+	//! How the bytes before the start read on, false when that is not known
+	bool BytesBeforeStart(CSVBufferEnd &before_start) const;
+	//! From a given initial state, it skips until we reach the until_state, through a broken row when the initial
+	//! state is exact
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator, bool &quoted,
+	                    bool exact = false) const;
 	//! If the current row we found is valid
 	bool IsRowValid(CSVIterator &current_iterator) const;
-	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos, bool exact = false) const;
 	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;

@@ -9,7 +9,7 @@ statement ok
 ATTACH '{TEMP_DIR}/partial_manager.db' AS db (BLOCK_SIZE 16384);
 
 statement ok
-CREATE TABLE db.t AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE);
+CREATE TABLE db.t AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 
 statement ok
 DETACH db;

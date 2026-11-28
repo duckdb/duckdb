@@ -20,6 +20,28 @@ enum class NewLineIdentifier : uint8_t {
 
 };
 
+//! Where the escape character works and what it escapes
+enum class CSVEscapeMode : uint8_t {
+	QUOTED = 0,     // the escape only works inside quoted values
+	ANYWHERE = 1,   // the escape works anywhere and escapes any character
+	QUOTES_ONLY = 2 // the escape works anywhere and only escapes the quote and escape characters
+};
+
+//! What a quote inside an unquoted field means
+enum class CSVEmbeddedQuotes : uint8_t {
+	NONE = 0,          // a quote inside a field is plain data
+	DOUBLED = 1,       // a doubled quote inside a field is one literal quote
+	TOGGLE = 2,        // a quote inside a field toggles the quote state, as the opencsv embedded quote rule reads it
+	DOUBLED_TOGGLE = 3 // a doubled quote is one literal quote and a lone quote toggles, the opencsv reading
+};
+
+//! What a quote that never closes means
+enum class CSVUnterminatedQuote : uint8_t {
+	THROW = 0,           // an unterminated quote is an error
+	VALUE = 1,           // the quote and the rest of its field read as a plain value
+	NULL_AT_LINE_END = 2 // the record ends at the line break and the open field reads as NULL
+};
+
 class Serializer;
 class Deserializer;
 

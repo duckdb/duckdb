@@ -41,7 +41,9 @@ shared_ptr<CSVBufferHandle> CSVRandomAccessBufferManager::GetBuffer(const idx_t 
 	}
 	// the load of a fresh or evicted buffer runs inside Pin, under the buffer's own lock,
 	// so loads of different buffers proceed in parallel
-	return buffer->Pin(*file_handle);
+	auto handle = buffer->Pin(*file_handle);
+	RememberBufferEnd(pos, *handle);
+	return handle;
 }
 
 CSVBufferResidency CSVRandomAccessBufferManager::GetBufferResidency(const idx_t pos,

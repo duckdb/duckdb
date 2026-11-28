@@ -5,14 +5,14 @@
 # Test simple null_padding, this will fail because we have a row with more columns that defined
 statement error
 from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, strict_mode=True)
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false)
 ----
 Expected Number of Columns: 4 Found: 5
 
 # Create a view
 statement ok
 CREATE VIEW np AS  from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, strict_mode=True);
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true);
 
 # With ignore errors this should work, with last row being ignored
 query IIII
@@ -43,7 +43,7 @@ NULL	NULL
 # Now let's try with options that give a const value
 query IIIII
 from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true, strict_mode=True);
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
 ----
 10	100	1000	NULL	{DATA_DIR}/csv/nullpadding.csv
 10	100	1000	10000	{DATA_DIR}/csv/nullpadding.csv
@@ -52,7 +52,7 @@ from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
 
 query II
 select a, filename from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true, strict_mode=True);
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
 ----
 10	{DATA_DIR}/csv/nullpadding.csv
 10	{DATA_DIR}/csv/nullpadding.csv
@@ -61,7 +61,7 @@ select a, filename from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=t
 
 query I
 select filename from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true, strict_mode=True);
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
 ----
 {DATA_DIR}/csv/nullpadding.csv
 {DATA_DIR}/csv/nullpadding.csv
@@ -70,7 +70,7 @@ select filename from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true
 
 query I
 select a from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors => true, filename => true, strict_mode=True);
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors => true, filename => true);
 ----
 10
 10
@@ -81,7 +81,7 @@ select a from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, colum
 
 query IIII
 select * from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect := false, ignore_errors := true, strict_mode=True)
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect := false, ignore_errors := true)
 where  b = 100;
 ----
 10	100	1000	NULL
@@ -91,7 +91,7 @@ where  b = 100;
 
 query IIIII
 select * from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true, strict_mode=True)
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true)
 where a = 10 and d = 10000;
 ----
 10	100	1000	10000	{DATA_DIR}/csv/nullpadding.csv

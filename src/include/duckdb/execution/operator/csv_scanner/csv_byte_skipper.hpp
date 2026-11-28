@@ -38,8 +38,13 @@ public:
 
 	//! Points the skipper at a buffer, dropping the block of a previous one
 	void SetBuffer(const CSVBufferHandle &buffer_handle) {
-		buffer = const_data_ptr_cast(buffer_handle.Ptr());
-		buffer_size = buffer_handle.actual_size;
+		SetBuffer(const_data_ptr_cast(buffer_handle.Ptr()), buffer_handle.actual_size);
+	}
+
+	//! Points the skipper at bytes, dropping the block of a previous buffer
+	void SetBuffer(const_data_ptr_t bytes, const idx_t size) {
+		buffer = bytes;
+		buffer_size = size;
 		block_start = 0;
 		block_end = 0;
 	}

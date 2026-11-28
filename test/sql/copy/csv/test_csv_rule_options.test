@@ -1,0 +1,685 @@
+# name: test/sql/copy/csv/test_csv_rule_options.test
+# description: The individual parsing rule options behind the CSV dialects
+# group: [csv]
+
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a\,7'), ('2,a\x,8'), ('3,c\')) t(line)) TO '{TEST_DIR}/rule_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+# escape_mode anywhere keeps a plain quote as data when it escapes the delimiter
+statement ok
+COPY (SELECT '1,a\,b"c' AS line) TO '{TEST_DIR}/rule_escape_quote.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query T
+SELECT b FROM read_csv('{TEST_DIR}/rule_escape_quote.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='anywhere');
+----
+a,b"c
+
+# an escape leading NULL string matches literally when the escape only works inside quotes
+statement ok
+COPY (SELECT * FROM (VALUES ('1,\N'), ('2,x')) t(line)) TO '{TEST_DIR}/rule_nullstr_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', nullstr='\N') ORDER BY a;
+----
+1	true
+2	false
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_nullstr_escape.csv', new_line=NULL::VARCHAR[]);
+----
+This is not accepted as a newline
+
+# where the escape works outside quotes the NULL string matches a plain field of the escape and its character
+foreach escape_mode anywhere quotes_only
+
+query IT
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N') ORDER BY a;
+----
+1	true
+2	false
+
+endloop
+
+# under quotes_only only a plain field of just the escape and the character matches, at any buffer size
+statement ok
+COPY (SELECT * FROM (VALUES ('1,x'), ('22,\N'), ('3,"\N"'), ('4,N'), ('5,\Nx'), ('66,N\'), ('7,\\N')) t(line)) TO '{TEST_DIR}/rule_nullstr_quotes_only.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach buffer_size 8 2000000
+
+foreach parallel true false
+
+query ITT
+SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_quotes_only.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='quotes_only', nullstr='\N', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	x	false
+3	N	false
+4	N	false
+5	Nx	false
+7	N	false
+22	NULL	true
+66	N	false
+
+# a plain NULL string matches what these fields read as
+query IT
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_quotes_only.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='quotes_only', nullstr='N', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	false
+3	true
+4	true
+5	false
+7	true
+22	true
+66	true
+
+endloop
+
+endloop
+
+# escape_mode anywhere lets the escape work outside quoted values, escaping any character after it
+query TTT
+SELECT a, replace(b, chr(10), '<nl>'), c FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', parallel=false) ORDER BY a;
+----
+1	a,7	NULL
+2	ax	8
+3	c<nl>	NULL
+
+# escape_mode quotes_only keeps the delimiter and line break active, as the escape only escapes specials
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', escape_mode='quotes_only') ORDER BY a;
+----
+1	a	7
+2	ax	8
+3	c	NULL
+
+# escape_mode quoted reads the escape as data outside quotes, the default
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', escape_mode='quoted') ORDER BY a;
+----
+1	a\	7
+2	a\x	8
+3	c\	NULL
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', quote='"', escape='"', escape_mode='quotes_only');
+----
+ESCAPE_MODE 'quotes_only' requires an ESCAPE character other than the QUOTE character
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', escape_mode='sometimes');
+----
+ESCAPE_MODE must be quoted, anywhere or quotes_only
+
+# unterminated_quote null_at_line_end ends the record on a line break even inside quotes
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"x'), ('y",2'), ('3,ok,4')) t(line)) TO '{TEST_DIR}/rule_lines.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='null_at_line_end') ORDER BY a;
+----
+1	NULL	NULL
+3	ok	4
+y"	2	NULL
+
+# the field left open counts toward the column check
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, unterminated_quote='null_at_line_end');
+----
+<REGEX>:.*Expected Number of Columns.*
+
+# embedded_quotes doubled collapses a doubled quote with an unrelated escape, in and outside quoted values
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"a""b"'), ('2,p""q')) t(line)) TO '{TEST_DIR}/rule_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, embedded_quotes='doubled') ORDER BY a;
+----
+1	a"b
+2	p"q
+
+# an escape that does not work in a plain field stays data when a quote sends the field through unescaping
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a\b""c'), ('2,ab\c"'), ('3,"a\"b""c"'), ('4,a\""b')) t(line)) TO '{TEST_DIR}/rule_doubled_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach buffer_size 12 13 2000000
+
+foreach parallel true false
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	a\b"c
+2	ab\c"
+3	a"b"c
+4	a\"b
+
+endloop
+
+endloop
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled', unterminated_quote='null_at_line_end') WHERE a = 2;
+----
+2	ab\c"
+
+# where the escape works outside quotes it is consumed there
+foreach escape_mode anywhere quotes_only
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', embedded_quotes='doubled') WHERE a < 4 ORDER BY a;
+----
+1	ab"c
+2	abc"
+3	a"b"c
+
+endloop
+
+# without an escape character a NUL byte in a field with a doubled quote is data
+statement ok
+COPY (SELECT 'a' || chr(0) || 'b""c' AS line) TO '{TEST_DIR}/rule_doubled_nul.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT length(v), v = 'a' || chr(0) || 'b"c' FROM read_csv('{TEST_DIR}/rule_doubled_nul.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='', embedded_quotes='doubled');
+----
+5	true
+
+# a lone quote under doubled stays data, also when a line rule reads open quotes as NULL
+statement ok
+COPY (SELECT * FROM (VALUES ('1,ab"'), ('2,c')) t(line)) TO '{TEST_DIR}/rule_doubled_lone.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_lone.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled', unterminated_quote='null_at_line_end') ORDER BY a;
+----
+1	ab"
+2	c
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_lone.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled') ORDER BY a;
+----
+1	ab"
+2	c
+
+query TT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', embedded_quotes='doubled') ORDER BY a;
+----
+1	a"b
+2	p"q
+
+# without an escape character a doubled quote collapses too, wherever a buffer boundary falls in its field
+statement ok
+COPY (SELECT * FROM (VALUES ('p'), ('q'), ('abcd""e'), ('z')) t(line)) TO '{TEST_DIR}/rule_doubled_boundary.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach buffer_size 8 64
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_doubled_boundary.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='', embedded_quotes='doubled', new_line='\n', buffer_size={buffer_size}, parallel=false);
+----
+p
+q
+abcd"e
+z
+
+endloop
+
+loop prefix 1 8
+
+statement ok
+COPY (SELECT encode(repeat('p', {prefix}) || chr(10) || 'ab""c' || chr(10) || 'z' || chr(10))) TO '{TEST_DIR}/rule_doubled_buffers.csv' (FORMAT BLOB);
+
+foreach embedded_quotes doubled toggle doubled_toggle
+
+foreach parallel true false
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_doubled_buffers.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='', embedded_quotes='{embedded_quotes}', new_line='\n', buffer_size=8, parallel={parallel}) WHERE v NOT LIKE 'p%';
+----
+ab"c
+z
+
+endloop
+
+endloop
+
+endloop
+
+# under the toggle alone a doubled quote is two toggles, each kept by the position rule
+statement ok
+COPY (SELECT '1,a""b,2' AS line) TO '{TEST_DIR}/rule_two_toggles.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/rule_two_toggles.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, embedded_quotes='toggle', unterminated_quote='null_at_line_end', null_padding=true);
+----
+1	a""b	2
+
+# embedded_quotes doubled_toggle applies opencsv's embedded quote rule
+statement ok
+COPY (SELECT '1,a"b"c,2' AS line) TO '{TEST_DIR}/rule_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', embedded_quotes='doubled_toggle');
+----
+1	a"b"c	2
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', quote='"', escape='"', embedded_quotes='toggle');
+----
+EMBEDDED_QUOTES requires a QUOTE character other than the ESCAPE character
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', embedded_quotes='twice');
+----
+EMBEDDED_QUOTES must be none, doubled, toggle or doubled_toggle
+
+# the toggle reads escapes inside its quotes under every escape rule
+statement ok
+COPY (SELECT 'xx,a"\"b",z' AS line) TO '{TEST_DIR}/rule_toggle_quoted_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_quoted_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle');
+----
+xx	a""b	z
+
+# the toggle leaves the escape alone under the default escape rule
+statement ok
+COPY (SELECT * FROM (VALUES ('xx,a\b"c"d,z'), ('xx,a\b,z')) t(line)) TO '{TEST_DIR}/rule_toggle_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query T
+SELECT b FROM read_csv('{TEST_DIR}/rule_toggle_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle') ORDER BY ALL;
+----
+a\b
+a\b"c"d
+
+# a toggled quote reads across line breaks unless the line rule is on
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a"'), ('b"'), ('2,c')) t(line)) TO '{TEST_DIR}/rule_toggle_nl.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT x, replace(y, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/rule_toggle_nl.csv', columns={'x': 'VARCHAR', 'y': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', null_padding=true, embedded_quotes='toggle', parallel=false) ORDER BY x;
+----
+1	a"<LF>b
+2	c
+
+# a toggle section left open at the end of the file is an unterminated quote, with or without a final line break
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"')) TO '{TEST_DIR}/rule_toggle_eof.csv' (FORMAT BLOB);
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"' || chr(10))) TO '{TEST_DIR}/rule_toggle_eof_nl.csv' (FORMAT BLOB);
+
+foreach embedded_quotes toggle doubled_toggle
+
+foreach file rule_toggle_eof.csv rule_toggle_eof_nl.csv
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}');
+----
+Value with unterminated quote found
+
+foreach parallel true false
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', ignore_errors=true, parallel={parallel});
+----
+x
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', unterminated_quote='null_at_line_end', parallel={parallel});
+----
+x
+NULL
+
+endloop
+
+endloop
+
+# read as a value the field left open keeps its text
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', unterminated_quote='value');
+----
+x
+a
+
+endloop
+
+# the same when the field left open is read over the last two buffers
+statement ok
+COPY (SELECT encode('xxxxxx' || chr(10) || 'ab"')) TO '{TEST_DIR}/rule_toggle_eof_buffers.csv' (FORMAT BLOB);
+
+foreach parallel true false
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_eof_buffers.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', buffer_size=8, parallel={parallel});
+----
+Value with unterminated quote found
+
+endloop
+
+# the space delimiter keeps its meaning under the field quote rules
+statement ok
+COPY (SELECT 'a  b' AS line) TO '{TEST_DIR}/rule_space_delim.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+FROM read_csv('{TEST_DIR}/rule_space_delim.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, header=false, auto_detect=false, delim=' ', quote='"', escape='\', null_padding=true, embedded_quotes='doubled');
+----
+a	NULL	b
+
+# an overlong encoding is invalid utf8 rather than whitespace in the toggle pass
+statement error
+FROM read_csv('data/csv/overlong_space.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle');
+----
+<REGEX>:.*(Invalid unicode|not utf-8).*
+
+# a new_line list reads every listed line break as a record boundary
+statement ok
+COPY (SELECT 'a,b' || chr(13) || chr(10) || '1,2' || chr(10) || '3,4' || chr(13) || '5,6' || chr(13) || chr(10) AS line) TO '{TEST_DIR}/rule_mixed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line=['\n', '\r', '\r\n'], columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false);
+----
+3
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line='\r\n', columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false);
+----
+<REGEX>:.*invalid state.*
+
+# a line break outside the list stays an invalid state
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line=['\n', '\r\n'], columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false);
+----
+<REGEX>:.*invalid state.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line=['\r\n'], columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false);
+----
+<REGEX>:.*invalid state.*
+
+# a one element list reads as the plain option
+statement ok
+COPY (SELECT 7 a, 8 b) TO '{TEST_DIR}/rule_single_rn.csv' (FORMAT csv, HEADER false, NEW_LINE '\r\n');
+
+query II
+SELECT * FROM read_csv('{TEST_DIR}/rule_single_rn.csv', columns={'a': 'INTEGER', 'b': 'INTEGER'}, header=false, auto_detect=false, new_line=['\r\n']);
+----
+7	8
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', new_line=['\n', '\t']);
+----
+This is not accepted as a newline: \t
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', new_line=[]);
+----
+NEW_LINE requires at least one line break in its list
+
+# ignore_extra_columns reads fields beyond the last column as ignored
+statement ok
+COPY (SELECT '1,x,extra' AS line) TO '{TEST_DIR}/rule_extra.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, ignore_extra_columns=true);
+----
+1	x
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false);
+----
+<REGEX>:.*Expected Number of Columns.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, ignore_extra_columns=false);
+----
+<REGEX>:.*Expected Number of Columns.*
+
+# allow_unescaped_quotes reads content after a closing quote as in unstrict parsing
+statement ok
+COPY (SELECT '1,"a"x,2' AS line) TO '{TEST_DIR}/rule_unescaped.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false, allow_unescaped_quotes=true);
+----
+1	a	2
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false);
+----
+<REGEX>:.*(invalid state|unterminated quote).*
+
+# unterminated_quote value reads a quote that never closes as a value
+statement ok
+COPY (SELECT '1,"abc' AS line) TO '{TEST_DIR}/rule_unterminated.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, unterminated_quote='value', parallel=false);
+----
+1	abc
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', unterminated_quote='maybe');
+----
+UNTERMINATED_QUOTE must be error, value or null_at_line_end
+
+# COPY FROM reads the rule options, the writer refuses them
+statement ok
+CREATE TABLE rule_rows (a VARCHAR, b VARCHAR, c VARCHAR);
+
+statement ok
+COPY rule_rows FROM '{TEST_DIR}/rule_escape.csv' (DELIM ',', QUOTE '"', ESCAPE '\', HEADER false, NEW_LINE ['\n', '\r', '\r\n'], IGNORE_EXTRA_COLUMNS true, ALLOW_UNESCAPED_QUOTES true, UNTERMINATED_QUOTE 'value', NULL_PADDING true, AUTO_DETECT false, ESCAPE_MODE 'quotes_only');
+
+query I
+SELECT count(*) FROM rule_rows;
+----
+3
+
+statement error
+COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (ESCAPE_MODE 'quotes_only');
+----
+<REGEX>:.*not supported for writing.*
+
+# the writer takes a single line break only
+statement error
+COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (NEW_LINE ['\n', '\r']);
+----
+<REGEX>:.*single argument.*
+
+# an empty line whose line break starts a buffer does not shift the embedded quote position of the next row
+statement ok
+COPY (FROM (VALUES (repeat('x', 31)), (''), ('ab"c"d')) t(a)) TO '{TEST_DIR}/rule_empty_line_buffer_start.csv' (HEADER false, QUOTE '', ESCAPE '', NEW_LINE '\r\n');
+
+foreach buffer_size 32 2000000
+
+query T
+SELECT a FROM read_csv('{TEST_DIR}/rule_empty_line_buffer_start.csv', columns={'a': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', new_line='\r\n', buffer_size={buffer_size}, parallel=false);
+----
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NULL
+abc"d
+
+endloop
+
+# an escape that is the last byte of the file leaves its quotes open, the toggle's and a plain quoted value's
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"\')) TO '{TEST_DIR}/rule_toggle_escape_eof.csv' (FORMAT BLOB);
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"a\')) TO '{TEST_DIR}/rule_quoted_escape_eof.csv' (FORMAT BLOB);
+
+foreach parallel true false
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_escape_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', new_line='\n', parallel={parallel});
+----
+Value with unterminated quote found
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_quoted_escape_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', parallel={parallel});
+----
+Value with unterminated quote found
+
+endloop
+
+# the escape and a character that spell a NULL string read as NULL in a typed column as well
+statement ok
+COPY (SELECT * FROM (VALUES ('123456'), ('\N'), ('2')) t(line)) TO '{TEST_DIR}/rule_typed_null.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach escape_mode quotes_only anywhere
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_null.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N');
+----
+123456
+NULL
+2
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_null.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N', buffer_size=8, max_line_size=7, parallel=false);
+----
+123456
+NULL
+2
+
+endloop
+
+# any other escaped value of a typed column is still an error
+statement ok
+COPY (SELECT * FROM (VALUES ('7'), ('\5')) t(line)) TO '{TEST_DIR}/rule_typed_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_escape.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='anywhere', nullstr='\N');
+----
+Could not convert string
+
+# the sniffer accepts a quote the user set that never closes when it reads as a value
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"b')) TO '{TEST_DIR}/rule_sniff_open_quote.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_sniff_open_quote.csv', header=false, all_varchar=true, delim=',', quote='"', escape='\', embedded_quotes='toggle', unterminated_quote='value', new_line='\n');
+----
+x
+ab
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_sniff_open_quote.csv', header=false, all_varchar=true, delim=',', quote='"', escape='\', embedded_quotes='toggle', new_line='\n');
+----
+<REGEX>:.*(unterminated quote|not possible to automatically detect).*
+
+# read as a value, a quoted value the end of the file leaves open keeps its last character
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"abc')) TO '{TEST_DIR}/rule_open_eof.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof.csv', header=false, all_varchar=true, delim=',', quote='"', escape='\', new_line='\n', unterminated_quote='value');
+----
+x
+abc
+
+# wherever the end of the file lies in the buffers
+loop i 1 8
+
+statement ok
+COPY (SELECT encode(repeat('x', {i}) || chr(10) || '"abc')) TO '{TEST_DIR}/rule_open_eof_{i}.csv' (FORMAT BLOB);
+
+foreach parallel true false
+
+query T
+SELECT ltrim(v, 'x') FROM read_csv('{TEST_DIR}/rule_open_eof_{i}.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', unterminated_quote='value', buffer_size=8, parallel={parallel});
+----
+(empty)
+abc
+
+endloop
+
+endloop
+
+# behind another column and in a typed column, whose type the sniffer detects from the whole value
+statement ok
+COPY (SELECT encode('1,"2')) TO '{TEST_DIR}/rule_open_eof_typed.csv' (FORMAT BLOB);
+
+query IIT
+SELECT column0, column1, typeof(column1) FROM read_csv('{TEST_DIR}/rule_open_eof_typed.csv', header=false, quote='"', escape='\', new_line='\n', unterminated_quote='value');
+----
+1	2	BIGINT
+
+foreach parallel true false
+
+query II
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof_typed.csv', columns={'a': 'INTEGER', 'b': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', unterminated_quote='value', parallel={parallel});
+----
+1	2
+
+# without the rule the open quote is still an error
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', parallel={parallel});
+----
+Value with unterminated quote found
+
+endloop
+
+# a doubled quote at its end is one quote and its trailing spaces stay, in one buffer and over two
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"abc""  ')) TO '{TEST_DIR}/rule_open_eof_doubled.csv' (FORMAT BLOB);
+
+foreach buffer_size 8 2000000
+
+query T
+SELECT '[' || v || ']' FROM read_csv('{TEST_DIR}/rule_open_eof_doubled.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='"', new_line='\n', unterminated_quote='value', buffer_size={buffer_size});
+----
+[x]
+[abc"  ]
+
+endloop
+
+# an escape that ends the file drops and an empty value left open is NULL
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"abc\')) TO '{TEST_DIR}/rule_open_eof_escape.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof_escape.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', unterminated_quote='value');
+----
+x
+abc
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"')) TO '{TEST_DIR}/rule_open_eof_empty.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof_empty.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', unterminated_quote='value');
+----
+x
+NULL
+
+# a line break that ends the file is not part of the value
+foreach line_break 10 13
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"abc' || chr({line_break}))) TO '{TEST_DIR}/rule_open_eof_break_{line_break}.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof_break_{line_break}.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line=['\n', '\r', '\r\n'], unterminated_quote='value');
+----
+x
+abc
+
+endloop
+
+# a carriage return before a final line feed is data when the line feed alone ends a record
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"abc' || chr(13) || chr(10))) TO '{TEST_DIR}/rule_open_eof_crlf.csv' (FORMAT BLOB);
+
+query T
+SELECT replace(v, chr(13), '<CR>') FROM read_csv('{TEST_DIR}/rule_open_eof_crlf.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', unterminated_quote='value');
+----
+x
+abc<CR>
+
+# the embedded quote toggle reads the open value whole as well
+foreach embedded_quotes toggle doubled_toggle
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_open_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', embedded_quotes='{embedded_quotes}', unterminated_quote='value');
+----
+x
+abc
+
+endloop

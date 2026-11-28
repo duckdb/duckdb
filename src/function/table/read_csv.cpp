@@ -68,7 +68,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("date_format", LogicalType::VARCHAR)
 		    .Add("timestamp_format", LogicalType::VARCHAR)
 		    .Add("quote", LogicalType::VARCHAR)
-		    .Add("new_line", LogicalType::VARCHAR)
+		    .Add("new_line", LogicalType::ANY)
 		    .Add("escape", LogicalType::VARCHAR)
 		    .Add("nullstr", LogicalType::ANY)
 		    .Add("columns", LogicalType::ANY)
@@ -103,7 +103,11 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("column_names", LogicalType::LIST(LogicalType::VARCHAR))
 		    .Add("comment", LogicalType::VARCHAR)
 		    .Add("encoding", LogicalType::VARCHAR)
-		    .Add("strict_mode", LogicalType::BOOLEAN)
+		    .Add("escape_mode", LogicalType::VARCHAR)
+		    .Add("embedded_quotes", LogicalType::VARCHAR)
+		    .Add("unterminated_quote", LogicalType::VARCHAR)
+		    .Add("ignore_extra_columns", LogicalType::BOOLEAN)
+		    .Add("allow_unescaped_quotes", LogicalType::BOOLEAN)
 		    .Add("thousands", LogicalType::VARCHAR)
 		    .Add("files_to_sniff", LogicalType::BIGINT);
 	});
