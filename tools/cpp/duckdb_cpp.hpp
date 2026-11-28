@@ -3670,6 +3670,27 @@ enum class OrderPreservation : uint8_t {
 	FIXED_ORDER = 2,
 };
 
+/// What an invocation of a scan's exec callback leaves the scan in. Mirrors the result of a table function in the
+/// engine: by default the size of the batch decides.
+enum class ScanResult : uint8_t {
+	/// The default. A batch with rows means the scan goes on, an empty batch that it is finished.
+	IMPLICIT = 0,
+	/// The scan goes on. The batch must have rows.
+	HAVE_MORE_OUTPUT = 1,
+	/// The scan is finished on this thread. The batch must be empty. For a scan that claims its batches this also ends
+	/// the claiming, where an empty batch only ends the claimed batch, except when a multi-file scan claims them.
+	FINISHED = 2,
+	/// The scan cannot go on until the tasks added with `AddTask` have run, after which the exec callback is invoked
+	/// again. The batch must be empty, and at least one task must have been added.
+	BLOCKED = 3,
+};
+
+namespace detail {
+//! Backs `SetResult`, `AddTask` and `Yield` of the exec inputs of the scans: the handle is the exec info
+auto SetScanResult(void *exec_info, ScanResult result) -> void;
+auto AddScanTask(void *exec_info, std::function<void()> task) -> void;
+} // namespace detail
+
 //----------------------------------------------------------------------------------------------------------------------
 // Statistics
 //----------------------------------------------------------------------------------------------------------------------
@@ -5039,9 +5060,32 @@ public:
 
 		/// The chunk to write the next batch of rows into, with one vector per column declared in bind. It starts out
 		/// empty on every invocation: write the rows, then give the batch its row count with `Vector::SetSize` on the
-		/// chunk's first vector, which the engine propagates to the others. Leaving it empty ends the scan.
+		/// chunk's first vector, which the engine propagates to the others. Leaving it empty ends the scan, unless
+		/// the invocation declares otherwise with `SetResult` or `AddTask`.
 		/// @return A borrowed chunk, valid only for the callback duration.
 		auto GetOutputChunk() const -> DataChunk;
+
+		/// Declares what this invocation leaves the scan in, see `ScanResult`. Checked when the callback returns:
+		/// a result that does not fit the batch fails the query. Unstable API.
+		auto SetResult(ScanResult result) -> void {
+			detail::SetScanResult(args, result);
+		}
+
+		/// Adds a task to run before the scan goes on, and makes the result of this invocation `ScanResult::BLOCKED`.
+		/// The engine runs the tasks on its scheduler, or one after the other on the calling thread when the scan runs
+		/// synchronously, then invokes the exec callback again, possibly on another thread. A task runs once, cannot
+		/// reach this input, and must not touch the state of the scan that other threads write unsynchronized. An
+		/// exception it throws fails the query. Unstable API.
+		auto AddTask(std::function<void()> task) -> void {
+			detail::AddScanTask(args, std::move(task));
+		}
+
+		/// Ends this invocation without ending the scan, by blocking it on a task that does nothing: for a callback
+		/// that works long without producing rows, e.g. one generating data into tables, which hands the thread back
+		/// to the engine between steps and so keeps the progress observable. Unstable API.
+		auto Yield() -> void {
+			AddTask([] {});
+		}
 
 		/// How many vectors the output chunk holds; see `InitGlobalInput::GetColumnCount`.
 		auto GetColumnCount() const -> idx_t;
@@ -6352,9 +6396,32 @@ public:
 		/// The chunk to write the next batch of rows into, with one vector per column reported by
 		/// `CopyFromBindInput::GetColumnCount`. It starts out empty on every invocation: write the rows, then give the
 		/// batch its row count with `Vector::SetSize` on the chunk's first vector, which the engine propagates to the
-		/// others. Leaving it empty ends the read.
+		/// others. Leaving it empty ends the read, unless the invocation declares otherwise with `SetResult` or
+		/// `AddTask`.
 		/// @return A borrowed chunk, valid only for the callback duration.
 		auto GetOutputChunk() const -> DataChunk;
+
+		/// Declares what this invocation leaves the scan in, see `ScanResult`. Checked when the callback returns:
+		/// a result that does not fit the batch fails the query. Unstable API.
+		auto SetResult(ScanResult result) -> void {
+			detail::SetScanResult(args, result);
+		}
+
+		/// Adds a task to run before the scan goes on, and makes the result of this invocation `ScanResult::BLOCKED`.
+		/// The engine runs the tasks on its scheduler, or one after the other on the calling thread when the scan runs
+		/// synchronously, then invokes the exec callback again, possibly on another thread. A task runs once, cannot
+		/// reach this input, and must not touch the state of the scan that other threads write unsynchronized. An
+		/// exception it throws fails the query. Unstable API.
+		auto AddTask(std::function<void()> task) -> void {
+			detail::AddScanTask(args, std::move(task));
+		}
+
+		/// Ends this invocation without ending the scan, by blocking it on a task that does nothing: for a callback
+		/// that works long without producing rows, e.g. one generating data into tables, which hands the thread back
+		/// to the engine between steps and so keeps the progress observable. Unstable API.
+		auto Yield() -> void {
+			AddTask([] {});
+		}
 
 		/// The execution context. Borrowed, valid only for the callback duration.
 		auto GetContext() -> Context &;

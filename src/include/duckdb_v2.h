@@ -17659,6 +17659,35 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_result_to_arrow_c_stream(duckdb_v2_
 
 /* --- Enums for data_source --- */
 
+/*!
+ * What an invocation of the exec callback leaves the scan in, set with `duckdb_v2_data_source_exec_set_result()`. It
+ * mirrors the result of a table function in the engine (`AsyncResultType`): by default the size of the batch decides,
+ * and a callback can instead declare explicitly that the scan goes on, that it is finished, or that it is blocked on
+ * tasks to run first.
+ */
+typedef enum DUCKDB_V2_DATA_SOURCE_RESULT {
+	//! The default. A batch with rows means the scan goes on, an empty batch that it is finished.
+	DUCKDB_V2_DATA_SOURCE_RESULT_IMPLICIT = 0,
+
+	//! The scan goes on. The batch must have rows.
+	DUCKDB_V2_DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT = 1,
+
+	/*!
+	 * The scan is finished on this thread, and the callback is not invoked again on it. The batch must be empty. For a
+	 * data source that claims its batches (see `duckdb_v2_data_source_set_claim_batch_callback()`) this also ends the
+	 * claiming, where an empty batch only ends the claimed batch, except when a multi-file scan claims the batches:
+	 * there it ends the batch like an empty batch does.
+	 */
+	DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED = 2,
+
+	/*!
+	 * The scan cannot go on until the tasks added with `duckdb_v2_data_source_exec_add_task()` have run, after which
+	 * the callback is invoked again. The batch must be empty, and at least one task must have been added.
+	 */
+	DUCKDB_V2_DATA_SOURCE_RESULT_BLOCKED = 3,
+	DUCKDB_V2_DATA_SOURCE_RESULT_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_DATA_SOURCE_RESULT;
+
 /* --- Struct forward declarations for data_source --- */
 
 /* --- Types for data_source --- */
@@ -17747,6 +17776,8 @@ typedef struct _duckdb_v2_data_source_metrics_info {
 /* --- Constants for data_source --- */
 
 /* --- Function pointer typedefs for data_source --- */
+
+typedef void (*duckdb_v2_data_source_task_callback_fn)(void *data, duckdb_v2_error_info_handle *err);
 
 typedef void (*duckdb_v2_data_source_init_global_callback_fn)(duckdb_v2_data_source_init_global_info_handle info,
                                                               duckdb_v2_context_handle context,
@@ -18349,7 +18380,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_local_state(duckdb_v
  * order; reach them with `duckdb_v2_data_chunk_get_vector()`. The chunk starts out empty on every invocation: write the
  * rows, then declare how many there are with `duckdb_v2_vector_set_size()` on the first vector, which the engine takes
  * as the batch's row count and propagates to the other vectors. Producing an empty batch signals the end of the scan,
- * after which the callback is not invoked again on that thread. Borrowed; valid only for the duration of the callback.
+ * after which the callback is not invoked again on that thread, unless the invocation declares otherwise with
+ * `duckdb_v2_data_source_exec_set_result()` or `duckdb_v2_data_source_exec_add_task()`. Borrowed; valid only for the
+ * duration of the callback.
  *
  * history:
  * - unstable: v2.0.0
@@ -18409,6 +18442,58 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_count(duckdb_
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_index(duckdb_v2_data_source_exec_info_handle info,
                                                                          idx_t index, idx_t *column_index,
                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Declares what this invocation of the exec callback leaves the scan in, see `DUCKDB_V2_DATA_SOURCE_RESULT`.
+ *
+ * Without it, the size of the batch decides: an empty batch finishes the scan on this thread. Checked when the callback
+ * returns: `DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT` with an empty batch, `DATA_SOURCE_RESULT_FINISHED` or
+ * `DATA_SOURCE_RESULT_BLOCKED` with rows, `DATA_SOURCE_RESULT_BLOCKED` without a task, or a task added while the result
+ * is not `DATA_SOURCE_RESULT_BLOCKED` fail the query.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param result What the invocation leaves the scan in.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_set_result(duckdb_v2_data_source_exec_info_handle info,
+                                                                   DUCKDB_V2_DATA_SOURCE_RESULT result,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Adds a task to run before the scan goes on, and sets the result of this invocation to `DATA_SOURCE_RESULT_BLOCKED`.
+ *
+ * Once the callback returns, the scan is blocked until every task it added has run, after which the exec callback is
+ * invoked again, possibly on another thread. The engine runs the tasks on its scheduler, where they do not hold up the
+ * thread the scan ran on, or runs them on the calling thread, one after the other, when the scan runs synchronously. A
+ * task can do work the next invocation needs, like reading ahead, or nothing at all: a task that does nothing hands the
+ * thread back to the engine, which keeps the progress of a callback that works long without producing rows observable.
+ * A task runs once, without access to the exec info, and must not touch the state of the scan that other threads write
+ * unsynchronized. A task that fails fails the query.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param task The task to run.
+ * @param data Opaque handle bundling the data the task is called with plus an optional destructor, invoked once the
+ * task has run or when it is discarded. The pointer may be null. Taken over by the call, also when it fails.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_add_task(duckdb_v2_data_source_exec_info_handle info,
+                                                                 duckdb_v2_data_source_task_callback_fn task,
+                                                                 duckdb_v2_opaque *data,
+                                                                 duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

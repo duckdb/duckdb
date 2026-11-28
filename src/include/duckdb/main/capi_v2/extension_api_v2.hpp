@@ -1744,11 +1744,17 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_variant_to_value)
 	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_in_transaction)
+	(duckdb_v2_context_handle ctx, duckdb_v2_connection_handle *out_conn, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_set_data_source)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_data_source_handle data_source,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_in_transaction)
-	(duckdb_v2_context_handle ctx, duckdb_v2_connection_handle *out_conn, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_exec_add_task)
+	(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_data_source_task_callback_fn task, duckdb_v2_opaque *data,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_exec_set_result)
+	(duckdb_v2_data_source_exec_info_handle info, DUCKDB_V2_DATA_SOURCE_RESULT result,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_property)
 	(duckdb_v2_table_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
 	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
@@ -2529,8 +2535,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_set_data_source = duckdb_v2_table_function_set_data_source;
 	result.duckdb_v2_table_function_set_operator = duckdb_v2_table_function_set_operator;
 	result.duckdb_v2_value_variant_to_value = duckdb_v2_value_variant_to_value;
-	result.duckdb_v2_copy_from_set_data_source = duckdb_v2_copy_from_set_data_source;
 	result.duckdb_v2_connection_create_in_transaction = duckdb_v2_connection_create_in_transaction;
+	result.duckdb_v2_copy_from_set_data_source = duckdb_v2_copy_from_set_data_source;
+	result.duckdb_v2_data_source_exec_add_task = duckdb_v2_data_source_exec_add_task;
+	result.duckdb_v2_data_source_exec_set_result = duckdb_v2_data_source_exec_set_result;
 	result.duckdb_v2_table_function_set_property = duckdb_v2_table_function_set_property;
 	return result;
 }

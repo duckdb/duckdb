@@ -60,9 +60,51 @@ handles:
       e.g. how many row groups it read.
 
 #-----------------------------------------------------------------------------------------------------------------------
+# Enums
+#-----------------------------------------------------------------------------------------------------------------------
+enums:
+  DATA_SOURCE_RESULT:
+    description: |
+      What an invocation of the exec callback leaves the scan in, set with `[[data_source_exec_set_result]]`. It
+      mirrors the result of a table function in the engine (`AsyncResultType`): by default the size of the batch
+      decides, and a callback can instead declare explicitly that the scan goes on, that it is finished, or that it
+      is blocked on tasks to run first.
+    values:
+      DATA_SOURCE_RESULT_IMPLICIT:
+        value: 0
+        description: The default. A batch with rows means the scan goes on, an empty batch that it is finished.
+      DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT:
+        value: 1
+        description: The scan goes on. The batch must have rows.
+      DATA_SOURCE_RESULT_FINISHED:
+        value: 2
+        description: |
+          The scan is finished on this thread, and the callback is not invoked again on it. The batch must be empty.
+          For a data source that claims its batches (see `[[data_source_set_claim_batch_callback]]`) this also ends
+          the claiming, where an empty batch only ends the claimed batch, except when a multi-file scan claims the
+          batches: there it ends the batch like an empty batch does.
+      DATA_SOURCE_RESULT_BLOCKED:
+        value: 3
+        description: |
+          The scan cannot go on until the tasks added with `[[data_source_exec_add_task]]` have run, after which the
+          callback is invoked again. The batch must be empty, and at least one task must have been added.
+
+#-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
 #-----------------------------------------------------------------------------------------------------------------------
 callbacks:
+  data_source_task_callback:
+    parameters:
+      data:
+        type: void
+        indirection: 1
+        description: The data the task was added with, see `[[data_source_exec_add_task]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
   data_source_init_global_callback:
     parameters:
       info:
@@ -788,8 +830,9 @@ functions:
       same order; reach them with `[[data_chunk_get_vector]]`. The chunk starts out empty on every invocation:
       write the rows, then declare how many there are with `[[vector_set_size]]` on the first vector, which the
       engine takes as the batch's row count and propagates to the other vectors. Producing an empty batch signals
-      the end of the scan, after which the callback is not invoked again on that thread. Borrowed; valid only for
-      the duration of the callback.
+      the end of the scan, after which the callback is not invoked again on that thread, unless the invocation
+      declares otherwise with `[[data_source_exec_set_result]]` or `[[data_source_exec_add_task]]`. Borrowed; valid
+      only for the duration of the callback.
     parameters:
       info:
         type: data_source_exec_info
@@ -852,6 +895,62 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_set_result:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-27" ]
+    description: |
+      Declares what this invocation of the exec callback leaves the scan in, see `[[DATA_SOURCE_RESULT]]`.
+
+      Without it, the size of the batch decides: an empty batch finishes the scan on this thread. Checked when the
+      callback returns: `DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT` with an empty batch, `DATA_SOURCE_RESULT_FINISHED`
+      or `DATA_SOURCE_RESULT_BLOCKED` with rows, `DATA_SOURCE_RESULT_BLOCKED` without a task, or a task added
+      while the result is not `DATA_SOURCE_RESULT_BLOCKED` fail the query.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      result:
+        type: DATA_SOURCE_RESULT
+        description: What the invocation leaves the scan in.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_add_task:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-27" ]
+    description: |
+      Adds a task to run before the scan goes on, and sets the result of this invocation to
+      `DATA_SOURCE_RESULT_BLOCKED`.
+
+      Once the callback returns, the scan is blocked until every task it added has run, after which the exec
+      callback is invoked again, possibly on another thread. The engine runs the tasks on its scheduler, where they
+      do not hold up the thread the scan ran on, or runs them on the calling thread, one after the other, when the
+      scan runs synchronously. A task can do work the next invocation needs, like reading ahead, or nothing at all:
+      a task that does nothing hands the thread back to the engine, which keeps the progress of a callback that
+      works long without producing rows observable. A task runs once, without access to the exec info, and must
+      not touch the state of the scan that other threads write unsynchronized. A task that fails fails the query.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      task:
+        type: data_source_task_callback
+        description: The task to run.
+      data:
+        type: opaque
+        indirection: 1
+        description: |
+          Opaque handle bundling the data the task is called with plus an optional destructor, invoked once the task
+          has run or when it is discarded. The pointer may be null. Taken over by the call, also when it fails.
       err:
         type: error_info
         indirection: 1

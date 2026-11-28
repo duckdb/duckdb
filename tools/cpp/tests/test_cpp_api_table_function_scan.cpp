@@ -808,3 +808,107 @@ TEST_CASE("Stable C++API: table function to string callback with user data, prof
 	REQUIRE_THROWS_WITH(conn.Execute("SELECT i FROM cpp_describe_fails(2)").Drain(),
 	                    Catch::Contains("cannot describe the scan"));
 }
+
+namespace {
+
+// cpp_tasks(count, mode): one row per call. Before each row the scan blocks: with mode 0 on Yield(), with mode 1 on a
+// task computing the next value, with mode 2 on a task that throws.
+struct TasksBind {
+	int64_t count;
+	int64_t mode;
+};
+struct TasksGlobal {
+	int64_t next = 0;
+	bool blocked = false;
+	// Written by the task, read by the next call
+	std::atomic<int64_t> computed {-1};
+};
+
+std::atomic<int64_t> tasks_exec_calls {0};
+
+void TasksBindFunction(TableFunction::BindInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	input.AddResultColumn("v", factory.ParseType("BIGINT"));
+	input.SetBindData<TasksBind>(
+	    TasksBind {input.GetConstantArgument(0).Get<int64_t>(), input.GetConstantArgument(1).Get<int64_t>()});
+}
+
+void TasksInitGlobal(TableFunction::InitGlobalInput &input) {
+	input.SetGlobalState<TasksGlobal>();
+}
+
+void TasksExec(TableFunction::ExecInput &input) {
+	const auto &bind = input.GetBindData<TasksBind>();
+	auto &global = input.GetGlobalState<TasksGlobal>();
+	tasks_exec_calls++;
+	auto vec = input.GetOutputChunk().GetVector(0);
+	if (global.next >= bind.count) {
+		vec.SetSize(0);
+		input.SetResult(ScanResult::FINISHED);
+		return;
+	}
+	if (!global.blocked) {
+		global.blocked = true;
+		vec.SetSize(0);
+		switch (bind.mode) {
+		case 0:
+			input.Yield();
+			break;
+		case 1: {
+			auto value = global.next * 10;
+			auto &computed = global.computed;
+			input.AddTask([value, &computed]() { computed = value; });
+			break;
+		}
+		default:
+			input.AddTask([]() { throw InvalidInputException("the task threw"); });
+			break;
+		}
+		return;
+	}
+	global.blocked = false;
+	auto value = global.next;
+	if (bind.mode == 1) {
+		// the task ran before this call
+		value = global.computed.exchange(-1);
+	}
+	global.next++;
+	vec.GetDataMutable<int64_t>()[0] = value;
+	vec.SetSize(1);
+	input.SetResult(ScanResult::HAVE_MORE_OUTPUT);
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: table function blocks its scan on tasks", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	const auto bigint = factory.ParseType("BIGINT");
+
+	auto function = TableFunction::Create(factory);
+	function.SetName("cpp_tasks").WithSignature([&](FunctionSignature &sig) {
+		sig.AddParameter("count", bigint);
+		sig.AddParameter("mode", bigint);
+	});
+	function.SetBindCallback(TasksBindFunction).SetInitGlobalCallback(TasksInitGlobal).SetExecCallback(TasksExec);
+	conn.Register(function);
+
+	for (auto strategy : {"DEFAULT", "SYNCHRONOUS"}) {
+		INFO(strategy);
+		conn.Execute(std::string("SET debug_physical_table_scan_execution_strategy=") + strategy).Drain();
+
+		// an empty batch after Yield does not end the scan: the rows after it are still produced
+		tasks_exec_calls = 0;
+		REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_tasks(3, 0)")) == std::vector<int64_t> {0, 1, 2});
+		// three blocked calls, three producing a row, and the one declaring the scan finished
+		REQUIRE(tasks_exec_calls == 7);
+
+		// a task runs before the next call, which reads what it computed
+		REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_tasks(3, 1)")) == std::vector<int64_t> {0, 10, 20});
+		REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_tasks(0, 1)")).empty());
+
+		// an exception a task throws fails the query
+		REQUIRE_THROWS_WITH(conn.Execute("SELECT * FROM cpp_tasks(3, 2)").Drain(), Catch::Contains("the task threw"));
+	}
+}
