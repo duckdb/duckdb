@@ -12,6 +12,30 @@
 			]
 		},
 		{
+			"reason": "NUMERIC values come back from VARIANT in another representation, and NUMERIC values wider than 38 digits are not supported in VARIANT",
+			"paths": [
+				"test/sql/types/numeric/numeric_aggregates.test",
+				"test/sql/types/numeric/numeric_canonical_encoding.test",
+				"test/sql/types/numeric/numeric_casts.test",
+				"test/sql/types/numeric/numeric_kernel_contract.test",
+				"test/sql/types/numeric/numeric_kernel_sizing.test",
+				"test/sql/types/numeric/numeric_no_common_representation.test",
+				"test/sql/types/numeric/numeric_to_float_rounding.test",
+				"test/sql/types/numeric/numeric_to_float_rounding_representation.test",
+				"test/sql/types/numeric/numeric_type_arithmetic.test",
+				"test/sql/types/numeric/numeric_type.test",
+				"test/sql/types/numeric/numeric_variant_arithmetic.test",
+				"test/sql/types/numeric/numeric_variant_smoke.test",
+				"test/sql/types/numeric/numeric_variant_storage_smoke.test",
+				"test/sql/types/variant/variant_numeric_ordering.test",
+				"test/sql/types/numeric/postgres_numeric_big.test",
+				"test/sql/types/numeric/numeric_limits_review.test",
+				"test/sql/types/numeric/numeric_magnitude_overflow.test",
+				"test/sql/storage/types/numeric/numeric_storage_version.test",
+				"test/optimizer/compressed_materialization_numeric.test"
+			]
+		},
+		{
 			"reason": "Roundtrip is not possible (MAP type)",
 			"paths": [
 				"test/sql/types/struct/remap_struct_empty_map_keys.test",

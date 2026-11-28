@@ -114,7 +114,8 @@ static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpres
 	if (cast_type.IsIntegral() && target_type.IsIntegral()) {
 		return true;
 	}
-	if (BoundCastExpression::CastIsOrderPreserving(target_type, cast_type)) {
+	if (BoundCastExpression::CastIsOrderPreserving(target_type, cast_type) ||
+	    (cast_type.id() == LogicalTypeId::NUMERIC && BoundCastExpression::CastIsInvertible(target_type, cast_type))) {
 		auto roundtrip = cast_constant.TryCastAs(context, cast_type, nullptr, true);
 		if (!roundtrip) {
 			return false;

@@ -47,9 +47,9 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	Initialize(info);
 }
 
-//! Whether the column types of a view can be stored in its database. A view with a wide DECIMAL result in a database
-//! written before wide decimals is stored without types, like a view that was never bound, so that older engines read
-//! it and bind it by their rules.
+//! Whether the column types of a view can be stored in its database. A view with a wide DECIMAL or NUMERIC result in
+//! a database written before those types is stored without types, like a view that was never bound, so that older
+//! engines read it and bind it by their rules.
 static bool CanStoreViewTypes(const Catalog &catalog, const vector<LogicalType> &types) {
 	auto &db = catalog.GetAttached();
 	if (!db.HasStorageManager()) {
@@ -57,7 +57,7 @@ static bool CanStoreViewTypes(const Catalog &catalog, const vector<LogicalType> 
 	}
 	auto &storage_manager = db.GetStorageManager();
 	for (auto &type : types) {
-		if (!storage_manager.GetUnsupportedDecimalWidthReason(type).empty()) {
+		if (!storage_manager.GetUnsupportedCatalogTypeReason(type).empty()) {
 			return false;
 		}
 	}

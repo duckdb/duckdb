@@ -41,6 +41,7 @@ SELECT median(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
 0.0
 
+# rounding a wide decimal is exact
 query I
 SELECT round(bigdec, 1) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----

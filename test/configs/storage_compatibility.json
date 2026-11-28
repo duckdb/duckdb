@@ -14,11 +14,28 @@
     "VARIANT columns are not supported in storage versions prior to v1.5.0",
     "GEOGRAPHY columns are not supported in storage versions prior to v2.1.0",
     "DECIMAL columns wider than 38 digits are not supported in storage versions prior to v2.1.0",
+    "NUMERIC columns are not supported in storage versions prior to v2.1.0",
     "Typed macro parameters are only supported for storage versions v1.4.0 and higher",
     "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
   "skip_compiled": "true",
   "skip_tests": [
+    {
+      "reason": "NUMERIC requires storage version v2.1.0, these tests load their database at the latest storage version.",
+      "paths": [
+        "test/optimizer/compressed_materialization_numeric.test",
+        "test/sql/types/numeric/numeric_aggregates.test",
+        "test/sql/types/numeric/numeric_filter_pushdown.test",
+        "test/sql/types/numeric/numeric_index_expression.test",
+        "test/sql/types/numeric/numeric_kernel_contract.test",
+        "test/sql/types/numeric/numeric_kernel_sizing.test",
+        "test/sql/types/numeric/numeric_no_common_representation.test",
+        "test/sql/types/numeric/numeric_type_nested.test",
+        "test/sql/types/numeric/numeric_type_storage.test",
+        "test/sql/types/numeric/numeric_variant_arithmetic.test",
+        "test/sql/types/numeric/numeric_variant_storage_smoke.test"
+      ]
+    },
     {
       "reason": "Older versions cannot read the types of the tables left behind by the test.",
       "paths": [

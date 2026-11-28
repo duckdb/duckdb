@@ -10,7 +10,7 @@ SET warnings_as_errors=true;
 
 # Mixing DECIMAL types that need 39 digits widens the column instead of reducing the scale
 query I
-SELECT typeof(col0) FROM (VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)), (NULL::NUMERIC)) LIMIT 1;
+SELECT typeof(col0) FROM (VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)), (NULL::DECIMAL(18,3))) LIMIT 1;
 ----
 DECIMAL(39,24)
 

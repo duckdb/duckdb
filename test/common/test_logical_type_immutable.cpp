@@ -168,7 +168,8 @@ TEST_CASE("Plain decimal types share metadata across construction and deserializ
 			auto expected = width <= 4    ? PhysicalType::INT16
 			                : width <= 9  ? PhysicalType::INT32
 			                : width <= 18 ? PhysicalType::INT64
-			                              : PhysicalType::INT128;
+			                : width <= 38 ? PhysicalType::INT128
+			                              : PhysicalType::VARCHAR;
 			REQUIRE(type.InternalType() == expected);
 		}
 	}

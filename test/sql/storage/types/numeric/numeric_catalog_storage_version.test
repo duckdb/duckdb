@@ -1,0 +1,256 @@
+# name: test/sql/storage/types/numeric/numeric_catalog_storage_version.test
+# description: NUMERIC reaches the catalog of a database written before NUMERIC only where the engines of that version read it as this engine does, they bind the type name as DECIMAL(18,3)
+# group: [numeric]
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_catalog_new.db' AS new (STORAGE_VERSION 'latest');
+
+statement ok
+CREATE TABLE new.t(n NUMERIC);
+
+statement ok
+INSERT INTO new.t VALUES (1.5), (12345678901234567890);
+
+foreach version v1.4.4 v2.0.0
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_catalog_old_{version}.db' AS old (STORAGE_VERSION '{version}');
+
+# a type alias, a macro parameter or a macro default of NUMERIC is refused, like a column
+statement error
+CREATE TYPE old.money AS NUMERIC
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE TYPE old.money AS STRUCT(a NUMERIC)
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE MACRO old.m(x NUMERIC) AS x
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE MACRO old.m(x NUMERIC[]) AS TABLE SELECT x
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+# a macro default is stored folded, with its type
+statement error
+CREATE MACRO old.m(x := 1.2345::NUMERIC) AS x
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+# casts to NUMERIC inside stored expressions are refused: those engines compute DECIMAL(18,3) values for them
+statement error
+CREATE VIEW old.v AS SELECT 1.2345::NUMERIC AS n;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE VIEW old.v AS SELECT (SELECT '1.2345'::NUMERIC) AS n;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE VIEW old.v AS WITH c AS (SELECT 1::NUMERIC AS n) SELECT n FROM c;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE VIEW old.v AS SELECT 1 AS n UNION ALL SELECT ('1.2345'::NUMERIC)::INTEGER;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE MACRO old.m() AS '1.2345'::NUMERIC;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE MACRO old.m(x) AS (x::NUMERIC * 2)::INTEGER;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE MACRO old.m(x) AS TABLE SELECT x::NUMERIC AS n;
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE TABLE old.t(i INTEGER DEFAULT (10::NUMERIC)::INTEGER);
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE TABLE old.t(i INTEGER, j INTEGER AS ((i::NUMERIC)::INTEGER));
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE TABLE old.t(i INTEGER, j NUMERIC AS (i));
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE TABLE old.t(i INTEGER CHECK ((i::NUMERIC)::INTEGER > 0));
+----
+NUMERIC columns are not supported in storage versions prior to v2.1.0
+
+# a macro default is stored folded, so a NUMERIC intermediate in it is not stored
+statement ok
+CREATE MACRO old.m_default(x := (10::NUMERIC)::INTEGER) AS x;
+
+query II
+SELECT old.m_default(), typeof(old.m_default())
+----
+10	INTEGER
+
+# index keys that compute NUMERIC values are refused: those engines compute other keys, so a UNIQUE index would
+# accept duplicates
+statement ok
+CREATE TABLE old.keys(key INTEGER);
+
+statement error
+CREATE UNIQUE INDEX ux ON old.keys ((CAST(CAST(key AS NUMERIC) AS VARCHAR)));
+----
+NUMERIC index key expressions are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE INDEX ix ON old.keys ((key::NUMERIC + 1));
+----
+NUMERIC index key expressions are not supported in storage versions prior to v2.1.0
+
+# a view over the NUMERIC values of another database is stored without its column types, those engines bind it by
+# their own rules
+statement ok
+CREATE VIEW old.v_other AS SELECT n, n * 2 AS d FROM new.t;
+
+query II
+SELECT typeof(n), typeof(d) FROM old.v_other LIMIT 1
+----
+NUMERIC	NUMERIC
+
+query I
+SELECT data_type FROM duckdb_columns() WHERE database_name = 'old' AND table_name = 'v_other' ORDER BY column_index
+----
+NUMERIC
+NUMERIC
+
+# the same statements with NUMERIC(width, scale), a DECIMAL as before, are stored
+statement ok
+CREATE TYPE old.money AS NUMERIC(10, 2)
+
+statement ok
+CREATE MACRO old.m(x NUMERIC(10, 2)) AS x * x
+
+statement ok
+CREATE VIEW old.v AS SELECT 1.2345::NUMERIC(10, 2) AS n;
+
+statement ok
+CREATE TABLE old.t(i INTEGER DEFAULT (1.5::NUMERIC(10, 2))::INTEGER, j INTEGER AS ((i::NUMERIC(10, 2))::INTEGER), CHECK ((i::NUMERIC(10, 2))::INTEGER > 0));
+
+statement ok
+INSERT INTO old.t(i) VALUES (DEFAULT);
+
+statement ok
+CREATE UNIQUE INDEX ux ON old.keys ((CAST(CAST(key AS NUMERIC(10, 2)) AS VARCHAR)));
+
+statement ok
+INSERT INTO old.keys VALUES (1);
+
+statement error
+INSERT INTO old.keys VALUES (1);
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+CHECKPOINT old;
+
+statement ok
+DETACH old;
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_catalog_old_{version}.db' AS old;
+
+query IIII
+SELECT old.m(2), (SELECT n FROM old.v), (SELECT j FROM old.t), typeof(1::old.money)
+----
+4.0000	1.23	2	DECIMAL(10,2)
+
+query II
+SELECT typeof(n), count(*) FROM old.v_other GROUP BY ALL
+----
+NUMERIC	2
+
+statement error
+INSERT INTO old.keys VALUES (1);
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+DETACH old;
+
+endloop
+
+# the storage version that stores NUMERIC takes all of them
+statement ok
+CREATE TYPE new.money AS NUMERIC
+
+statement ok
+CREATE MACRO new.m(x NUMERIC) AS x * 2
+
+statement ok
+CREATE MACRO new.m_default(x := 1.2345::NUMERIC) AS x
+
+statement ok
+CREATE MACRO new.m_cast() AS '1.2345'::NUMERIC
+
+statement ok
+CREATE VIEW new.v AS SELECT 1.2345::NUMERIC AS n
+
+statement ok
+CREATE TABLE new.d(i INTEGER DEFAULT (10::NUMERIC)::INTEGER, j NUMERIC AS (i * 1.5), CHECK ((i::NUMERIC) > 0))
+
+statement ok
+INSERT INTO new.d(i) VALUES (DEFAULT)
+
+statement ok
+CREATE TABLE new.keys(key INTEGER)
+
+statement ok
+CREATE UNIQUE INDEX ux ON new.keys ((CAST(CAST(key AS NUMERIC) AS VARCHAR)))
+
+statement ok
+INSERT INTO new.keys VALUES (1)
+
+statement error
+INSERT INTO new.keys VALUES (1)
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+CHECKPOINT new
+
+statement ok
+DETACH new
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_catalog_new.db' AS new
+
+query IIIIII
+SELECT new.m(1.5::new.money), new.m_default(), new.m_cast(), (SELECT n FROM new.v), (SELECT j FROM new.d), typeof(new.m_cast())
+----
+3	1.2345	1.2345	1.2345	15	NUMERIC
+
+query I
+SELECT data_type FROM duckdb_columns() WHERE database_name = 'new' AND table_name = 'v'
+----
+NUMERIC
+
+statement error
+INSERT INTO new.keys VALUES (1)
+----
+<REGEX>:.*Duplicate key.*

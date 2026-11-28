@@ -7,6 +7,9 @@
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/function/aggregate/numeric_aggregates.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -562,7 +565,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	if (internal_type == PhysicalType::INT128) {
 		bool cannot_overflow = bounds.has_value();
 		if (cannot_overflow && expr.GetReturnType().id() == LogicalTypeId::DECIMAL) {
-			const auto decimal_limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+			const auto decimal_limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
 			cannot_overflow = bounds->min > -decimal_limit && bounds->max < decimal_limit;
 		}
 		expr.FunctionMutable().SetErrorMode(cannot_overflow ? FunctionErrors::CANNOT_ERROR
@@ -786,18 +789,22 @@ struct BignumOperation {
 		}
 	}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		const BignumIntermediate rhs(input);
+	//! Adds a value to the sum, moving to the wide value once the hugeint_t accumulator overflows
+	static void Add(BignumState &state, const BignumIntermediate &rhs, ArenaAllocator &allocator) {
 		state.is_set = true;
 		if (!state.is_wide) {
 			hugeint_t value;
 			if (TryGetSmall(rhs, value) && Hugeint::TryAddInPlace(state.small, value)) {
 				return;
 			}
-			Widen(state, unary_input.input.allocator);
+			Widen(state, allocator);
 		}
-		state.wide.AddInPlace(unary_input.input.allocator, rhs);
+		state.wide.AddInPlace(allocator, rhs);
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		Add(state, BignumIntermediate(input), unary_input.input.allocator);
 	}
 
 	template <class STATE, class OP>
@@ -822,18 +829,22 @@ struct BignumOperation {
 		}
 	}
 
+	//! The sum as an arena-allocated BIGNUM; the state is only read, it is exported while other threads still read it
+	static bignum_t ToBignum(const BignumState &state, ArenaAllocator &allocator) {
+		if (state.is_wide) {
+			return state.wide.ToBignum(allocator);
+		}
+		auto blob = reinterpret_cast<char *>(allocator.Allocate(2 * BignumLimb::BYTES + Bignum::BIGNUM_HEADER_SIZE));
+		const auto size = EncodeSmall(state.small, blob);
+		return bignum_t(string_t(blob, UnsafeNumericCast<uint32_t>(size)));
+	}
+
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
-		// the state is only read: it is exported while other threads may still read it
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
-		} else if (state.is_wide) {
-			target = state.wide.ToBignum(finalize_data.input.allocator);
 		} else {
-			auto blob = reinterpret_cast<char *>(
-			    finalize_data.input.allocator.Allocate(2 * BignumLimb::BYTES + Bignum::BIGNUM_HEADER_SIZE));
-			const auto size = EncodeSmall(state.small, blob);
-			target = bignum_t(string_t(blob, UnsafeNumericCast<uint32_t>(size)));
+			target = ToBignum(state, finalize_data.input.allocator);
 		}
 	}
 
@@ -944,6 +955,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
 	sum_bignum.SetStateExportCallbacks(BignumSumStateLayout, BignumSumExportState, BignumSumImportState);
 	sum.AddFunction(sum_bignum);
+	sum.AddFunction(NumericAggregates::GetSum());
 	return sum;
 }
 

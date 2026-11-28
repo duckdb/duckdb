@@ -1,3 +1,7 @@
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/function/scalar/numeric_dispatch.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
@@ -45,13 +49,25 @@ static unique_ptr<FunctionData> BindIEEEFloatingBinary(BindScalarFunctionInput &
 
 // Names the unary argument "x", shared by most math functions/operators in this file.
 static ScalarFunction NameXArgument(ScalarFunction fun, const LogicalType &type) {
-	fun.GetSignature().AddParameter("x", type);
+	auto &signature = fun.GetSignature();
+	if (signature.GetParameterCount() > 0) {
+		// the NUMERIC overloads declare their argument: it is renamed
+		signature.GetParameter(0).SetName("x");
+	} else {
+		signature.AddParameter("x", type);
+	}
 	return fun;
 }
 
 // Names the "x,precision" pair shared by round/round_even/trunc's binary overloads.
 static ScalarFunction NameXPrecisionArguments(ScalarFunction fun, const LogicalType &type) {
-	fun.GetSignature().AddParameter("x", type).AddParameter("precision", LogicalType::INTEGER);
+	auto &signature = fun.GetSignature();
+	if (signature.GetParameterCount() > 1) {
+		signature.GetParameter(0).SetName("x");
+		signature.GetParameter(1).SetName("precision");
+	} else {
+		signature.AddParameter("x", type).AddParameter("precision", LogicalType::INTEGER);
+	}
 	return fun;
 }
 
@@ -304,6 +320,9 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		}
 	}
 	abs.SetFallible();
+	abs.AddFunction(NameXArgument(
+	    NumericDispatch::GetFunction("abs", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::ABS),
+	    LogicalType::NUMERIC));
 	return abs;
 }
 
@@ -510,6 +529,9 @@ ScalarFunctionSet SignFun::GetFunctions() {
 		function.SetStatisticsCallback(PropagateSignStats);
 		sign.AddFunction(function);
 	}
+	sign.AddFunction(NameXArgument(NumericDispatch::GetFunction("sign", {LogicalType::NUMERIC}, LogicalType::TINYINT,
+	                                                            NumericDispatchKind::GENERIC),
+	                               LogicalType::NUMERIC));
 	return sign;
 }
 
@@ -629,6 +651,9 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		ceil.AddFunction(NameXArgument(std::move(ceil_function), type));
 	}
 	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing().RoundsToInteger(IntegerRounding::CEIL));
+	ceil.AddFunction(NameXArgument(
+	    NumericDispatch::GetFunction("ceil", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::ROUND),
+	    LogicalType::NUMERIC));
 	return ceil;
 }
 
@@ -671,6 +696,9 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		floor.AddFunction(NameXArgument(std::move(floor_function), type));
 	}
 	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing().RoundsToInteger(IntegerRounding::FLOOR));
+	floor.AddFunction(NameXArgument(
+	    NumericDispatch::GetFunction("floor", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::ROUND),
+	    LogicalType::NUMERIC));
 	return floor;
 }
 
@@ -969,6 +997,9 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		trunc_prec_function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 		trunc.AddFunction(NameXPrecisionArguments(std::move(trunc_prec_function), type));
 	}
+	trunc.AddFunction(NameXArgument(
+	    NumericDispatch::GetFunction("trunc", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::ROUND),
+	    LogicalType::NUMERIC));
 	return trunc;
 }
 
@@ -1172,6 +1203,13 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(std::move(round_prec_function));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	round.AddFunction(NameXArgument(
+	    NumericDispatch::GetFunction("round", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::ROUND),
+	    LogicalType::NUMERIC));
+	round.AddFunction(
+	    NameXPrecisionArguments(NumericDispatch::GetFunction("round", {LogicalType::NUMERIC, LogicalType::INTEGER},
+	                                                         LogicalType::NUMERIC, NumericDispatchKind::ROUND),
+	                            LogicalType::NUMERIC));
 	return round;
 }
 

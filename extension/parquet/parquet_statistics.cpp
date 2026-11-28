@@ -14,6 +14,7 @@
 #include "reader/string_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/time.hpp"

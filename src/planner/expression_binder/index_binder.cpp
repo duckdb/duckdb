@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/error_data.hpp"
 
@@ -91,29 +92,47 @@ struct KeyDecimalWidthScope {
 	optional_ptr<const DecimalWidthLimit> previous;
 };
 
-//! The first expression of a wide decimal type within the key, if any: the engines before wide decimals bind every
-//! subexpression within 38 digits, so a wide intermediate changes the computed key as much as a wide result
-optional_ptr<const Expression> FindWideDecimalExpression(const Expression &expr) {
-	if (StorageManager::ContainsWideDecimal(expr.GetReturnType())) {
+//! Whether the keys of an index of the storage version are bound by engines that read the type name NUMERIC as
+//! DECIMAL(18,3), the type it named before NUMERIC
+bool KeysPredateNumeric(StorageVersion key_version) {
+	return StorageManager::IsPriorToVersion(NumericType::VERSION_ADDED, key_version);
+}
+
+//! The first expression within the key whose type satisfies the predicate, if any: the engines before a type bind
+//! every subexpression otherwise, so an intermediate of the type changes the computed key as much as a result
+template <class PREDICATE>
+optional_ptr<const Expression> FindKeyExpression(const Expression &expr, PREDICATE &predicate) {
+	if (predicate(expr.GetReturnType())) {
 		return &expr;
 	}
 	optional_ptr<const Expression> result;
 	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
 		if (!result) {
-			result = FindWideDecimalExpression(child);
+			result = FindKeyExpression(child, predicate);
 		}
 	});
 	return result;
 }
 
-optional_ptr<const Expression> FindWideDecimalExpression(const vector<unique_ptr<Expression>> &keys) {
+template <class PREDICATE>
+optional_ptr<const Expression> FindKeyExpression(const vector<unique_ptr<Expression>> &keys, PREDICATE predicate) {
 	for (auto &key : keys) {
-		auto wide = FindWideDecimalExpression(*key);
-		if (wide) {
-			return wide;
+		auto found = FindKeyExpression(*key, predicate);
+		if (found) {
+			return found;
 		}
 	}
 	return nullptr;
+}
+
+//! The first expression of a wide decimal type within the keys, if any
+optional_ptr<const Expression> FindWideDecimalExpression(const vector<unique_ptr<Expression>> &keys) {
+	return FindKeyExpression(keys, StorageManager::ContainsWideDecimal);
+}
+
+//! The first expression of a NUMERIC type within the keys, if any
+optional_ptr<const Expression> FindNumericExpression(const vector<unique_ptr<Expression>> &keys) {
+	return FindKeyExpression(keys, StorageManager::ContainsNumeric);
 }
 
 //! The element type of a LIST or ARRAY
@@ -247,9 +266,25 @@ bool CastsBetweenBignumAndDecimal(ClientContext &context, const LogicalType &sou
 	return false;
 }
 
-//! Why the engines before wide decimals compute other keys for the expressions than this engine, empty when they
-//! agree: those engines bind every decimal within 38 digits and have no cast between BIGNUM and DECIMAL
+//! Whether the engines of the storage version compute some keys otherwise than this engine
+bool KeysPredateThisEngine(StorageVersion key_version) {
+	return KeysPredateWideDecimals(key_version) || KeysPredateNumeric(key_version);
+}
+
+//! Why the engines of the storage version compute other keys for the expressions than this engine, empty when they
+//! agree: the engines before wide decimals bind every decimal within 38 digits and have no cast between BIGNUM and
+//! DECIMAL, the engines before NUMERIC bind the type name as DECIMAL(18,3)
 string DescribeLegacyKeyDifference(const vector<unique_ptr<Expression>> &keys, const IndexKeyBinding &binding) {
+	if (KeysPredateNumeric(binding.version)) {
+		auto numeric = FindNumericExpression(keys);
+		if (numeric) {
+			return StringUtil::Format("%s binds to %s, those engines bind the type name NUMERIC as DECIMAL(18,3)",
+			                          numeric->ToString(), numeric->GetReturnType().ToString());
+		}
+	}
+	if (!KeysPredateWideDecimals(binding.version)) {
+		return string();
+	}
 	auto wide = FindWideDecimalExpression(keys);
 	if (wide) {
 		return StringUtil::Format("%s binds to %s, those engines bind decimal keys within %d digits", wide->ToString(),
@@ -355,14 +390,21 @@ void ThrowMismatchedStoredKeyType(const UnboundIndex &unbound_index, const strin
 //! The keys of a new index are stored at the storage version of its database: a key the engines of that version
 //! compute otherwise is refused, like a column type they cannot read, so that they compute the stored keys
 void CheckNewKeys(AttachedDatabase &db, const vector<unique_ptr<Expression>> &keys, const IndexKeyBinding &binding) {
+	auto &storage = db.GetStorageManager();
+	if (KeysPredateNumeric(binding.version)) {
+		auto numeric = FindNumericExpression(keys);
+		if (numeric) {
+			throw InvalidInputException(
+			    storage.GetUnsupportedCatalogTypeReason(numeric->GetReturnType(), "index key expressions"));
+		}
+	}
 	if (!KeysPredateWideDecimals(binding.version)) {
 		return;
 	}
-	auto &storage = db.GetStorageManager();
 	auto wide = FindWideDecimalExpression(keys);
 	if (wide) {
 		throw InvalidInputException(
-		    storage.GetUnsupportedDecimalWidthReason(wide->GetReturnType(), "index key expressions"));
+		    storage.GetUnsupportedCatalogTypeReason(wide->GetReturnType(), "index key expressions"));
 	}
 	if (!binding.legacy_cast.empty()) {
 		throw InvalidInputException(storage.GetUnsupportedPriorToVersionReason(
@@ -463,7 +505,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index,
 		}
 	}
 	properties.always_require_rebind = statement_requires_rebind;
-	if (KeysPredateWideDecimals(binding.version)) {
+	if (KeysPredateThisEngine(binding.version)) {
 		auto difference = DescribeLegacyKeyDifference(unbound_expressions, binding);
 		if (!difference.empty()) {
 			if (skip_mismatched_keys) {

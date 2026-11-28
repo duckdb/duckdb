@@ -4,6 +4,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_range_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
@@ -43,6 +44,9 @@ void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
 		break;
 	default:
 		break;
+	}
+	if (stats.type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::Construct(stats);
 	}
 }
 
@@ -187,6 +191,9 @@ void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_typ
 	default:
 		break;
 	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::Merge(*this, other);
+	}
 }
 
 void BaseStatistics::ResetAdditiveStatistics() {
@@ -284,6 +291,10 @@ BaseStatistics BaseStatistics::CreateEmpty(LogicalType type) {
 	}
 	auto result = CreateEmptyType(std::move(type));
 	result.InitializeEmpty();
+	if (result.type.id() == LogicalTypeId::NUMERIC) {
+		// no values yet: every representation holds them
+		NumericRangeStats::Set(result, NumericRange());
+	}
 	return result;
 }
 
@@ -314,6 +325,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 		break;
 	default:
 		break;
+	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::Copy(*this, other);
 	}
 }
 
@@ -444,6 +458,9 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 			break;
 		}
 	});
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::Serialize(*this, serializer);
+	}
 }
 
 BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
@@ -491,6 +508,9 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 			break;
 		}
 	});
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::Deserialize(deserializer, stats);
+	}
 
 	return stats;
 }
@@ -524,6 +544,9 @@ Value BaseStatistics::ToStruct(bool exact) const {
 		break;
 	default:
 		break;
+	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::ToStruct(*this, children);
 	}
 	children.emplace_back("has_null", Value::BOOLEAN(has_null));
 	children.emplace_back("has_no_null", Value::BOOLEAN(has_no_null));
@@ -574,12 +597,17 @@ void BaseStatistics::SetFromStruct(const Value &value, const string &path) {
 	default:
 		break;
 	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		NumericRangeStats::SetFromStruct(*this, fields);
+	}
 	fields.VerifyAllRead(type);
 }
 
-void BaseStatistics::Verify(const Vector &vector, const SelectionVector &sel, idx_t count,
+void BaseStatistics::Verify(const Vector &input, const SelectionVector &sel, idx_t count,
                             const bool ignore_has_null) const {
-	D_ASSERT(vector.GetType() == this->type);
+	D_ASSERT(input.GetType() == this->type);
+	// reading a shredded vector in unified format flattens it in place: verify a referencing copy instead
+	auto vector = Vector::Ref(input);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
 		NumericStats::Verify(*this, vector, sel, count);

@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/numeric_blob.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -969,6 +970,17 @@ Value Value::BIGNUM(const string &data) {
 	return result;
 }
 
+Value Value::NUMERIC(const string &text) {
+	return NUMERICBLOB(NumericBlob::Encode(text));
+}
+
+Value Value::NUMERICBLOB(const string &blob) {
+	Value result(LogicalType::NUMERIC);
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(blob);
+	return result;
+}
+
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
 	Value result;
 	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the LogicalTypeInfo
@@ -1807,6 +1819,10 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
+	case LogicalTypeId::NUMERIC:
+		// the decimal text of the number: it reparses as an exact INTEGER or DECIMAL literal, which converts to NUMERIC
+		// without loss (the SQL export adds the cast to the result type)
+		return ToString();
 	case LogicalTypeId::DECIMAL:
 		// a bare literal would be reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast
 		if (type_.InternalType() == PhysicalType::VARCHAR) {

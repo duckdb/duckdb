@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
+#include "duckdb/function/aggregate/numeric_aggregates.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -749,6 +750,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::DOUBLE));
+	avg.AddFunction(NumericAggregates::GetAvg());
 
 	avg.AddFunction(GetTimestampAverage());
 	for (auto &type : {LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_MS, LogicalType::DATE}) {

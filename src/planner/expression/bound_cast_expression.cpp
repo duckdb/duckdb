@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -162,6 +163,14 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	}
 	if (source_type.id() == LogicalTypeId::ENUM && target_type.id() == LogicalTypeId::ENUM) {
 		return false;
+	}
+	if (source_type.id() == LogicalTypeId::NUMERIC) {
+		// a NUMERIC holds more digits than any other type, so a cast to another type rounds or fails
+		return false;
+	}
+	if (target_type.id() == LogicalTypeId::NUMERIC) {
+		// a NUMERIC holds every integer and decimal exactly
+		return source_type.IsIntegral() || source_type.id() == LogicalTypeId::DECIMAL;
 	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint32_t source_width, target_width;
@@ -327,6 +336,14 @@ static bool HasCanonicalVarcharRepresentation(const LogicalType &type) {
 }
 
 bool BoundCastExpression::CastIsInvertibleForEquality(const LogicalType &source_type, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::NUMERIC) {
+		// a NUMERIC holds every integer and decimal exactly, in order
+		return CastIsInvertible(source_type, target_type);
+	}
+	if (source_type.id() == LogicalTypeId::NUMERIC) {
+		// a NUMERIC holds more digits than any other type, so a cast to another type rounds or fails
+		return false;
+	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
 		// a collation can make distinct strings equal
 		return HasCanonicalVarcharRepresentation(source_type) && StringType::GetCollation(target_type).empty();
@@ -514,6 +531,15 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// their range, e.g. a DECIMAL(309,0) of 2e308 -> DOUBLE
 	if ((target_type.id() == LogicalTypeId::FLOAT || target_type.id() == LogicalTypeId::DOUBLE) &&
 	    source_type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(source_type))) {
+		return true;
+	}
+	// A NUMERIC holds as many digits as a wide decimal, so its values do not necessarily fit in a FLOAT
+	if (source_type.id() == LogicalTypeId::NUMERIC && target_type.id() == LogicalTypeId::FLOAT) {
+		return true;
+	}
+	// A DECIMAL wider than NUMERIC holds carries values of more digits than NUMERIC takes
+	if (target_type.id() == LogicalTypeId::NUMERIC && source_type.id() == LogicalTypeId::DECIMAL &&
+	    DecimalType::GetWidth(source_type) > NumericType::MAX_WIDTH) {
 		return true;
 	}
 	// Floating point values that are not finite (NaN, inf) cannot be represented as a BIGNUM

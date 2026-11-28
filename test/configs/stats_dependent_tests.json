@@ -22,6 +22,8 @@
         "test/sql/optimizer/interval_arithmetic_zonemap_pruning.test",
         "test/sql/optimizer/modulo_zonemap_pruning.test",
         "test/sql/types/decimal/wide_decimal_statistics.test",
+        "test/sql/types/numeric/numeric_join_filter_pushdown.test",
+        "test/optimizer/compressed_materialization_numeric.test",
         "test/sql/types/decimal/wide_decimal_unbounded_statistics.test",
         "test/sql/types/decimal/wide_decimal_bounded_statistics.test",
         "test/sql/types/variant/variant_wide_decimal.test",
