@@ -60,6 +60,19 @@ static idx_t FindChoiceChild(const ChoiceMatcher &matcher, MatchState &state, id
 	return index;
 }
 
+//! An optional that matched nothing carries no rule, name or position, so every anonymous optional shares one
+//! immutable result; an optional with a rule of its own still gets a result naming that rule
+static MatcherResult MakeEmptyOptionalResult(MatchState &state) {
+	if (!state.BuildParseResult()) {
+		return MatcherResult::Success();
+	}
+	if (state.rule) {
+		return state.AllocateParseResult<OptionalParseResult>();
+	}
+	static OptionalParseResult shared_empty;
+	return MatcherResult::Success(&shared_empty);
+}
+
 static MatcherResult MakeChoiceResult(MatchState &state, const MatcherResult &child, idx_t index,
                                       optional_idx start_offset) {
 	if (!child.HasParseResult()) {
@@ -114,12 +127,9 @@ public:
 				if (chain && matcher.get().GetPreparedChainIndex() + 1 < chain->lists.size() &&
 				    (!chain->has_optional_prefix ||
 				     (allow_empty_prefix && !chain->prefix_first_set.MightMatch(list_state)))) {
-					auto &last = chain->lists.back().get();
-					if (!last.first_set.MightMatch(list_state)) {
-						break;
-					}
+					// the dispatched list's lookahead covers its chain members, which fail on entry otherwise
 					pending = state.context.process_allocator.Make<PendingList>(matcher.get(), pending);
-					matcher = last;
+					matcher = chain->lists.back().get();
 					continue;
 				}
 
@@ -130,7 +140,7 @@ public:
 				         list_state))) {
 					break;
 				}
-				if (!child || !child->first_set.MightMatch(list_state)) {
+				if (!child) {
 					break;
 				}
 				pending = state.context.process_allocator.Make<PendingList>(matcher.get(), pending);
@@ -183,8 +193,7 @@ public:
 		auto choice = matcher.get().GetFirstChoice();
 		auto current = list_state.token_iterator.Current();
 		if (!choice || !state.BuildParseResult() ||
-		    (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) ||
-		    !choice->first_set.MightMatch(list_state)) {
+		    (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
 			return;
 		}
 		first_choice = choice;
@@ -524,17 +533,40 @@ class RepeatMatchFrame final : public MatchStackFrame {
 public:
 	RepeatMatchFrame(const RepeatMatcher &matcher_p, MatchState &state_p, ArenaAllocator::Position mark = {},
 	                 const PackratMatchState &packrat = {})
-	    : MatchStackFrame(MatcherType::REPEAT, {matcher_p, state_p}, mark, packrat), matcher(matcher_p),
-	      repeat_state(state_p), results(state_p.context.process_allocator) {
+	    : RepeatMatchFrame(matcher_p, matcher_p, state_p, mark, packrat, false) {
+	}
+	//! A repetition inside an optional (zero or more) runs as one frame and produces the optional's result
+	RepeatMatchFrame(const OptionalMatcher &optional, const RepeatMatcher &matcher_p, MatchState &state_p,
+	                 ArenaAllocator::Position mark, const PackratMatchState &packrat)
+	    : RepeatMatchFrame(optional, matcher_p, state_p, mark, packrat, true) {
+	}
+
+private:
+	RepeatMatchFrame(const Matcher &input_matcher, const RepeatMatcher &matcher_p, MatchState &state_p,
+	                 ArenaAllocator::Position mark, const PackratMatchState &packrat, bool optional_wrapper_p)
+	    : MatchStackFrame(MatcherType::REPEAT, {input_matcher, state_p}, mark, packrat), matcher(matcher_p),
+	      repeat_state(state_p), results(state_p.context.process_allocator), optional_wrapper(optional_wrapper_p) {
 		if (auto current = repeat_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
 	}
 
 public:
+	//! The result of one or more repetitions
 	MatcherResult CreateResult() {
-		return state.AllocateParseResult<RepeatParseResult>(state.context.allocator.MakeChildren(results),
-		                                                    start_offset);
+		auto repeat =
+		    state.AllocateParseResult<RepeatParseResult>(state.context.allocator.MakeChildren(results), start_offset);
+		if (!optional_wrapper) {
+			return repeat;
+		}
+		if (!repeat.HasParseResult()) {
+			return MatcherResult::Success();
+		}
+		return state.AllocateParseResult<OptionalParseResult>(repeat.GetParseResult(), start_offset);
+	}
+	//! The result when the first repetition does not match
+	MatcherResult NoMatch() {
+		return optional_wrapper ? MakeEmptyOptionalResult(state) : MatcherResult::Failure();
 	}
 
 public:
@@ -544,6 +576,8 @@ public:
 	bool matched_once = false;
 	optional_idx start_offset;
 	bool awaiting_child = false;
+	//! the frame stands for the optional around the repetition
+	bool optional_wrapper;
 };
 struct OpaqueMatchFrame final : MatchStackFrame {
 	OpaqueMatchFrame(MatchInput input, ArenaAllocator::Position mark, const PackratMatchState &packrat)
@@ -630,10 +664,19 @@ optional<MatcherResult> MatchStack::PushFrame(MatchInput input) {
 			    arena.Make<ChoiceMatchFrame>(input.matcher.Cast<ChoiceMatcher>(), input.state, mark, packrat));
 			break;
 
-		case MatcherType::OPTIONAL:
-			owned = arena_ptr<MatchStackFrame>(
-			    arena.Make<OptionalMatchFrame>(input.matcher.Cast<OptionalMatcher>(), input.state, mark, packrat));
+		case MatcherType::OPTIONAL: {
+			auto &optional = input.matcher.Cast<OptionalMatcher>();
+			auto &child = optional.GetChildMatcher();
+			if (child.IsStructural() && child.Type() == MatcherType::REPEAT && !child.IsPackratMemoized() &&
+			    !child.GetRule() && !optional.GetRule()) {
+				owned = arena_ptr<MatchStackFrame>(
+				    arena.Make<RepeatMatchFrame>(optional, child.Cast<RepeatMatcher>(), input.state, mark, packrat));
+			} else {
+				owned =
+				    arena_ptr<MatchStackFrame>(arena.Make<OptionalMatchFrame>(optional, input.state, mark, packrat));
+			}
 			break;
+		}
 
 		case MatcherType::REPEAT:
 			owned = arena_ptr<MatchStackFrame>(
@@ -668,6 +711,8 @@ template <bool SINGLE_STEP>
 MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStackFrame &initial_frame,
                                       optional<MatcherResult> child_result) {
 	reference<MatchStackFrame> current_frame(initial_frame);
+	// the next child was covered by a lookahead test of its parent already
+	bool child_checked = false;
 	while (true) {
 		auto &frame = current_frame.get();
 		optional<MatchInput> next;
@@ -730,11 +775,13 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				f.awaiting_child = true;
 				next.emplace(MatchInput {f.matcher.GetChildMatcher(), f.child_state});
 				has_child = true;
+				// the optional's fast-empty test already tested the child's FIRST set
+				child_checked = true;
 				break;
 			}
 			f.awaiting_child = false;
 			if (!child_result->IsSuccess()) {
-				completed = f.state.AllocateParseResult<OptionalParseResult>();
+				completed = MakeEmptyOptionalResult(f.state);
 				break;
 			}
 			f.state.token_iterator.SetPosition(f.child_state.token_iterator);
@@ -752,9 +799,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			if (child_result) {
 				f.awaiting_child = false;
 				if (!child_result->IsSuccess()) {
-					if (f.matched_once) {
-						completed = f.CreateResult();
-					}
+					completed = f.matched_once ? f.CreateResult() : f.NoMatch();
 					break;
 				}
 				f.matched_once = true;
@@ -772,6 +817,8 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			f.awaiting_child = true;
 			next.emplace(MatchInput {f.matcher.GetChildMatcher(), f.repeat_state});
 			has_child = true;
+			// the repetition's own test covers the first iteration
+			child_checked = !f.matched_once;
 			break;
 		}
 		default: {
@@ -792,15 +839,17 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				return MatchStep::Child(*next);
 			}
 			auto &child = *next;
+			auto checked = child_checked;
+			child_checked = false;
 			if (!child.matcher.IsStructural() && child.matcher.IsAtomic()) {
 				child_result = stack->ExecuteAtomicMatcher(child);
 				continue;
 			}
-			if (child.state.BuildParseResult()) {
+			if (child.state.BuildParseResult() && !checked) {
 				if (child.matcher.Type() == MatcherType::OPTIONAL && child.matcher.IsStructural() &&
 				    !child.matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child.state)) {
 					child.state.rule = child.matcher.GetRule();
-					child_result = child.state.AllocateParseResult<OptionalParseResult>();
+					child_result = MakeEmptyOptionalResult(child.state);
 					continue;
 				}
 				if (!child.matcher.first_set.MightMatch(child.state)) {
