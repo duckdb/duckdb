@@ -49,7 +49,13 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 		active_query->retention = ResultLifetime::RETAINED;
 	}
 	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
-		transaction.BeginTransaction();
+		try {
+			transaction.BeginTransaction();
+		} catch (...) {
+			// no state saw the query begin, so none is to see it end
+			active_query.reset();
+			throw;
+		}
 	}
 	BeginStatementInternal(lock, query);
 
@@ -68,9 +74,21 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	} else {
 		query_deadline.SetInvalid();
 	}
-	// Notify any registered state of query begin
+	// Notify any registered state of query begin - all of them, also when one of them fails, so that all see it end
+	ErrorData begin_error;
 	for (auto &state : context->GetRegisteredState().States()) {
-		state->QueryBegin(*this);
+		try {
+			state->QueryBegin(*this);
+		} catch (std::exception &ex) {
+			if (!begin_error.HasError()) {
+				begin_error = ErrorData(ex);
+			}
+		}
+	}
+	if (begin_error.HasError()) {
+		// a state rejected the query: end it right away, which rolls back the transaction it started
+		EndQueryInternal(lock, false, false, &begin_error);
+		begin_error.Throw();
 	}
 	RefreshLoggerInternal();
 }

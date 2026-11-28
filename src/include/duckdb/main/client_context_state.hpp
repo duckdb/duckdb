@@ -37,6 +37,10 @@ struct BindPreparedStatementCallbackInfo {
 class ClientContextState {
 public:
 	virtual ~ClientContextState() = default;
+	//! Identifies the kind of state for code that only sees the base class, null when not set
+	virtual const void *GetStateTag() const {
+		return nullptr;
+	}
 	virtual void QueryBegin(ClientContext &context) {
 	}
 	virtual void QueryEnd() {
@@ -103,17 +107,16 @@ public:
 
 class RegisteredStateManager {
 public:
+	//! The state under `key`, constructed first if there is none. The constructor runs outside the registry lock, so
+	//! it may use the context: when several threads race for a key, all but the first state inserted are discarded.
 	template <class T, typename... ARGS>
 	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
-		lock_guard<mutex> l(lock);
-		auto lookup = registered_state.find(key);
-		if (lookup != registered_state.end()) {
-			return shared_ptr_cast<ClientContextState, T>(lookup->second);
+		auto existing = Get<T>(key);
+		if (existing) {
+			return existing;
 		}
-		auto cache = make_shared_ptr<T>(std::forward<ARGS>(args)...);
-		registered_state[key] = cache;
-		InvalidateSnapshot();
-		return cache;
+		auto state = GetOrInsert(key, make_shared_ptr<T>(std::forward<ARGS>(args)...));
+		return shared_ptr_cast<ClientContextState, T>(std::move(state));
 	}
 
 	template <class T>
@@ -126,18 +129,43 @@ public:
 		return shared_ptr_cast<ClientContextState, T>(lookup->second);
 	}
 
-	void Insert(const string &key, shared_ptr<ClientContextState> state_p) {
+	//! Inserts `state_p` under `key` unless the key is taken, and returns the state the key then holds. A state that
+	//! is not inserted is released after the registry lock is.
+	shared_ptr<ClientContextState> GetOrInsert(const string &key, shared_ptr<ClientContextState> state_p) {
+		shared_ptr<const vector<shared_ptr<ClientContextState>>> old_snapshot;
 		lock_guard<mutex> l(lock);
-		if (registered_state.insert(make_pair(key, std::move(state_p))).second) {
-			InvalidateSnapshot();
+		auto lookup = registered_state.find(key);
+		if (lookup != registered_state.end()) {
+			return lookup->second;
 		}
+		registered_state.emplace(key, state_p);
+		old_snapshot = InvalidateSnapshot();
+		return state_p;
+	}
+
+	void Insert(const string &key, shared_ptr<ClientContextState> state_p) {
+		GetOrInsert(key, std::move(state_p));
 	}
 
 	void Remove(const string &key) {
+		RemoveIf(key, [](ClientContextState &) { return true; });
+	}
+
+	//! Removes the state under `key` if `predicate` accepts it, which runs under the registry lock. The removed state
+	//! is released after the registry lock is, so its destructor may use the context.
+	template <class PREDICATE>
+	bool RemoveIf(const string &key, PREDICATE &&predicate) {
+		shared_ptr<ClientContextState> removed;
+		shared_ptr<const vector<shared_ptr<ClientContextState>>> old_snapshot;
 		lock_guard<mutex> l(lock);
-		if (registered_state.erase(key)) {
-			InvalidateSnapshot();
+		auto lookup = registered_state.find(key);
+		if (lookup == registered_state.end() || !predicate(*lookup->second)) {
+			return false;
 		}
+		removed = std::move(lookup->second);
+		registered_state.erase(lookup);
+		old_snapshot = InvalidateSnapshot();
+		return true;
 	}
 
 	vector<shared_ptr<ClientContextState>> States() {
@@ -184,10 +212,13 @@ private:
 		return states;
 	}
 
-	//! Called with the registry lock held after a successful mutation.
-	void InvalidateSnapshot() {
+	//! Called with the registry lock held after a successful mutation. Returns the old snapshot, for the caller to
+	//! release after the lock: it can hold the last reference to a removed state.
+	shared_ptr<const vector<shared_ptr<ClientContextState>>> InvalidateSnapshot() {
+		auto old_snapshot = state_snapshot.atomic_load();
 		state_snapshot.atomic_store(nullptr);
 		has_states.store(!registered_state.empty(), std::memory_order_release);
+		return old_snapshot;
 	}
 
 private:
