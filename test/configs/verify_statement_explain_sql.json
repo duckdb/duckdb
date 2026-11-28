@@ -167,6 +167,12 @@
       ]
     },
     {
+      "reason": "The rendered SQL spells out the DECIMAL(40,4) type of the division over a stored wide column, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
+      "paths": [
+        "test/sql/types/decimal/wide_decimal_division_fixed_width_session.test"
+      ]
+    },
+    {
       "reason": "The SQL export of a chain of projections that each read their input column twice takes time exponential in the depth of the chain; the fixture pins that the native estimate of the distinct rows reads the plan once per column",
       "paths": [
         "test/optimizer/setop_all_aggregate_estimates.test"

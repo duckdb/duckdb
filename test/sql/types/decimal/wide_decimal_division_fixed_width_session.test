@@ -1,0 +1,35 @@
+# name: test/sql/types/decimal/wide_decimal_division_fixed_width_session.test
+# description: decimal_division over wide decimals in a session bound to the fixed-size decimals
+# group: [decimal]
+
+# wide decimal columns need the latest storage version
+statement ok
+ATTACH ':memory:' AS wd (STORAGE_VERSION 'latest');
+
+statement ok
+USE wd;
+
+statement ok
+CREATE TABLE decimals AS
+SELECT 5::DECIMAL(12,4) AS a4, 5::DECIMAL(40,4) AS wa4, 2::DECIMAL(6,0) AS b0, 2::DECIMAL(40,2) AS wb2;
+
+# a session bound to the fixed-size decimals still divides the wide decimals it already has, within their width
+statement ok
+SET max_decimal_width = 38;
+
+query II
+SELECT decimal_division(wa4, b0, 4), typeof(decimal_division(wa4, b0, 4))
+FROM decimals;
+----
+2.5000	DECIMAL(40,4)
+
+# result_width = 40-4+2+7 = 45
+statement error
+SELECT decimal_division(wa4, wb2, 7) FROM decimals;
+----
+Division needs a DECIMAL of 45 digits, the maximum DECIMAL width is 38
+
+statement error
+SELECT decimal_division(1.00::DECIMAL(18,2), 3.00::DECIMAL(18,2));
+----
+<REGEX>:Out of Range Error:.*Needed width 39.*Max width is 38; could not perform an accurate division.*

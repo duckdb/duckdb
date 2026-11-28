@@ -475,8 +475,9 @@ string_t DecimalHelper<bignum_t>::DivideAndRound(const BignumIntermediate &sourc
 	if (DecimalHelper<bignum_t>::IsZero(bignum_t(remainder))) {
 		return quotient;
 	}
-	// The remainder has the sign of the value; the quotient is truncated towards zero.
-	const bool negative = source.is_negative;
+	// The remainder has the sign of the value; the quotient is truncated towards zero and is negative when the signs
+	// of the value and the divisor differ.
+	const bool negative = source.is_negative != divisor.is_negative;
 	int32_t adjustment = 0;
 	switch (rounding) {
 	case DecimalRounding::TRUNCATE:
@@ -555,6 +556,32 @@ bool DecimalHelper<bignum_t>::TryRescale(const bignum_t &value, uint32_t source_
 		return false;
 	}
 	result = std::move(rescaled);
+	return true;
+}
+
+bool DecimalHelper<bignum_t>::TryDivide(RescaleState &scratch, const bignum_t &dividend, const bignum_t &divisor,
+                                        int64_t scale_exponent, DecimalRounding rounding, bignum_t &result) {
+	if (IsZero(divisor)) {
+		return false;
+	}
+	auto numerator = dividend.data;
+	auto denominator = divisor.data;
+	if (scale_exponent != 0) {
+		const auto exponent = NumericCast<idx_t>(scale_exponent < 0 ? -scale_exponent : scale_exponent);
+		BorrowedBignum factor(scratch.GetPowerOfTen(exponent));
+		BorrowedBignum scaled(scale_exponent < 0 ? divisor : dividend);
+		auto product =
+		    BignumIntermediate::Multiply(scratch.heap, scratch.arithmetic, scaled.intermediate, factor.intermediate);
+		if (scale_exponent < 0) {
+			denominator = product;
+		} else {
+			numerator = product;
+		}
+	}
+	BorrowedBignum numerator_value {bignum_t(numerator)};
+	BorrowedBignum denominator_value {bignum_t(denominator)};
+	result = bignum_t(DivideAndRound(numerator_value.intermediate, denominator_value.intermediate, rounding,
+	                                 scratch.heap, scratch.arithmetic));
 	return true;
 }
 

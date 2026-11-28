@@ -123,6 +123,12 @@ struct DecimalHelper<bignum_t> {
 	                                  uint32_t target_scale, string &result,
 	                                  optional_ptr<ClientContext> context = nullptr);
 
+	//! Divides two unscaled values and rounds the quotient: the dividend (scale_exponent > 0) or the divisor
+	//! (scale_exponent < 0) is first multiplied by 10^|scale_exponent|. Returns false when the divisor is zero. The
+	//! result borrows from the state; consume it before resetting the state
+	DUCKDB_API static bool TryDivide(RescaleState &state, const bignum_t &dividend, const bignum_t &divisor,
+	                                 int64_t scale_exponent, DecimalRounding rounding, bignum_t &result);
+
 	//! Converts an unscaled value with the given scale to a FLOAT or DOUBLE, rounding once (through the decimal
 	//! string), returns false if the value is out of range
 	DUCKDB_API static bool TryToFloating(const bignum_t &value, uint32_t scale, float &result,

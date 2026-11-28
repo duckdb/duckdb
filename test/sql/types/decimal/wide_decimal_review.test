@@ -74,16 +74,16 @@ SELECT d FROM wide WHERE -d > '0'::DECIMAL(40,0)
 ----
 -1
 
-# decimal_division does not support wide arguments
-statement error
-SELECT decimal_division('0.1'::DECIMAL(39,39), 1::DECIMAL(1,0), 1)
+# decimal_division takes wide arguments, the result is a fixed-size or a wide decimal
+query II
+SELECT decimal_division('0.1'::DECIMAL(39,39), 1::DECIMAL(1,0), 1), typeof(decimal_division('0.1'::DECIMAL(39,39), 1::DECIMAL(1,0), 1))
 ----
-Not implemented Error
+0.1	DECIMAL(1,1)
 
-statement error
-SELECT decimal_division('1'::DECIMAL(38,0), '1'::DECIMAL(39,0))
+query II
+SELECT decimal_division('1'::DECIMAL(38,0), '3'::DECIMAL(39,0), 6), typeof(decimal_division('1'::DECIMAL(38,0), '3'::DECIMAL(39,0), 6))
 ----
-Not implemented Error
+0.333333	DECIMAL(44,6)
 
 # DOUBLE casts round half away from zero, like the fixed-size decimals
 query IIII
