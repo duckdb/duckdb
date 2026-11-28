@@ -27,6 +27,8 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &GetLocal(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
+	//! The file system of the client when the context has one, else the file system of the database
+	DUCKDB_API static FileSystem &Get(QueryContext context, AttachedDatabase &db);
 
 public:
 	//! Static helpers that do not depend on a file system instance
