@@ -184,7 +184,6 @@ MacroFunction &ExpressionBinder::UnfoldMacroExpression(FunctionExpression &funct
 
 	auto new_macro_binding =
 	    MacroFunction::CreateDummyBinding(macro_def, macro_func.name, positional_arguments, named_arguments);
-	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression
 	// special case: If this is a window function, then we need to return a window expression
@@ -194,15 +193,20 @@ MacroFunction &ExpressionBinder::UnfoldMacroExpression(FunctionExpression &funct
 		expr = macro_def.expression->Copy();
 	}
 
+	SubstituteMacroParameters(expr, *new_macro_binding);
+	return macro_def;
+}
+
+void ExpressionBinder::SubstituteMacroParameters(unique_ptr<ParsedExpression> &expr, DummyBinding &binding) {
+	macro_binding = &binding;
 	// qualify only the macro parameters with a new empty binder that only knows the macro binding
 	auto dummy_binder = Binder::CreateBinder(context);
-	dummy_binder->macro_binding = new_macro_binding.get();
+	dummy_binder->macro_binding = &binding;
 	ExpressionBinder::QualifyColumnNames(*dummy_binder, expr);
 
 	// now replace the parameters
 	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
-	return macro_def;
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,

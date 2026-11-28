@@ -19,6 +19,8 @@ set(TEST_API_OBJECTS
     test_bind_statement.cpp
     test_function_binding.cpp
     test_monotone_preimage.cpp
+    test_client_context_register_function.cpp
+    test_type_info_identity.cpp
     test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
