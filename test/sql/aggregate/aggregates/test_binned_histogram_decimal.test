@@ -1,0 +1,144 @@
+# name: test/sql/aggregate/aggregates/test_binned_histogram_decimal.test
+# description: The binned histogram of a DECIMAL has DECIMAL bins, a value is compared with them exactly
+# group: [aggregates]
+
+statement ok
+CREATE TABLE decimals AS SELECT * FROM (VALUES (0.10::DECIMAL(4,2)), (0.30), (0.25), (-5.00), (99.99), (NULL)) t(x)
+
+# the bins are of the type the argument and the bin list unify to
+query II
+SELECT histogram(x, [0.1, 0.25, 1.5]), typeof(histogram(x, [0.1, 0.25, 1.5])) FROM decimals
+----
+{0.10=2, 0.25=1, 1.50=1, 99.99=1}	MAP(DECIMAL(4,2), UBIGINT)
+
+query II
+SELECT histogram_exact(x, [0.1, 0.3, 7.5]), typeof(histogram_exact(x, [0.1, 0.3, 7.5])) FROM decimals
+----
+{0.10=1, 0.30=1, 7.50=0, 99.99=3}	MAP(DECIMAL(4,2), UBIGINT)
+
+query I
+SELECT typeof(histogram(x, [0.125, 1])) FROM decimals
+----
+MAP(DECIMAL(13,3), UBIGINT)
+
+# every storage tier of the fixed-size decimals
+foreach width 4 9 18 38
+
+query I
+SELECT histogram(x::DECIMAL({width},2), [0.1, 0.25, 1.5]::DECIMAL({width},2)[]) FROM (SELECT x FROM decimals WHERE x < 50)
+----
+{0.10=2, 0.25=1, 1.50=1}
+
+query I
+SELECT histogram_exact(x::DECIMAL({width},2), [-5, 0.25, 1.5]::DECIMAL({width},2)[]) FROM (SELECT x FROM decimals WHERE x < 0.3 AND x <> 0.1)
+----
+{-5.00=1, 0.25=1, 1.50=0}
+
+endloop
+
+# the bucket of the other values is keyed by the largest value of the type, like for the integer types
+query II
+SELECT x, is_histogram_other_bin(x) FROM (SELECT unnest(map_keys(histogram(x, [0.1, 1.5]::DECIMAL(9,2)[]))) AS x FROM decimals) ORDER BY x
+----
+0.10	false
+1.50	false
+9999999.99	true
+
+# the bucket of the other values is keyed by the largest value of the key type, so a bin of that value cannot be told
+# apart from it when there are other values: that is an error, as it is for the largest value of an integer type and
+# for an infinite DOUBLE bin
+statement error
+SELECT histogram_exact(x, [99.99::DECIMAL(4,2)]) FROM (VALUES (50.00::DECIMAL(4,2)), (99.99::DECIMAL(4,2))) t(x)
+----
+<REGEX>:.*Histogram bin 99.99 collides with the key of the "other values" bucket.*
+
+statement error
+SELECT histogram_exact(x, [127::TINYINT]) FROM (VALUES (50::TINYINT), (127::TINYINT)) t(x)
+----
+<REGEX>:.*Histogram bin 127 collides with the key of the "other values" bucket.*
+
+statement error
+SELECT histogram_exact(x, ['inf'::DOUBLE]) FROM (VALUES (50::DOUBLE), ('inf'::DOUBLE)) t(x)
+----
+<REGEX>:.*collides with the key of the "other values" bucket.*
+
+# without other values the bin is reported, and a key type with more digits than the bin avoids the collision
+query III
+SELECT histogram_exact(x, [99.99::DECIMAL(4,2)]) FILTER (WHERE x > 60), histogram(x, [99.99::DECIMAL(4,2)]), histogram_exact(x, [99.99::DECIMAL(5,2)])
+FROM (VALUES (99.99::DECIMAL(4,2)), (50.00::DECIMAL(4,2))) t(x)
+----
+{99.99=1}	{99.99=2}	{99.99=1, 999.99=1}
+
+# a DOUBLE cannot tell these values apart, the bins can
+query II
+SELECT histogram(x, [12345678901234567890.12]), histogram_exact(x, [12345678901234567890.12, 12345678901234567890.14])
+FROM (VALUES (12345678901234567890.12::DECIMAL(22,2)), (12345678901234567890.13), (12345678901234567890.14)) t(x)
+----
+{12345678901234567890.12=1, 99999999999999999999.99=2}	{12345678901234567890.12=1, 12345678901234567890.14=1, 99999999999999999999.99=1}
+
+# decimals wider than 38 digits, cast in the query: a stored wide column needs a storage version from v2.1.0
+statement ok
+CREATE TABLE wide_text AS SELECT x::VARCHAR AS x FROM decimals
+
+statement ok
+INSERT INTO wide_text VALUES ('-100000000000000000000000000000000000000000.51'), ('100000000000000000000000000000000000000000.51'), ('100000000000000000000000000000000000000000.49')
+
+query II
+SELECT histogram(x, ['-100000000000000000000000000000000000000000.50'::DECIMAL(50,2), -5, 0.1, 0.25, 1.5, '100000000000000000000000000000000000000000.50'::DECIMAL(50,2)]), typeof(histogram(x, [0.1]::DECIMAL(50,2)[])) FROM (SELECT x::DECIMAL(50,2) AS x FROM wide_text)
+----
+{-100000000000000000000000000000000000000000.50=1, -5.00=1, 0.10=1, 0.25=1, 1.50=1, 100000000000000000000000000000000000000000.50=2, 999999999999999999999999999999999999999999999999.99=1}	MAP(DECIMAL(50,2), UBIGINT)
+
+query I
+SELECT histogram_exact(x, ['100000000000000000000000000000000000000000.51'::DECIMAL(50,2), 0.3, 7]) FROM (SELECT x::DECIMAL(50,2) AS x FROM wide_text)
+----
+{0.30=1, 7.00=0, 100000000000000000000000000000000000000000.51=1, 999999999999999999999999999999999999999999999999.99=6}
+
+# a fixed-size argument and wide bins
+query II
+SELECT histogram(x, [0.25, '100000000000000000000000000000000000000000.50'::DECIMAL(50,2)]), typeof(histogram(x, [0.25, '100000000000000000000000000000000000000000.50'::DECIMAL(50,2)])) FROM decimals
+----
+{0.25=3, 100000000000000000000000000000000000000000.50=2}	MAP(DECIMAL(50,2), UBIGINT)
+
+# grouped, and combined across threads
+query II
+SELECT x > 0.2 AS g, histogram(x, [0.1, 1.5]) FROM decimals GROUP BY g ORDER BY g
+----
+false	{0.10=2, 1.50=0}
+true	{0.10=0, 1.50=2, 99.99=1}
+NULL	NULL
+
+statement ok
+CREATE TABLE big AS SELECT ((i % 1000) * 0.125)::DECIMAL(12,3) AS f FROM range(300000) t(i)
+
+query II
+SELECT histogram(f::DECIMAL(40,3), [10, 50.125, 100]::DECIMAL(40,3)[]), histogram(f, [10, 50.125, 100]::DECIMAL(12,3)[]) FROM big
+----
+{10.000=24300, 50.125=96300, 100.000=119700, 9999999999999999999999999999999999999.999=59700}	{10.000=24300, 50.125=96300, 100.000=119700, 999999999.999=59700}
+
+# an integer argument beyond 2^53 is binned exactly against integer bins, whichever exact type the two unify to
+query II
+SELECT map_extract_value(histogram(u, [9007199254740992::BIGINT]), 9007199254740992::BIGINT),
+       map_extract_value(histogram_exact(u, [9007199254740992::BIGINT]), 9007199254740992::BIGINT)
+FROM (VALUES (9007199254740993::UHUGEINT)) t(u)
+----
+0	0
+
+query II
+SELECT map_extract_value(histogram(u, [9007199254740992::DECIMAL(39,0)]), 9007199254740992::DECIMAL(39,0)),
+       map_extract_value(histogram_exact(u::DECIMAL(39,0), [9007199254740993::DECIMAL(39,0)]), 9007199254740993::DECIMAL(39,0))
+FROM (VALUES (9007199254740993::UHUGEINT)) t(u)
+----
+0	1
+
+# DOUBLE bins still turn the histogram into one over DOUBLE
+query I
+SELECT typeof(histogram(x, [0.1::DOUBLE, 1])) FROM decimals
+----
+MAP(DOUBLE, UBIGINT)
+
+# the equi-height technique of the histogram table function bins a DECIMAL by its own values
+query II
+SELECT * FROM histogram_values('decimals', x, technique := 'equi-height', bin_count := 2)
+----
+0.25	3
+99.99	2
