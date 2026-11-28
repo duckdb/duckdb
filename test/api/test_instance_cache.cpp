@@ -222,7 +222,7 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	// base path
 	equivalent_paths.push_back(test_path);
 	// abs path
-	equivalent_paths.push_back(fs.JoinPath(fs.GetWorkingDirectory(), test_path));
+	equivalent_paths.push_back(fs.JoinPath(FileSystem::GetWorkingDirectory(), test_path));
 	// dot dot
 	auto dot_dot = TestCreatePath(fs.JoinPath("subdir", "..", "instance_cache_canonicalization.db"));
 	equivalent_paths.push_back(dot_dot);
@@ -267,7 +267,7 @@ TEST_CASE("Test database file path manager absolute path", "[api][.]") {
 	Connection con(db);
 
 	auto test_db = TestCreatePath("test_same_db_attach.db");
-	auto test_db_abs = fs.JoinPath(fs.GetWorkingDirectory(), test_db);
+	auto test_db_abs = fs.JoinPath(FileSystem::GetWorkingDirectory(), test_db);
 
 	// we can attach this once
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db + "' AS db1"));
@@ -302,7 +302,7 @@ TEST_CASE("Test automatic DB instance caching", "[api][.]") {
 	}
 }
 
-TEST_CASE("Test the instance cache hands out a database that is still open after its last handle", "[api]") {
+static void TestInstanceCacheLastHandle(idx_t reopen_iterations) {
 	DBInstanceCache instance_cache;
 	DBConfig config;
 	auto path = TestCreatePath("instance_cache_in_use.db");
@@ -366,7 +366,7 @@ TEST_CASE("Test the instance cache hands out a database that is still open after
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 	SECTION("A reopen races with closing the last connection") {
-		for (idx_t i = 0; i < 50; i++) {
+		for (idx_t i = 0; i < reopen_iterations; i++) {
 			auto db = instance_cache.GetOrCreateInstance(path, config, true);
 			auto con = make_uniq<Connection>(*db);
 			db.reset();
@@ -389,6 +389,14 @@ TEST_CASE("Test the instance cache hands out a database that is still open after
 		}
 	}
 	TestDeleteFile(path);
+}
+
+TEST_CASE("Test the instance cache hands out a database that is still open after its last handle", "[api]") {
+	TestInstanceCacheLastHandle(2);
+}
+
+TEST_CASE("Stress the instance cache reopening while its last handle closes", "[api][.]") {
+	TestInstanceCacheLastHandle(50);
 }
 
 struct SlowShutdownCatalog : public DuckCatalog {

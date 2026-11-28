@@ -96,6 +96,7 @@ struct CryptoMetaData;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 struct PartitionStatistics;
+struct ReadHead;
 struct TableFilterState;
 
 struct ParquetReaderPrefetchConfig {
@@ -154,7 +155,7 @@ StringColumnReader::Utf8ValidationOption
 EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value);
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
+	ParquetScanFilter(ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
 
@@ -392,6 +393,7 @@ public:
 
 	mutable CachingFileSystem fs;
 	Allocator &allocator;
+	BufferManager &buffer_manager;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;
@@ -489,8 +491,11 @@ private:
 	void InitializeSchema(ClientContext &context);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
-	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
-	                                         idx_t &next_file_idx, ClientContext &context);
+	struct ParseSchemaFrame;
+	ParquetColumnSchema ParseSchemaTree(ClientContext &context, idx_t &next_schema_idx, idx_t &next_file_idx);
+	bool ParseSchemaElement(ClientContext &context, idx_t depth, idx_t max_define, idx_t max_repeat, idx_t schema_idx,
+	                        idx_t &next_file_idx, vector<ParseSchemaFrame> &frames, ParquetColumnSchema &result);
+	ParquetColumnSchema FinishSchemaElement(ParseSchemaFrame &frame, idx_t next_file_idx);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
@@ -501,6 +506,8 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, ParquetReaderScanState &state,
 	                                                    ColumnReader &column_reader, const TableFilter &filter);
+	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, idx_t group_index,
+	                                                    ColumnReader &column_reader, const TableFilter &filter);
 	bool FiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state, bool dynamic_filters_only);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Reads the page index of the row group and works out which rows may match the filters; a page index that
@@ -510,6 +517,12 @@ private:
 	//! Serves the page index of the whole file from one buffer that is read once per reader and shared by every row
 	//! group and thread, when the index fits the transport's accepted column gap; returns false when it does not
 	bool TryAttachPageIndexBuffer(ThriftFileTransport &transport) const;
+	struct BloomFilterReadPlan;
+	BloomFilterReadPlan PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport,
+	                                         ColumnReader &column_reader, const TableFilter &filter,
+	                                         idx_t column_chunk_idx);
+	bool TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
+	                                  ColumnReader &column_reader, const TableFilter &filter, idx_t column_chunk_idx);
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);
@@ -566,6 +579,9 @@ private:
 	mutable mutex page_index_buffer_lock;
 	mutable AllocatedData page_index_buffer;
 	mutable bool page_index_buffer_loaded = false;
+	mutex bloom_filter_read_heads_lock;
+	//! Per column, unclaimed row groups hold their shared read heads. Plans use the first gap estimate.
+	unordered_map<idx_t, unordered_map<idx_t, shared_ptr<ReadHead>>> bloom_filter_read_heads;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;

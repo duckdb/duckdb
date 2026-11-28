@@ -13,7 +13,7 @@ DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DatabaseInstance> &insta
 DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
-static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
+static string GetDBAbsolutePath(const string &database_p, VirtualFileSystem &fs) {
 	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
@@ -27,19 +27,14 @@ static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 		return database;
 	}
 	// canonicalize the path
-	return fs.CanonicalizePath(database);
+	return fs.FindFileSystem(database, nullptr).CanonicalizePath(database, nullptr);
 }
 
 static string GetCacheKey(const string &database_p, const DBConfig &config) {
 	// Currently the cache key is derived directly from the abs path,
 	// but it can apply more transformations to the path if necessary
 	string abs_database_path;
-	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
-	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database_p, *tmp_fs);
-	}
+	abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
 #if defined(_WIN32) || defined(__APPLE__)
 	return StringUtil::Lower(abs_database_path);
 #else  // !(_WIN32 or __APPLE__)
@@ -55,7 +50,8 @@ DBInstanceCache::~DBInstanceCache() {
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config,
-                                                        std::unique_lock<std::mutex> &db_instances_lock) {
+                                                        std::unique_lock<std::mutex> &db_instances_lock,
+                                                        const db_config_match_t &is_same_config) {
 	D_ASSERT(db_instances_lock.owns_lock());
 	auto cache_key = GetCacheKey(database, config);
 	auto entry = db_instances.find(cache_key);
@@ -96,7 +92,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		return nullptr;
 	}
 	// the database instance exists - check that the config matches
-	if (db_instance->config != config) {
+	if (is_same_config ? !is_same_config(db_instance->config, config) : db_instance->config != config) {
 		throw ConnectionException("Can't open a connection to same database file with a different configuration "
 		                          "than existing connections");
 	}
@@ -114,12 +110,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
                                                            const std::function<void(DuckDB &)> &on_create) {
 	D_ASSERT(db_instances_lock.owns_lock());
 	string abs_database_path;
-	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
-	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
-	}
+	abs_database_path = GetDBAbsolutePath(database, *config.file_system);
 	// Creates new instance
 	string instance_path = abs_database_path;
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {
@@ -143,13 +134,23 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 			config.db_cache_entry.reset();
 			throw;
 		}
+		// before the instance is published: a call that finds the entry waits for the mutex held here
+		if (on_create) {
+			try {
+				on_create(*db_instance);
+			} catch (...) {
+				config.db_cache_entry.reset();
+				db_instance.reset();
+				throw;
+			}
+		}
 		cache_entry->instance = db_instance->instance;
 	} else {
 		db_instances_lock.unlock();
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
-	}
-	if (on_create) {
-		on_create(*db_instance);
+		if (on_create) {
+			on_create(*db_instance);
+		}
 	}
 	return db_instance;
 }
@@ -173,7 +174,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
 
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
                                                         CacheBehavior cache_behavior,
-                                                        const std::function<void(DuckDB &)> &on_create) {
+                                                        const std::function<void(DuckDB &)> &on_create,
+                                                        const db_config_match_t &is_same_config) {
 	unique_lock<mutex> lock(cache_lock, std::defer_lock);
 	bool cache_instance = cache_behavior == CacheBehavior::ALWAYS_CACHE;
 	if (cache_behavior == CacheBehavior::AUTOMATIC) {
@@ -194,7 +196,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
 			// find a cache entry (can be done without unlocking) or we find a cache entry and the database is valid as
 			// well (in this case we can return that database)
 			lock.lock();
-			auto instance = GetInstanceInternal(database, config_dict, lock);
+			auto instance = GetInstanceInternal(database, config_dict, lock, is_same_config);
 			if (instance) {
 				return instance;
 			}

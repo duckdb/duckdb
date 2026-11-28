@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_macro_info.hpp"
 #include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
@@ -108,6 +109,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	switch (type) {
 	case AlterType::ALTER_DATABASE:
 		result = AlterDatabaseInfo::Deserialize(deserializer);
+		break;
+	case AlterType::ALTER_MACRO:
+		result = AlterMacroInfo::Deserialize(deserializer);
 		break;
 	case AlterType::ALTER_SCHEMA:
 		result = AlterSchemaInfo::Deserialize(deserializer);
@@ -238,6 +242,27 @@ unique_ptr<AlterInfo> AlterDatabaseInfo::Deserialize(Deserializer &deserializer)
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterDatabaseInfo!");
 	}
+	return std::move(result);
+}
+
+void AlterMacroInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<AlterMacroType>(300, "alter_macro_type", alter_macro_type);
+	serializer.WriteProperty<CatalogType>(301, "entry_catalog_type", entry_catalog_type);
+}
+
+unique_ptr<AlterInfo> AlterMacroInfo::Deserialize(Deserializer &deserializer) {
+	auto alter_macro_type = deserializer.ReadProperty<AlterMacroType>(300, "alter_macro_type");
+	auto entry_catalog_type = deserializer.ReadProperty<CatalogType>(301, "entry_catalog_type");
+	unique_ptr<AlterMacroInfo> result;
+	switch (alter_macro_type) {
+	case AlterMacroType::REMOVE_OVERLOAD:
+		result = RemoveMacroOverloadInfo::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of AlterMacroInfo!");
+	}
+	result->entry_catalog_type = entry_catalog_type;
 	return std::move(result);
 }
 
@@ -611,6 +636,17 @@ unique_ptr<AlterTableInfo> RemoveFieldInfo::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
+void RemoveMacroOverloadInfo::Serialize(Serializer &serializer) const {
+	AlterMacroInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(400, "signature", signature);
+}
+
+unique_ptr<AlterMacroInfo> RemoveMacroOverloadInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<RemoveMacroOverloadInfo>(new RemoveMacroOverloadInfo());
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(400, "signature", result->signature);
+	return std::move(result);
+}
+
 void RenameColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(400, "old_name", old_name);
@@ -808,6 +844,7 @@ void TransactionInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TransactionModifierType>(201, "modifier", modifier);
 	serializer.WritePropertyWithDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
 	serializer.WritePropertyWithDefault<bool>(203, "auto_rollback", auto_rollback);
+	serializer.WritePropertyWithDefault<string>(204, "share_id", share_id, string());
 }
 
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
@@ -816,6 +853,7 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<TransactionModifierType>(201, "modifier", result->modifier);
 	deserializer.ReadPropertyWithExplicitDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", result->invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
 	deserializer.ReadPropertyWithDefault<bool>(203, "auto_rollback", result->auto_rollback);
+	deserializer.ReadPropertyWithExplicitDefault<string>(204, "share_id", result->share_id, string());
 	return std::move(result);
 }
 

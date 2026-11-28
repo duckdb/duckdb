@@ -1,58 +1,327 @@
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/optimizer/expression_heuristics.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
 
-static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional);
+class BooleanFilterCache final : public TableFilterCache {
+public:
+	BooleanFilterCache(const SelectionVector &selected, idx_t selected_count, idx_t count)
+	    : matches(make_unsafe_uniq_array<bool>(count)), match_count(selected_count), value_count(count) {
+		memset(matches.get(), 0, count * sizeof(bool));
+		for (idx_t i = 0; i < selected_count; i++) {
+			matches[selected.get_index(i)] = true;
+		}
+	}
 
-static void InitializeExecutor(ClientContext &context, const Expression &expression, ExpressionFilterState &state) {
+	bool CanSkipAllInternal() const override {
+		return match_count == 0;
+	}
+
+protected:
+	optional<array_ptr<const bool>> GetPureMaskInternal() const override {
+		return array_ptr<const bool>(matches.get(), value_count);
+	}
+
+	bool CanAcceptAllInternal() const override {
+		return match_count == value_count;
+	}
+
+	void FilterConstantInternal(idx_t value_index, idx_t &count) override {
+		if (count != 0 && !matches[value_index]) {
+			count = 0;
+		}
+	}
+
+	void FilterInternal(const SelectionVector &values, SelectionVector &sel, idx_t &count) override {
+		if (count == 0 || match_count == value_count) {
+			return;
+		}
+		if (!result.IsSet() || result.Capacity() < count) {
+			result.Initialize(count);
+		}
+		idx_t accepted = 0;
+		if (!sel.IsSet()) {
+			accepted = SelectionVector::SelectFromBoolean(matches.get(), &values, count,
+			                                              array_ptr<sel_t>(result.data(), result.Capacity()));
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto row = sel.get_index(i);
+				result.set_index(accepted, row);
+				accepted += matches[values.get_index(row)];
+			}
+		}
+		if (accepted != count) {
+			// Transfer ownership so later filters cannot overwrite a retained selection.
+			sel = std::move(result);
+		}
+		count = accepted;
+	}
+
+	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t>, SelectionVector &sel,
+	                        idx_t &count) override {
+		FilterInternal(values, sel, count);
+	}
+
+private:
+	unsafe_unique_array<bool> matches;
+	idx_t match_count;
+	idx_t value_count;
+	SelectionVector result;
+};
+
+static unique_ptr<TableFilterCache> CreateBooleanCache(ExpressionFilterExecutor &executor, Vector &values,
+                                                       idx_t count) {
+	SelectionVector selected;
+	auto selected_count = count;
+	executor.FilterSelection(selected, values, count, selected_count);
+	return make_uniq<BooleanFilterCache>(selected, selected_count, count);
+}
+
+TableFilterState::~TableFilterState() {
+	if (cache_identity) {
+		cache_identity->valid = false;
+	}
+}
+
+bool TableFilterCache::IsValidFor(const TableFilterState &state) const {
+	return identity && identity->valid && identity == state.cache_identity;
+}
+
+bool TableFilterCache::CanSkipAll() const {
+	return (!identity || identity->valid) && CanSkipAllInternal();
+}
+
+bool TableFilterCache::CanAcceptAll() const {
+	return (!identity || identity->valid) && CanAcceptAllInternal();
+}
+
+optional<array_ptr<const bool>> TableFilterCache::GetPureMask() const {
+	if (identity && !identity->valid) {
+		throw InternalException("Filter cache outlived its filter state");
+	}
+	return GetPureMaskInternal();
+}
+
+void TableFilterCache::Filter(const SelectionVector &values, SelectionVector &sel, idx_t &count) {
+	if (identity && !identity->valid) {
+		throw InternalException("Filter cache outlived its filter state");
+	}
+	FilterInternal(values, sel, count);
+}
+
+void TableFilterCache::FilterConstant(idx_t value_index, idx_t &count) {
+	if (identity && !identity->valid) {
+		throw InternalException("Filter cache outlived its filter state");
+	}
+	FilterConstantInternal(value_index, count);
+}
+
+void TableFilterCache::FilterRuns(const SelectionVector &values, array_ptr<const idx_t> row_counts,
+                                  SelectionVector &sel, idx_t &count) {
+	if (identity && !identity->valid) {
+		throw InternalException("Filter cache outlived its filter state");
+	}
+	FilterRunsInternal(values, row_counts, sel, count);
+}
+
+unique_ptr<TableFilterCache> ExpressionFilterExecutor::CreateCache(Vector &values, idx_t count) {
+	throw InternalException("Filter executor does not support cached evaluation");
+}
+
+unique_ptr<TableFilterCache> TableFilterState::CreateCache(Vector &values, idx_t count) {
+	D_ASSERT(can_cache);
+	auto &state = Cast<ExpressionFilterState>();
+	unique_ptr<TableFilterCache> result;
+	if (state.can_cache_result) {
+		SelectionVector selected;
+		auto selected_count = count;
+		ColumnSegment::FilterSelection(selected, values, *this, count, selected_count);
+		result = make_uniq<BooleanFilterCache>(selected, selected_count, count);
+	} else {
+		result = state.fast_executor->CreateCache(values, count);
+	}
+	if (!cache_identity) {
+		cache_identity = make_shared_ptr<TableFilterCacheIdentity>();
+	}
+	result->identity = cache_identity;
+	return result;
+}
+
+struct FilterCacheProperties {
+	bool safe = true;
+	bool adaptive = false;
+};
+
+static FilterCacheProperties GetCacheProperties(const Expression &expression) {
+	FilterCacheProperties result;
+	// Verification statistics describe logical rows, not unused dictionary entries.
+	if (expression.CanThrow() || expression.IsVolatile() || expression.GetVerificationStats()) {
+		result.safe = false;
+		return result;
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expression.Cast<BoundFunctionExpression>();
+		const auto &name = function.Function().GetName();
+		if (name == DynamicFilterScalarFun::NAME) {
+			result.safe = false;
+			return result;
+		}
+		if (name == SelectivityOptionalFilterScalarFun::NAME) {
+			result.adaptive = true;
+			auto child = ExpressionFilter::GetOptionalFilterChild(expression);
+			if (child) {
+				const auto properties = GetCacheProperties(*child);
+				result.safe = properties.safe;
+			}
+		}
+		if (name == BloomFilterScalarFun::NAME || name == PrefixRangeScalarFun::NAME) {
+			if (!function.BindInfo()) {
+				result.safe = false;
+				return result;
+			}
+			if (name == BloomFilterScalarFun::NAME) {
+				auto &data = function.BindInfo()->Cast<BloomFilterFunctionData>();
+				result.safe = data.filter && data.filter->IsSealed() && data.filter->IsPublished();
+				result.adaptive = data.n_vectors_to_check != 0;
+			} else {
+				auto &data = function.BindInfo()->Cast<PrefixRangeFunctionData>();
+				result.safe = data.filter && data.filter->IsInitialized() && data.filter->IsPublished();
+				result.adaptive = data.n_vectors_to_check != 0;
+			}
+		}
+	}
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
+		const auto properties = GetCacheProperties(child);
+		result.safe = result.safe && properties.safe;
+		result.adaptive = result.adaptive || properties.adaptive;
+	});
+	return result;
+}
+
+static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
+                                                                  bool inside_selectivity_optional,
+                                                                  optional_ptr<idx_t> cost = nullptr);
+
+static void InitializeExecutor(Context &context, const Expression &expression, ExpressionFilterState &state) {
 	state.executor = make_uniq<ExpressionExecutor>(context);
 	state.executor->AddExpression(expression);
 }
 
-ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
-	can_throw = expression.CanThrow();
-	fast_executor = TryCreateFastExecutor(expression, false);
+ExpressionFilterState::ExpressionFilterState(Context &context, const Expression &expression) {
+	fast_executor = ExpressionFilterExecutor::TryCreate(expression);
 	InitializeExecutor(context, expression, *this);
+	const auto properties = GetCacheProperties(expression);
+	can_cache_result = properties.safe && !properties.adaptive;
+	can_cache = properties.safe && (can_cache_result || (fast_executor && fast_executor->CanCache()));
 }
 
 ExpressionFilterState::~ExpressionFilterState() {
 }
 
+bool ExpressionFilterState::TryFilterDictionary(SelectionVector &sel, Vector &vector, idx_t &approved_tuple_count) {
+	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
+	if (!can_cache || vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	const auto size = DictionaryVector::DictionarySize(vector);
+	const auto &id = DictionaryVector::DictionaryId(vector);
+	auto &values = DictionaryVector::Child(vector);
+	if (!size.IsValid() || id.empty() || size.GetIndex() >= MAX_DICTIONARY_SIZE_THRESHOLD ||
+	    values.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return false;
+	}
+	if (approved_tuple_count == 0) {
+		return true;
+	}
+	if (!dictionary_cache || dictionary_id != id) {
+		// Avoid evaluating a large dictionary for only a few selected rows.
+		if (size.GetIndex() > STANDARD_VECTOR_SIZE && approved_tuple_count <= STANDARD_VECTOR_SIZE / 2) {
+			return false;
+		}
+		auto new_cache = CreateCache(values, size.GetIndex());
+		dictionary_id = id;
+		dictionary_cache = std::move(new_cache);
+	}
+	dictionary_cache->Filter(DictionaryVector::SelVector(vector), sel, approved_tuple_count);
+	return true;
+}
+
+template <class CHILD, class FILTER>
+static void FilterConjunction(AdaptiveFilter &adaptive_filter, vector<unique_ptr<CHILD>> &children, idx_t &count,
+                              FILTER filter, bool adapt = true) {
+	if (count == 0) {
+		return;
+	}
+	auto state = adapt ? adaptive_filter.BeginFilter() : AdaptiveFilterState();
+	for (auto child_idx : adaptive_filter.GetPermutation()) {
+		filter(*children[child_idx]);
+		if (count == 0) {
+			break;
+		}
+	}
+	if (adapt) {
+		adaptive_filter.EndFilter(state);
+	}
+}
+
 class ConjunctionAndFilterExecutor final : public ExpressionFilterExecutor {
 public:
-	explicit ConjunctionAndFilterExecutor(vector<unique_ptr<ExpressionFilterExecutor>> children_p)
-	    : children(std::move(children_p)) {
+	ConjunctionAndFilterExecutor(const Expression &expression, vector<unique_ptr<ExpressionFilterExecutor>> children_p)
+	    : children(std::move(children_p)), adaptive_filter(expression) {
 	}
+
+	bool CanCache() const override {
+		for (const auto &child : children) {
+			if (!child->CanCache()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override;
 
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                      idx_t &approved_tuple_count) override {
-		for (auto &child : children) {
-			child->FilterSelection(sel, vector, scan_count, approved_tuple_count);
-			if (approved_tuple_count == 0) {
-				break;
-			}
-		}
+		FilterConjunction(adaptive_filter, children, approved_tuple_count, [&](ExpressionFilterExecutor &child) {
+			child.FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		});
 		return approved_tuple_count;
 	}
 
 private:
 	vector<unique_ptr<ExpressionFilterExecutor>> children;
+	AdaptiveFilter adaptive_filter;
 };
 
 class OptionalFilterExecutor final : public ExpressionFilterExecutor {
 public:
+	bool CanCache() const override {
+		return true;
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		return CreateBooleanCache(*this, values, count);
+	}
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                      idx_t &approved_tuple_count) override {
 		return approved_tuple_count;
@@ -130,6 +399,12 @@ private:
 
 class ComparisonFilterExecutor final : public ExpressionFilterExecutor {
 public:
+	bool CanCache() const override {
+		return true;
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		return CreateBooleanCache(*this, values, count);
+	}
 	ComparisonFilterExecutor(ExpressionType comparison_type_p, Value constant_p)
 	    : comparison_type(comparison_type_p), constant(std::move(constant_p)) {
 	}
@@ -157,6 +432,12 @@ public:
 	}
 
 private:
+	template <class T, class OP>
+	static constexpr bool UseSelectionBatch() {
+		return UseBooleanSelectionBatch<T>() || std::is_same_v<OP, InlinedStringEquals> ||
+		       std::is_same_v<OP, InlinedStringNotEquals>;
+	}
+
 	template <class T, class OP, bool CAN_HAVE_NULL>
 	idx_t TemplatedSelect(const UnifiedVectorFormat &vdata, T predicate, const SelectionVector &sel,
 	                      idx_t approved_tuple_count) {
@@ -164,7 +445,7 @@ private:
 		auto &mask = vdata.validity;
 		idx_t result_count = 0;
 		idx_t i = 0;
-		if constexpr (UseBooleanSelectionBatch<T>() && !CAN_HAVE_NULL) {
+		if constexpr (UseSelectionBatch<T, OP>() && !CAN_HAVE_NULL) {
 			if (!sel.IsSet() && !vdata.sel->IsSet()) {
 				array_ptr<sel_t> output(result_sel.data(), result_sel.Capacity());
 				for (; i + 64 <= approved_tuple_count; i += 64) {
@@ -197,21 +478,43 @@ private:
 		return TemplatedSelect<T, OP, true>(vdata, predicate, sel, approved_tuple_count);
 	}
 
+	template <class T, class OP>
+	idx_t SelectEquality(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			if (constant.GetValueUnsafe<string_t>().IsInlined()) {
+				using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
+				return SelectOperation<string_t, INLINED_OP>(vdata, sel, approved_tuple_count);
+			}
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
+	template <class T, class OP>
+	idx_t SelectOrdering(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			auto mode =
+			    StringComparison::SelectMode(vdata, constant.GetValueUnsafe<string_t>(), sel, approved_tuple_count);
+			return StringComparison::Dispatch<OP>(
+			    mode, [&](auto op) { return SelectOperation<T, decltype(op)>(vdata, sel, approved_tuple_count); });
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
 	template <class T>
 	idx_t SelectTyped(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
-			return SelectOperation<T, Equals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, Equals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_NOTEQUAL:
-			return SelectOperation<T, NotEquals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, NotEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHAN:
-			return SelectOperation<T, GreaterThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SelectOperation<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHAN:
-			return SelectOperation<T, LessThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SelectOperation<T, LessThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThanEquals>(vdata, sel, approved_tuple_count);
 		default:
 			InternalException::Throw("Unsupported comparison type for comparison filter executor");
 		}
@@ -268,12 +571,50 @@ private:
 	idx_t current_capacity = 0;
 };
 
+class InFilterExecutor final : public ExpressionFilterExecutor {
+public:
+	explicit InFilterExecutor(vector<Value> constants) : executor(CreateComparisons(std::move(constants))) {
+	}
+
+	bool CanCache() const override {
+		return true;
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		return CreateBooleanCache(*this, values, count);
+	}
+	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
+	                      idx_t &approved_tuple_count) override {
+		return executor.FilterSelection(sel, vector, scan_count, approved_tuple_count);
+	}
+
+private:
+	static vector<unique_ptr<ExpressionFilterExecutor>> CreateComparisons(vector<Value> constants) {
+		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		for (auto &constant : constants) {
+			children.push_back(make_uniq<ComparisonFilterExecutor>(ExpressionType::COMPARE_EQUAL, std::move(constant)));
+		}
+		return children;
+	}
+
+	ConjunctionOrFilterExecutor executor;
+};
+
+static bool KeepOptionalSelection(const SelectivityOptionalFilterState::SelectivityStats &stats, idx_t accepted,
+                                  idx_t processed) {
+	return static_cast<double>(accepted) < static_cast<double>(processed) * stats.selectivity_threshold;
+}
+
 class SelectivityOptionalFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	SelectivityOptionalFilterExecutor(unique_ptr<ExpressionFilterExecutor> child_p, idx_t n_vectors_to_check,
 	                                  float selectivity_threshold)
 	    : child(std::move(child_p)), stats(n_vectors_to_check, selectivity_threshold) {
 	}
+
+	bool CanCache() const override {
+		return child && child->CanCache();
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override;
 
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                      idx_t &approved_tuple_count) override {
@@ -288,8 +629,13 @@ public:
 			return approved_tuple_count;
 		}
 		const auto before_count = approved_tuple_count;
+		const auto had_selection = sel.IsSet();
 		child->FilterSelection(sel, vector, scan_count, approved_tuple_count);
 		stats.Update(approved_tuple_count, before_count);
+		if (!had_selection && !KeepOptionalSelection(stats, approved_tuple_count, before_count)) {
+			sel = SelectionVector();
+			approved_tuple_count = before_count;
+		}
 		return approved_tuple_count;
 	}
 
@@ -298,14 +644,161 @@ private:
 	SelectivityOptionalFilterState::SelectivityStats stats;
 };
 
+class ConjunctionFilterCache final : public TableFilterCache {
+public:
+	ConjunctionFilterCache(vector<unique_ptr<TableFilterCache>> children_p, AdaptiveFilter &adaptive_filter_p)
+	    : children(std::move(children_p)), adaptive_filter(adaptive_filter_p) {
+	}
+
+protected:
+	bool CanAcceptAllInternal() const override {
+		for (const auto &child : children) {
+			if (!child->CanAcceptAll()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void FilterConstantInternal(idx_t value_index, idx_t &count) override {
+		// A cached constant only requires a mask lookup per child.
+		FilterConjunction(
+		    adaptive_filter.get(), children, count,
+		    [&](TableFilterCache &child) { child.FilterConstant(value_index, count); }, false);
+	}
+
+	void FilterInternal(const SelectionVector &values, SelectionVector &sel, idx_t &count) override {
+		FilterConjunction(
+		    adaptive_filter.get(), children, count, [&](TableFilterCache &child) { child.Filter(values, sel, count); },
+		    !CanAcceptAllInternal());
+	}
+
+	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t> row_counts, SelectionVector &sel,
+	                        idx_t &count) override {
+		FilterConjunction(
+		    adaptive_filter.get(), children, count,
+		    [&](TableFilterCache &child) { child.FilterRuns(values, row_counts, sel, count); },
+		    !CanAcceptAllInternal());
+	}
+
+private:
+	vector<unique_ptr<TableFilterCache>> children;
+	reference<AdaptiveFilter> adaptive_filter;
+};
+
+static idx_t CountRunRows(array_ptr<const idx_t> row_counts, const SelectionVector &sel, idx_t count) {
+	idx_t rows = 0;
+	for (idx_t i = 0; i < count; i++) {
+		rows += row_counts[sel.get_index(i)];
+	}
+	return rows;
+}
+
+class OptionalFilterCache final : public TableFilterCache {
+public:
+	OptionalFilterCache(unique_ptr<TableFilterCache> child_p, SelectivityOptionalFilterState::SelectivityStats &stats_p)
+	    : child(std::move(child_p)), stats(stats_p) {
+	}
+
+protected:
+	bool CanAcceptAllInternal() const override {
+		return !stats.get().IsActive() || child->CanAcceptAll();
+	}
+
+	void FilterConstantInternal(idx_t value_index, idx_t &count) override {
+		if (count == 0) {
+			return;
+		}
+		if (!stats.get().IsActive()) {
+			stats.get().Update(0, 0);
+			return;
+		}
+		const auto before_count = count;
+		child->FilterConstant(value_index, count);
+		stats.get().Update(count, before_count);
+		if (!KeepOptionalSelection(stats.get(), count, before_count)) {
+			count = before_count;
+		}
+	}
+
+	void FilterInternal(const SelectionVector &values, SelectionVector &sel, idx_t &count) override {
+		if (count == 0) {
+			return;
+		}
+		if (!stats.get().IsActive()) {
+			stats.get().Update(0, 0);
+			return;
+		}
+		const auto before_count = count;
+		const auto had_selection = sel.IsSet();
+		child->Filter(values, sel, count);
+		stats.get().Update(count, before_count);
+		if (!had_selection && !KeepOptionalSelection(stats.get(), count, before_count)) {
+			sel = SelectionVector();
+			count = before_count;
+		}
+	}
+
+	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t> row_counts, SelectionVector &sel,
+	                        idx_t &count) override {
+		if (!stats.get().IsActive()) {
+			for (idx_t i = 0; i < count; i++) {
+				if (row_counts[sel.get_index(i)] != 0) {
+					stats.get().Update(0, 0);
+					break;
+				}
+			}
+			return;
+		}
+		const auto before_rows = CountRunRows(row_counts, sel, count);
+		if (before_rows == 0) {
+			return;
+		}
+		const auto before_count = count;
+		const auto had_selection = sel.IsSet();
+		child->FilterRuns(values, row_counts, sel, count);
+		const auto accepted_rows = count == before_count ? before_rows : CountRunRows(row_counts, sel, count);
+		stats.get().Update(accepted_rows, before_rows);
+		if (!had_selection && !KeepOptionalSelection(stats.get(), accepted_rows, before_rows)) {
+			sel = SelectionVector();
+			count = before_count;
+		}
+	}
+
+private:
+	unique_ptr<TableFilterCache> child;
+	reference<SelectivityOptionalFilterState::SelectivityStats> stats;
+};
+
+unique_ptr<TableFilterCache> ConjunctionAndFilterExecutor::CreateCache(Vector &values, idx_t count) {
+	vector<unique_ptr<TableFilterCache>> caches;
+	for (auto &child : children) {
+		caches.push_back(child->CreateCache(values, count));
+	}
+	return make_uniq<ConjunctionFilterCache>(std::move(caches), adaptive_filter);
+}
+
+unique_ptr<TableFilterCache> SelectivityOptionalFilterExecutor::CreateCache(Vector &values, idx_t count) {
+	return make_uniq<OptionalFilterCache>(child->CreateCache(values, count), stats);
+}
+
 class BloomFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	BloomFilterExecutor(const BloomFilterFunctionData &data, bool inside_selectivity_optional)
-	    : filter(data.filter), filters_null_values(data.filters_null_values), hashes(LogicalType::HASH) {
+	    : filter(data.filter), locality(data.locality), filters_null_values(data.filters_null_values),
+	      hashes(LogicalType::HASH) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
 			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
 			                                                                    data.selectivity_threshold);
 		}
+	}
+
+	bool CanCache() const override {
+		return !stats && filter && filter->IsSealed() && filter->IsPublished();
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		D_ASSERT(CanCache());
+		return CreateBooleanCache(*this, values, count);
 	}
 
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
@@ -323,6 +816,9 @@ public:
 
 		const auto hash_capacity = sel.IsSet() ? scan_count : approved_tuple_count;
 		PrepareCapacity(hash_capacity);
+		if (sel.IsSet() && sel.data() == bloom_sel.data()) {
+			bloom_sel.Initialize(current_capacity);
+		}
 		if (sel.IsSet()) {
 			VectorOperations::Hash(vector, hashes, sel, approved_tuple_count);
 			if (hashes.GetVectorType() == VectorType::FLAT_VECTOR) {
@@ -353,18 +849,19 @@ public:
 
 private:
 	idx_t ProbeBloomFilter(optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count) {
+		const auto view = GetBloomFilterReadView(*filter, locality);
 		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			const auto hash = *ConstantVector::GetData<hash_t>(hashes);
-			return filter->LookupOne(hash) ? approved_tuple_count : 0;
+			return view.LookupOne(hash) ? approved_tuple_count : 0;
 		}
 		if (hashes.GetVectorType() != VectorType::FLAT_VECTOR) {
 			hashes.Flatten();
 		}
 		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 		if (sel) {
-			return filter->LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
+			return view.LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
 		}
-		return filter->LookupHashes(hashes, bloom_sel, approved_tuple_count);
+		return view.LookupHashes(hashes, bloom_sel, approved_tuple_count);
 	}
 
 	idx_t AddNullsToBloomSelection(SelectionVector &sel, Vector &vector, idx_t bloom_count,
@@ -433,6 +930,7 @@ private:
 	}
 
 	shared_ptr<const BloomFilter> filter;
+	BloomFilterReadLocality locality;
 	bool filters_null_values;
 	Vector hashes;
 	SelectionVector bloom_sel;
@@ -452,6 +950,14 @@ public:
 		}
 	}
 
+	bool CanCache() const override {
+		return !stats && filter && filter->IsInitialized() && filter->IsPublished();
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		D_ASSERT(CanCache());
+		return CreateBooleanCache(*this, values, count);
+	}
+
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                      idx_t &approved_tuple_count) override {
 		if (approved_tuple_count == 0) {
@@ -466,6 +972,9 @@ public:
 		}
 
 		PrepareCapacity(approved_tuple_count);
+		if (sel.IsSet() && sel.data() == local_sel.data()) {
+			local_sel.Initialize(current_capacity);
+		}
 		const auto has_selection = sel.IsSet();
 		const auto result_count = has_selection ? filter->LookupKeys(vector, sel, local_sel, approved_tuple_count)
 		                                        : filter->LookupKeys(vector, local_sel, approved_tuple_count);
@@ -616,10 +1125,21 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateComparisonExecutor(const Bo
 	return make_uniq<ComparisonFilterExecutor>(comparison_type, constant->GetValue());
 }
 
+static unique_ptr<ExpressionFilterExecutor> TryCreateInExecutor(const BoundOperatorExpression &expr) {
+	if (!ExpressionFilter::IsNativeInFilter(expr)) {
+		return nullptr;
+	}
+	vector<Value> constants;
+	for (idx_t i = 1; i < expr.GetChildren().size(); i++) {
+		constants.push_back(expr.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue());
+	}
+	return make_uniq<InFilterExecutor>(std::move(constants));
+}
+
 static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const BoundFunctionExpression &func,
-                                                                      bool inside_selectivity_optional) {
-	if (!inside_selectivity_optional && func.GetChildren().size() == 2 &&
-	    BoundComparisonExpression::IsComparison(func.GetExpressionType())) {
+                                                                      bool inside_selectivity_optional,
+                                                                      optional_ptr<idx_t> cost) {
+	if (func.GetChildren().size() == 2 && BoundComparisonExpression::IsComparison(func.GetExpressionType())) {
 		return TryCreateComparisonExecutor(func);
 	}
 	if (!IsColumnReferenceFunction(func)) {
@@ -635,7 +1155,7 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 		if (!optional_child) {
 			return make_uniq<OptionalFilterExecutor>();
 		}
-		auto child = TryCreateFastExecutor(*optional_child, true);
+		auto child = TryCreateFastExecutor(*optional_child, true, cost);
 		if (!child) {
 			return nullptr;
 		}
@@ -660,27 +1180,66 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 	return nullptr;
 }
 
-static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional) {
+static unique_ptr<ExpressionFilterExecutor>
+TryCreateFastExecutor(const Expression &expression, bool inside_selectivity_optional, optional_ptr<idx_t> cost) {
+	if (cost) {
+		*cost = ExpressionHeuristics::Cost(expression);
+	}
 	switch (expression.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
-		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional);
+		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional, cost);
+	case ExpressionClass::BOUND_OPERATOR:
+		return TryCreateInExecutor(expression.Cast<BoundOperatorExpression>());
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		if (expression.GetExpressionType() != ExpressionType::CONJUNCTION_AND &&
 		    expression.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 			return nullptr;
 		}
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		struct FilterCost {
+			unique_ptr<ExpressionFilterExecutor> executor;
+			idx_t cost;
+		};
+		vector<FilterCost> filters;
+		const auto is_and = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+		idx_t row_filter_count = 0;
+		idx_t row_filter_index = 0;
 		for (auto &child_expr : conjunction.GetChildren()) {
-			auto child_executor = TryCreateFastExecutor(*child_expr, inside_selectivity_optional);
+			idx_t child_cost = 0;
+			auto child_executor =
+			    TryCreateFastExecutor(*child_expr, inside_selectivity_optional, is_and ? &child_cost : nullptr);
 			if (!child_executor) {
 				return nullptr;
 			}
-			children.push_back(std::move(child_executor));
+			if (is_and && !ExpressionFilter::IsPruningOnlyExpression(*child_expr)) {
+				row_filter_count++;
+				row_filter_index = filters.size();
+			}
+			filters.push_back({std::move(child_executor), child_cost});
 		}
-		if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			return make_uniq<ConjunctionAndFilterExecutor>(std::move(children));
+		if (is_and) {
+			// Keep pruning hints in the expression, but avoid an AND executor for zero or one row filter.
+			if (row_filter_count == 0) {
+				if (cost) {
+					*cost = 0;
+				}
+				return make_uniq<OptionalFilterExecutor>();
+			}
+			if (row_filter_count == 1) {
+				if (cost) {
+					*cost = filters[row_filter_index].cost;
+				}
+				return std::move(filters[row_filter_index].executor);
+			}
+			std::stable_sort(filters.begin(), filters.end(),
+			                 [](const FilterCost &left, const FilterCost &right) { return left.cost < right.cost; });
+		}
+		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		for (auto &filter : filters) {
+			children.push_back(std::move(filter.executor));
+		}
+		if (is_and) {
+			return make_uniq<ConjunctionAndFilterExecutor>(expression, std::move(children));
 		}
 		return make_uniq<ConjunctionOrFilterExecutor>(std::move(children));
 	}
@@ -689,9 +1248,13 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expressi
 	}
 }
 
+unique_ptr<ExpressionFilterExecutor> ExpressionFilterExecutor::TryCreate(const Expression &expression) {
+	return TryCreateFastExecutor(expression, false);
+}
+
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TableFilterState::Initialize");
-	return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
+	return make_uniq<ExpressionFilterState>(context.GetContext(), *expr_filter.expr);
 }
 
 } // namespace duckdb

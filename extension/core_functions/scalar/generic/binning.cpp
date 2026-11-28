@@ -475,14 +475,14 @@ void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		    }
 		    return result_bins;
 	    });
-	VectorOperations::DefaultCast(intermediate_result, result, args.size());
+	VectorOperations::Cast(state.GetContext(), intermediate_result, result, args.size());
 }
 
 void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
-void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<const FunctionData>, const BoundScalarFunction &) {
 	return;
 }
 

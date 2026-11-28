@@ -28,7 +28,7 @@ TEST_CASE("optional_idx validity", "[optional_idx]") {
 	REQUIRE(!unset.IsValid());
 	REQUIRE(!optional_idx::Invalid().IsValid());
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(unset.GetIndex(), InternalException);
+	REQUIRE_THROWS_WITH(unset.GetIndex(), Catch::Contains("optional_idx that is not set"));
 #endif
 
 	optional_idx zero(0);
@@ -61,6 +61,7 @@ TEST_CASE("optional_idx serialization", "[optional_idx]") {
 	REQUIRE(RoundTrip(optional_idx(DConstants::INVALID_INDEX - 1)) == optional_idx(DConstants::INVALID_INDEX - 1));
 	// INVALID_INDEX is the serialized representation of an unset optional_idx
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(RoundTrip(optional_idx(DConstants::INVALID_INDEX)), InternalException);
+	REQUIRE_THROWS_WITH(RoundTrip(optional_idx(DConstants::INVALID_INDEX)),
+	                    Catch::Contains("Cannot serialize an optional_idx that is set to INVALID_INDEX"));
 #endif
 }

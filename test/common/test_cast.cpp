@@ -3,8 +3,15 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector.hpp"
+
+#include <cmath>
+#include <limits>
 
 using namespace duckdb; // NOLINT
 
@@ -329,4 +336,65 @@ TEST_CASE("Test casting to double", "[cast]") {
 	    "1 . 2", "1. 2",    "1.2 e20",
 	    "+"};
 	TestStringCastDouble<double>(working_values, expected_values, broken_values);
+}
+
+TEST_CASE("Test converting long double to HUGEINT and UHUGEINT", "[cast]") {
+	const long double two_to_the_127 = std::ldexp(1.0L, 127);
+	hugeint_t hugeint_result;
+	REQUIRE(Hugeint::TryConvert(-two_to_the_127, hugeint_result));
+	REQUIRE(hugeint_result == NumericLimits<hugeint_t>::Minimum());
+	REQUIRE(!Hugeint::TryConvert(two_to_the_127, hugeint_result));
+	REQUIRE(!Hugeint::TryConvert(-two_to_the_127 * 2, hugeint_result));
+
+	uhugeint_t uhugeint_result;
+	REQUIRE(Uhugeint::TryConvert(two_to_the_127, uhugeint_result));
+	REQUIRE(uhugeint_result == uhugeint_t(uint64_t(1) << 63, 0));
+	REQUIRE(!Uhugeint::TryConvert(two_to_the_127 * 2, uhugeint_result));
+
+	if (std::numeric_limits<long double>::digits < 64) {
+		return;
+	}
+	// Exact only in a long double with at least 64 mantissa bits, and lost by a conversion through double.
+	const long double uint64_maximum = static_cast<long double>(NumericLimits<uint64_t>::Maximum());
+	const long double above_uint64 = std::ldexp(1.0L, 66) + 8;
+	REQUIRE(Hugeint::TryConvert(uint64_maximum, hugeint_result));
+	REQUIRE(hugeint_result == hugeint_t(0, NumericLimits<uint64_t>::Maximum()));
+	REQUIRE(Hugeint::TryConvert(-uint64_maximum, hugeint_result));
+	REQUIRE(hugeint_result == -hugeint_t(0, NumericLimits<uint64_t>::Maximum()));
+	REQUIRE(Hugeint::TryConvert(above_uint64, hugeint_result));
+	REQUIRE(hugeint_result == hugeint_t(4, 8));
+	REQUIRE(Hugeint::TryConvert(-above_uint64, hugeint_result));
+	REQUIRE(hugeint_result == -hugeint_t(4, 8));
+	REQUIRE(Uhugeint::TryConvert(uint64_maximum, uhugeint_result));
+	REQUIRE(uhugeint_result == uhugeint_t(0, NumericLimits<uint64_t>::Maximum()));
+	REQUIRE(Uhugeint::TryConvert(above_uint64, uhugeint_result));
+	REQUIRE(uhugeint_result == uhugeint_t(4, 8));
+}
+
+TEST_CASE("Test nanoseconds of strings without fractional seconds", "[cast]") {
+	// the parsers must overwrite the nanoseconds even when there is no fraction
+	const string time_str = "12:34:56";
+	int32_t nanos = 999;
+	auto time = Time::FromCString(time_str.c_str(), time_str.size(), false, &nanos);
+	REQUIRE(time == Time::FromTime(12, 34, 56));
+	REQUIRE(nanos == 0);
+
+	const string ts_str = "2020-01-01 12:34:56";
+	const auto expected = Timestamp::FromDatetime(Date::FromDate(2020, 1, 1), Time::FromTime(12, 34, 56));
+	nanos = 999;
+	auto ts = Timestamp::FromCString(ts_str.c_str(), ts_str.size(), false, &nanos);
+	REQUIRE(ts == expected);
+	REQUIRE(nanos == 0);
+
+	// a fraction still sets them
+	const string frac_str = "2020-01-01 12:34:56.123456789";
+	ts = Timestamp::FromCString(frac_str.c_str(), frac_str.size(), false, &nanos);
+	REQUIRE(ts.value == expected.value + 123456);
+	REQUIRE(nanos == 789);
+
+	// the throwing casts pass uninitialized nanoseconds
+	const auto expected_ns = expected.value * Interval::NANOS_PER_MICRO;
+	REQUIRE(Cast::Operation<string_t, timestamp_ns_t>(string_t(ts_str)).value == expected_ns);
+	REQUIRE(Cast::Operation<string_t, timestamp_tz_ns_t>(string_t(ts_str)).value == expected_ns);
+	REQUIRE(Cast::Operation<string_t, timestamp_ns_t>(string_t(frac_str)).value == expected_ns + 123456789);
 }

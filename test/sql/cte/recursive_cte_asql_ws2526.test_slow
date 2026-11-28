@@ -65,21 +65,12 @@ SET VARIABLE asql_keyed_sql = (
 	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_cyk_using_key.sql')
 );
 
+# Keep this result check independent of cost-based join ordering. Direct partial-key
+# probe selection is covered in recursive_cte_key_probe.test.
 query IIIT
 SELECT * FROM query(getvariable('asql_keyed_sql'));
 ----
 212	11	1	c3bfde6e8a8587e43d92d2363461eede
-
-statement ok
-SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
-
-statement ok
-PRAGMA explain_output='physical_only';
-
-query II
-EXPLAIN SELECT * FROM query(getvariable('asql_keyed_sql'));
-----
-physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
 
 # An invalid token must not be accepted.
 statement ok

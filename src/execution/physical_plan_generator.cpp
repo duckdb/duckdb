@@ -15,6 +15,56 @@
 
 namespace duckdb {
 
+class PhysicalPlanGenerator::LogicalPlanProperties {
+public:
+	explicit LogicalPlanProperties(const LogicalOperator &op) {
+		Collect(op);
+	}
+
+	class Scope {
+	public:
+		Scope(optional_ptr<const LogicalPlanProperties> &active_p, optional_ptr<const LogicalPlanProperties> current)
+		    : active(active_p), previous(active_p) {
+			active = current;
+		}
+		~Scope() {
+			active = previous;
+		}
+		Scope(const Scope &) = delete;
+		Scope &operator=(const Scope &) = delete;
+
+	private:
+		optional_ptr<const LogicalPlanProperties> &active;
+		optional_ptr<const LogicalPlanProperties> previous;
+	};
+
+public:
+	LogicalSubtreeProperties Get(const LogicalOperator &op) const {
+		auto entry = properties.find(op);
+		D_ASSERT(entry != properties.end());
+		return entry->second;
+	}
+
+private:
+	LogicalSubtreeProperties Collect(const LogicalOperator &op) {
+		LogicalSubtreeProperties result;
+		result.has_side_effects = op.HasLocalSideEffects();
+		result.has_recursive_cte = op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
+		for (auto &child : op.children) {
+			if (!child) {
+				continue;
+			}
+			auto child_properties = Collect(*child);
+			result.has_side_effects |= child_properties.has_side_effects;
+			result.has_recursive_cte |= child_properties.has_recursive_cte;
+		}
+		properties.emplace(op, result);
+		return result;
+	}
+
+	reference_map_t<const LogicalOperator, LogicalSubtreeProperties> properties;
+};
+
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
 }
 
@@ -22,31 +72,31 @@ PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 }
 
 unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator> op) {
-	auto &plan = ResolveAndPlan(std::move(op));
+	auto &plan = ResolveAndPlan(*op);
 	plan.Verify();
 	return std::move(physical_plan);
 }
 
-PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperator> op) {
+PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(LogicalOperator &op) {
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Resolve the types of each operator.
 	{
 		auto timer = profiler.StartTimer<MetricPhysicalPlannerResolveTypes>();
-		op->ResolveOperatorTypes();
+		op.ResolveOperatorTypes();
 	}
 
 	// Resolve the column references.
 	{
 		auto timer = profiler.StartTimer<MetricPhysicalPlannerColumnBinding>();
 		ColumnBindingResolver resolver;
-		resolver.VisitOperator(*op);
+		resolver.VisitOperator(op);
 	}
 
 	// Create the main physical plan.
 	{
 		auto timer = profiler.StartTimer<MetricPhysicalPlannerCreatePlan>();
-		physical_plan = PlanInternal(*op);
+		physical_plan = PlanInternal(op);
 	}
 
 	// Return a reference to the root of this plan.
@@ -73,12 +123,35 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
-	const auto repeatable = ClassifyLogicalOperatorRepeatability(op) == LogicalOperatorRepeatability::REPEATABLE;
-	auto &result = CreatePlanInternal(op);
-	if (!repeatable) {
-		non_repeatable_operators.insert(result);
+	// Callers may have changed the logical tree since an enclosing planning call.
+	LogicalPlanProperties::Scope scope(logical_properties, nullptr);
+	return CreatePlanRecursive(op);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreatePlanRecursive(LogicalOperator &op) {
+	const auto locally_repeatable =
+	    ClassifyLogicalOperatorLocalRepeatability(op) == LogicalOperatorRepeatability::REPEATABLE;
+	auto create_plan = [&]() -> PhysicalOperator & {
+		const auto repeatable = locally_repeatable && !GetLogicalProperties(op).has_side_effects;
+		auto &result = CreatePlanInternal(op);
+		if (!repeatable) {
+			non_repeatable_operators.insert(result);
+		}
+		return result;
+	};
+	const auto needs_properties = locally_repeatable || op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
+	if (needs_properties && !logical_properties) {
+		LogicalPlanProperties properties(op);
+		LogicalPlanProperties::Scope scope(logical_properties, properties);
+		return create_plan();
 	}
-	return result;
+	return create_plan();
+}
+
+PhysicalPlanGenerator::LogicalSubtreeProperties
+PhysicalPlanGenerator::GetLogicalProperties(const LogicalOperator &op) const {
+	D_ASSERT(logical_properties);
+	return logical_properties->Get(op);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op) {
@@ -105,6 +178,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 		return CreatePlan(op.Cast<LogicalOrder>());
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		return CreatePlan(op.Cast<LogicalTopN>());
+	case LogicalOperatorType::LOGICAL_TOP_KEY_FILTER:
+		return CreatePlan(op.Cast<LogicalTopKeyFilter>());
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return CreatePlan(op.Cast<LogicalCopyToFile>());
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -151,8 +226,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 		return CreatePlan(op.Cast<LogicalDistinct>());
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return CreatePlan(op.Cast<LogicalPrepare>());
-	case LogicalOperatorType::LOGICAL_EXECUTE:
-		return CreatePlan(op.Cast<LogicalExecute>());
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:

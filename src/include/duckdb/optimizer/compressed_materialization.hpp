@@ -109,13 +109,13 @@ public:
 	                          const vector<reference<unique_ptr<LogicalOperator>>> &ancestors,
 	                          statistics_map_t &statistics_map);
 
+	//! Compress an operator after statistics propagation has resolved its input and output types.
 	void Compress(unique_ptr<LogicalOperator> &op);
 
 private:
 	//! Compress materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
 	void CompressComparisonJoin(unique_ptr<LogicalOperator> &op);
-	void CompressDistinct(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Update statistics after compressing

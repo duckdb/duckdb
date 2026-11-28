@@ -177,6 +177,16 @@ SELECT finalize(combine_aggr(s)) FROM (
 ----
 [7]
 
+# combine admits a value whose merged count (6 + 5) exceeds the target minimum (5 + 5)
+query I
+SELECT finalize(combine_aggr(s ORDER BY g)) FROM (
+	SELECT g, approx_top_k(v, 1) EXPORT_STATE s
+	FROM (VALUES (0, 'a', 5), (0, 'b', 5), (0, 'c', 5), (1, 'x', 6), (1, 'y', 5), (1, 'z', 5)) t(g, v, n), range(n)
+	GROUP BY g
+);
+----
+[x]
+
 # only a full state drops values into the filter, so a state with fewer values cannot have filter counts
 statement error
 SELECT finalize(to_aggregate_state({
@@ -186,3 +196,46 @@ SELECT finalize(to_aggregate_state({
 }, 'approx_top_k', ['VARCHAR', 'BIGINT']));
 ----
 <REGEX>:Invalid Input Error: Invalid approx_top_k state - the filter must be empty.*
+
+# an imported state with zero values finalizes to NULL
+query I
+SELECT finalize(to_aggregate_state({
+	'k': 3::UBIGINT,
+	'values': []::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(128), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']));
+----
+NULL
+
+# combining an imported empty state with a different k takes the k of the other state
+query I
+SELECT finalize(combine(to_aggregate_state({
+	'k': 3::UBIGINT,
+	'values': []::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(128), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']), (SELECT approx_top_k(y, 2) EXPORT_STATE FROM (VALUES ('a'), ('b'), ('a')) s(y))));
+----
+[a, b]
+
+# a repeated combine keeps its intermediate states out of the target's arena
+statement ok
+SET memory_limit='64MB';
+
+query I
+SELECT len(finalize(combine_aggr(s, 1000))) FROM (SELECT to_aggregate_state({
+	'k': 2::UBIGINT,
+	'values': [{'value': md5(i::VARCHAR), 'count': 1::UBIGINT}]::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(64), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']) s FROM range(100000) r(i));
+----
+2
+
+# and frees them when the combine fails
+statement error
+SELECT finalize(combine_aggr(to_aggregate_state({
+	'k': k,
+	'values': [{'value': 'a'::VARCHAR, 'count': 1::UBIGINT}]::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(filter_size), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']), 3)) FROM (VALUES (2::UBIGINT, 64), (3::UBIGINT, 128)) t(k, filter_size);
+----
+<REGEX>:.*cannot combine approx_top_K with different k values.*

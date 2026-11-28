@@ -1,0 +1,107 @@
+# name: test/sql/transactions/join_transaction_concurrent_modify.test_slow
+# description: Many connections of one shared transaction update, delete and scan the same table at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl AS SELECT i, i % 8 AS grp, 0 AS upd, 'row' || i AS s FROM range(200000) t(i);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+loop r 0 3
+
+# every connection modifies its own rows, the rows are spread over the same row groups
+statement ok
+UPDATE tbl SET upd = upd + 1 WHERE grp = {threadid}
+
+statement ok
+DELETE FROM tbl WHERE grp = {threadid} AND i % 100 = {r}
+
+# readers scan the table while the other connections modify it
+statement ok
+SELECT count(*), sum(upd), max(s) FROM tbl
+
+query I
+SELECT count(*) FROM tbl WHERE grp = {threadid} AND i % 100 = {r}
+----
+0
+
+statement ok
+SELECT * FROM tbl WHERE i = {threadid} * 1000 + {r}
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+query III
+SELECT count(*), sum(upd), count(*) FILTER (upd <> 3) FROM tbl
+----
+194000	582000	0
+
+query II
+SELECT grp, count(*) FROM tbl GROUP BY grp ORDER BY grp
+----
+0	24000
+1	24000
+2	24000
+3	25000
+4	24000
+5	24000
+6	24000
+7	25000
+
+statement ok
+COMMIT
+
+query III
+SELECT count(*), sum(upd), count(*) FILTER (upd <> 3) FROM tbl
+----
+194000	582000	0
+
+# the changes are gone after a rollback of the transaction (a rollback vote of one participant is enough)
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 4
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+UPDATE tbl SET upd = 100 WHERE grp = {threadid}
+
+statement ok
+DELETE FROM tbl WHERE grp = {threadid} AND i % 2 = 0
+
+statement ok
+ROLLBACK
+
+endloop
+
+statement error
+COMMIT
+----
+<REGEX>:.*a connection sharing the transaction rolled it back.*
+
+query III
+SELECT count(*), sum(upd), count(*) FILTER (upd <> 3) FROM tbl
+----
+194000	582000	0

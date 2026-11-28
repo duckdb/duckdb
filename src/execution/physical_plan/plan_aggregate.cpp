@@ -84,7 +84,8 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 			break;
 		}
 		case PhysicalOperatorType::FILTER:
-			// continue into child operators
+		case PhysicalOperatorType::TOP_KEY_FILTER:
+			// these operators only remove rows and forward every column: continue into child operators
 			child_ref = child_op.children[0];
 			break;
 		default:
@@ -240,8 +241,22 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.Function().HasStateCombineCallback()) {
-			// distinct aggregates are not supported in perfect hash aggregates
+		const auto &function = aggregate.Function();
+		if (aggregate.IsDistinct() || !function.HasStateCombineCallback()) {
+			return false;
+		}
+		if (!function.HasGetStateTypeCallback() || function.HasStateDestructorCallback()) {
+			return false;
+		}
+		const auto layout = function.GetStateType(aggregate.BindInfo().get());
+		// Preserve min/max and fixed-size sketch fast paths, excluding sorted aggregate buffers.
+		const auto &name = function.GetName();
+		if (function.GetArguments().size() == 1 && layout.field.kind != AggregateFieldKind::LIST &&
+		    (name == "min" || name == "max" || name == "approx_count_distinct")) {
+			continue;
+		}
+		if (function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback() ||
+		    !layout.field.IsFixedSize(layout.type)) {
 			return false;
 		}
 	}
@@ -251,7 +266,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	reference<PhysicalOperator> plan = CreatePlanRecursive(*op.children[0]);
 	// the ungrouped aggregate evaluates its filters directly; grouped aggregates need them as payload columns
 	const bool ungrouped = op.groups.empty() && op.grouping_sets.size() <= 1;
 	plan = ExtractAggregateExpressions(plan, op.expressions, op.groups, op.grouping_sets, !ungrouped);

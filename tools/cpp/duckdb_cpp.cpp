@@ -259,14 +259,16 @@ namespace {
 // This is used to simplify error handling in the C++ wrapper.
 // Raise a failed call's error info as the matching exception type, consuming the info handle.
 [[noreturn]] void ThrowAPIError(DUCKDB_V2_ERROR code, duckdb_v2_error_info_handle err) {
-	duckdb_v2_str message_view = {nullptr, 0};
-	duckdb_v2_str raw_view = {nullptr, 0};
+	const char *message_view = nullptr;
+	idx_t message_view_length = 0;
+	const char *raw_view = nullptr;
+	idx_t raw_view_length = 0;
 	if (err) {
-		duckdb_v2_error_info_get_text(err, &message_view);
-		duckdb_v2_error_info_get_raw_text(err, &raw_view);
+		duckdb_v2_error_info_get_text(err, &message_view, &message_view_length);
+		duckdb_v2_error_info_get_raw_text(err, &raw_view, &raw_view_length);
 	}
-	std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
-	std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
+	std::string message = message_view ? std::string(message_view, message_view_length) : "unknown error";
+	std::string raw = raw_view ? std::string(raw_view, raw_view_length) : "";
 	duckdb_v2_error_info_destroy(&err);
 	// Map error codes with a dedicated exception type to that type so callers can catch it directly.
 	switch (code) {
@@ -304,17 +306,46 @@ auto GetConfigHandle(GETTER getter, void *source) -> duckdb_v2_config_handle {
 	return config;
 }
 
-// Borrow a std::string as a length-delimited view for the C API.
-auto ToStr(const std::string &s) -> duckdb_v2_str {
-	return duckdb_v2_str {s.data(), s.size()};
+// Borrow a string as a length-delimited view for the C API.
+auto ToStr(const std::string &s) -> std::string_view {
+	return s;
 }
-auto ToStr(std::string_view s) -> duckdb_v2_str {
-	return duckdb_v2_str {s.data(), s.size()};
+auto ToStr(std::string_view s) -> std::string_view {
+	return s;
 }
 // Borrow a storage token's bytes. Covers varchar_t through its blob_t base.
-auto ToStr(const blob_t &bytes) -> duckdb_v2_str {
-	return duckdb_v2_str {bytes.data(), bytes.size()};
+auto ToStr(const blob_t &bytes) -> std::string_view {
+	return std::string_view(bytes.data(), bytes.size());
 }
+
+// Borrows strings as the C API's parallel pointer and length arrays; both are NULL when empty.
+class StringArrays {
+public:
+	explicit StringArrays(size_t capacity)
+	    : string_ptrs(capacity ? std::make_unique<const char *[]>(capacity) : nullptr),
+	      string_lengths(capacity ? std::make_unique<idx_t[]>(capacity) : nullptr) {
+	}
+
+	void Push(std::string_view str) {
+		string_ptrs[count] = str.data();
+		string_lengths[count] = str.size();
+		count++;
+	}
+	auto ptrs() const -> const char *const * {
+		return string_ptrs.get();
+	}
+	auto lengths() const -> const idx_t * {
+		return string_lengths.get();
+	}
+	auto size() const -> idx_t {
+		return count;
+	}
+
+private:
+	std::unique_ptr<const char *[]> string_ptrs;
+	std::unique_ptr<idx_t[]> string_lengths;
+	idx_t count = 0;
+};
 
 // The 128-bit mirrors carry the same halves as their C counterparts, converted
 // field-wise rather than by reinterpretation so the compiler checks them.
@@ -330,45 +361,46 @@ auto FromC(duckdb_v2_hugeint_t value) -> int128_t {
 auto FromC(duckdb_v2_uhugeint_t value) -> uint128_t {
 	return uint128_t {value.lower, value.upper};
 }
-// View a borrowed C-API string as a std::string_view ({NULL,0} -> empty).
-auto FromStr(duckdb_v2_str s) -> std::string_view {
-	return s.ptr ? std::string_view(s.ptr, s.len) : std::string_view();
+// View a borrowed C-API string as a std::string_view (NULL -> empty).
+auto FromStr(const char *ptr, idx_t length) -> std::string_view {
+	return ptr ? std::string_view(ptr, length) : std::string_view();
 }
 
 // Splits type parameters into the C API's parallel arrays; a TypeParam with an
-// empty name crosses as the positional {NULL, 0} view. The arrays borrow from
+// empty name crosses as a positional empty entry. The arrays borrow from
 // `params`, so this must outlive the call it feeds.
 class TypeParamArrays {
 public:
-	explicit TypeParamArrays(const std::vector<TypeParam> &params) {
-		name_views.reserve(params.size());
+	explicit TypeParamArrays(const std::vector<TypeParam> &params) : name_arrays(params.size()) {
 		value_handles.reserve(params.size());
 		for (const auto &param : params) {
-			name_views.push_back(param.GetName().empty() ? duckdb_v2_identifier_t {nullptr, 0}
-			                                             : ToStr(param.GetName()));
+			name_arrays.Push(param.GetName());
 			value_handles.push_back(param.GetValue().handle());
 		}
 	}
 
-	auto names() const -> const duckdb_v2_identifier_t * {
-		return name_views.empty() ? nullptr : name_views.data();
+	auto names() const -> const char *const * {
+		return name_arrays.ptrs();
+	}
+	auto names_lengths() const -> const idx_t * {
+		return name_arrays.lengths();
 	}
 	auto values() const -> const duckdb_v2_value_handle * {
 		return value_handles.empty() ? nullptr : value_handles.data();
 	}
 
 private:
-	std::vector<duckdb_v2_identifier_t> name_views;
+	StringArrays name_arrays;
 	std::vector<duckdb_v2_value_handle> value_handles;
 };
 
 // Splits statement parameters into the C API's parallel arrays; a NamedParam
-// with an empty name crosses as the positional {NULL, 0} view. The arrays
+// with an empty name crosses as a positional empty entry. The arrays
 // borrow from the parameters, so this must outlive the call it feeds.
 class ParameterArrays {
 public:
 	// A null pointer with a nonzero count produces no handles, so the C API reports the null argument.
-	ParameterArrays(const Value *parameters, idx_t parameter_count) {
+	ParameterArrays(const Value *parameters, idx_t parameter_count) : name_arrays(0) {
 		if (!parameters) {
 			return;
 		}
@@ -377,44 +409,46 @@ public:
 			value_handles.push_back(parameters[i].handle());
 		}
 	}
-	ParameterArrays(const NamedParam *parameters, idx_t parameter_count) {
+	ParameterArrays(const NamedParam *parameters, idx_t parameter_count)
+	    : name_arrays(parameters ? parameter_count : 0) {
 		if (!parameters) {
 			return;
 		}
-		name_views.reserve(parameter_count);
 		value_handles.reserve(parameter_count);
 		for (idx_t i = 0; i < parameter_count; i++) {
-			name_views.push_back(parameters[i].name.empty() ? duckdb_v2_identifier_t {nullptr, 0}
-			                                                : ToStr(parameters[i].name));
+			name_arrays.Push(parameters[i].name);
 			value_handles.push_back(parameters[i].value.handle());
 		}
 	}
 
-	auto names() const -> const duckdb_v2_identifier_t * {
-		return name_views.empty() ? nullptr : name_views.data();
+	auto names() const -> const char *const * {
+		return name_arrays.ptrs();
+	}
+	auto names_lengths() const -> const idx_t * {
+		return name_arrays.lengths();
 	}
 	auto values() const -> const duckdb_v2_value_handle * {
 		return value_handles.empty() ? nullptr : value_handles.data();
 	}
 
 private:
-	std::vector<duckdb_v2_identifier_t> name_views;
+	StringArrays name_arrays;
 	std::vector<duckdb_v2_value_handle> value_handles;
 };
 
 auto ExecuteStatementArrow(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement,
                            const ParameterArrays &split, idx_t parameter_count, ArrowFormat format) -> ArrowResult {
 	duckdb_v2_arrow_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute_arrow, conn, statement, split.names(), split.values(), parameter_count,
-	               format.batch_size, &result);
+	CheckedAPICall(duckdb_v2_statement_execute_arrow, conn, statement, split.names(), split.names_lengths(),
+	               split.values(), parameter_count, format.batch_size, &result);
 	return detail::HandleFactory::Make<ArrowResult>(result);
 }
 
 auto ExecutePreparedArrow(duckdb_v2_prepared_statement_handle prepared, const ParameterArrays &split,
                           idx_t parameter_count, ArrowFormat format) -> ArrowResult {
 	duckdb_v2_arrow_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute_arrow, prepared, split.names(), split.values(), parameter_count,
-	               format.batch_size, &result);
+	CheckedAPICall(duckdb_v2_prepared_statement_execute_arrow, prepared, split.names(), split.names_lengths(),
+	               split.values(), parameter_count, format.batch_size, &result);
 	return detail::HandleFactory::Make<ArrowResult>(result);
 }
 
@@ -458,7 +492,7 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 	if (err && *err) {
 		duckdb_v2_error_info_set_code(*err, code);
 		auto text_str = ToStr(text);
-		duckdb_v2_error_info_set_text(*err, &text_str);
+		duckdb_v2_error_info_set_text(*err, text_str.data(), text_str.size());
 	}
 
 	return code;
@@ -471,14 +505,15 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 //----------------------------------------------------------------------------------------------------------------------
 
 auto LibraryVersion() -> std::string {
-	duckdb_v2_str version;
-	CheckedAPICall(duckdb_v2_library_version, &version);
-	return std::string(version.ptr, version.len);
+	const char *version = nullptr;
+	idx_t version_length = 0;
+	CheckedAPICall(duckdb_v2_library_version, &version, &version_length);
+	return std::string(version, version_length);
 }
 
 auto RenderQuotedIdentifier(std::string_view name) -> std::string {
-	duckdb_v2_identifier_t name_str = {name.data(), name.size()};
-	return RenderText(duckdb_v2_identifier_render_quoted, &name_str);
+	std::string_view name_str(name.data(), name.size());
+	return RenderText(duckdb_v2_identifier_render_quoted, name_str.data(), name_str.size());
 }
 
 //---------------------------------------------------------------------------
@@ -512,17 +547,15 @@ auto Environment::GetInstanceCount() const -> size_t {
 namespace {
 
 auto CreateInstanceHandle(Environment &env, const std::vector<std::pair<std::string, std::string>> &options) -> void * {
-	std::vector<duckdb_v2_str> names;
-	std::vector<duckdb_v2_str> values;
-	names.reserve(options.size());
-	values.reserve(options.size());
+	StringArrays names(options.size());
+	StringArrays values(options.size());
 	for (auto &[name, value] : options) {
-		names.push_back(ToStr(name));
-		values.push_back(ToStr(value));
+		names.Push(name);
+		values.Push(value);
 	}
 	duckdb_v2_instance_handle instance = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create_with_options, env.handle(), names.data(), values.data(),
-	               static_cast<idx_t>(options.size()), &instance);
+	CheckedAPICall(duckdb_v2_instance_create_with_options, env.handle(), names.ptrs(), names.lengths(), values.ptrs(),
+	               values.lengths(), static_cast<idx_t>(options.size()), &instance);
 	return instance;
 }
 
@@ -552,6 +585,7 @@ auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<
 	if (options.custom_user_agent) {
 		result.emplace_back("custom_user_agent", *options.custom_user_agent);
 	}
+	result.insert(result.end(), options.options.begin(), options.options.end());
 	return result;
 }
 
@@ -568,6 +602,54 @@ Instance::Instance(Environment &env, const StartupOptions &options)
 
 Instance::Instance(Environment &env, const std::string &path, const StartupOptions &options) : Instance(env, options) {
 	Attach(path, true);
+}
+
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(Environment::Default(), path, options);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(env, path, options, nullptr);
+}
+
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+    -> Instance {
+	return OpenShared(Environment::Default(), path, options, init);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+                          const InitCallback &init) -> Instance {
+	duckdb_v2_instance_init_callback_fn init_fn = nullptr;
+	// a copy, as the callback's user data is not const
+	InitCallback init_copy = init;
+	if (init_copy) {
+		init_fn = [](duckdb_v2_instance_handle created, void *user_data, duckdb_v2_error_info_handle *err) {
+			WithExceptionGuard(err, [&]() {
+				// borrowed: released rather than destroyed when the callback returns
+				Instance borrowed(static_cast<void *>(created));
+				try {
+					(*static_cast<InitCallback *>(user_data))(borrowed);
+				} catch (...) {
+					borrowed.release();
+					throw;
+				}
+				borrowed.release();
+			});
+		};
+	}
+	auto pairs = StartupOptionPairs(options);
+	StringArrays names(pairs.size());
+	StringArrays values(pairs.size());
+	for (auto &[name, value] : pairs) {
+		names.Push(name);
+		values.Push(value);
+	}
+	auto path_str = ToStr(path);
+	duckdb_v2_instance_handle instance = nullptr;
+	CheckedAPICall(duckdb_v2_instance_open_shared, env.handle(), path_str.data(), path_str.size(), names.ptrs(),
+	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), init_fn,
+	               init_fn ? static_cast<void *>(&init_copy) : nullptr, &instance);
+	return Instance(instance);
 }
 
 //---------------------------------------------------------------------------
@@ -616,7 +698,7 @@ auto CustomOption::Create(Factory &factory) -> CustomOption {
 
 auto CustomOption::SetName(const std::string &name) & -> CustomOption & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_custom_option_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_custom_option_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -632,7 +714,7 @@ auto CustomOption::SetDefaultValue(const Value &value) & -> CustomOption & {
 
 auto CustomOption::SetDescription(std::string_view description) & -> CustomOption & {
 	auto view = ToStr(description);
-	CheckedAPICall(duckdb_v2_custom_option_set_description, handle(), &view);
+	CheckedAPICall(duckdb_v2_custom_option_set_description, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -727,9 +809,10 @@ OptionDescription::OptionDescription(void *impl) : detail::Handle<OptionDescript
 }
 
 auto OptionDescription::GetName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_option_get_name, handle(), &name);
-	return FromStr(name);
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_option_get_name, handle(), &name, &name_length);
+	return FromStr(name, name_length);
 }
 
 auto OptionDescription::GetDefaultValue() const -> Value {
@@ -739,9 +822,10 @@ auto OptionDescription::GetDefaultValue() const -> Value {
 }
 
 auto OptionDescription::GetDescription() const -> std::string_view {
-	duckdb_v2_str description = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_option_get_description, handle(), &description);
-	return FromStr(description);
+	const char *description = nullptr;
+	idx_t description_length = 0;
+	CheckedAPICall(duckdb_v2_option_get_description, handle(), &description, &description_length);
+	return FromStr(description, description_length);
 }
 
 auto OptionDescription::GetAliasCount() const -> size_t {
@@ -751,9 +835,10 @@ auto OptionDescription::GetAliasCount() const -> size_t {
 }
 
 auto OptionDescription::GetAliasByIndex(size_t index) const -> std::string_view {
-	duckdb_v2_identifier_t alias = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_option_get_alias, handle(), static_cast<idx_t>(index), &alias);
-	return FromStr(alias);
+	const char *alias = nullptr;
+	idx_t alias_length = 0;
+	CheckedAPICall(duckdb_v2_option_get_alias, handle(), static_cast<idx_t>(index), &alias, &alias_length);
+	return FromStr(alias, alias_length);
 }
 
 static_assert(static_cast<int>(SettingScope::DEFAULT) == DUCKDB_V2_SETTING_SCOPE_DEFAULT &&
@@ -797,7 +882,7 @@ Instance::~Instance() {
 
 auto Instance::Attach(const std::string &path, bool make_default) -> void {
 	auto path_str = ToStr(path);
-	CheckedAPICall(duckdb_v2_instance_attach, handle(), static_cast<duckdb_v2_identifier_t *>(nullptr), &path_str,
+	CheckedAPICall(duckdb_v2_instance_attach, handle(), nullptr, 0, path_str.data(), path_str.size(),
 	               static_cast<duckdb_v2_attach_options_handle>(nullptr), make_default);
 }
 
@@ -809,12 +894,13 @@ auto Instance::Attach(const std::string &path, const std::string &name,
 		for (auto &entry : options) {
 			auto key_str = ToStr(entry.first);
 			auto setting_str = ToStr(entry.second);
-			CheckedAPICall(duckdb_v2_attach_options_set, attach_options, &key_str, &setting_str);
+			CheckedAPICall(duckdb_v2_attach_options_set, attach_options, key_str.data(), key_str.size(),
+			               setting_str.data(), setting_str.size());
 		}
 		auto attach_name = ToStr(name);
 		auto path_str = ToStr(path);
-		CheckedAPICall(duckdb_v2_instance_attach, handle(), name.empty() ? nullptr : &attach_name, &path_str,
-		               attach_options, make_default);
+		CheckedAPICall(duckdb_v2_instance_attach, handle(), attach_name.data(), attach_name.size(), path_str.data(),
+		               path_str.size(), attach_options, make_default);
 	} catch (...) {
 		duckdb_v2_attach_options_destroy(&attach_options);
 		throw;
@@ -824,12 +910,12 @@ auto Instance::Attach(const std::string &path, const std::string &name,
 
 auto Instance::Detach(const std::string &name) -> void {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_instance_detach, handle(), &name_str);
+	CheckedAPICall(duckdb_v2_instance_detach, handle(), name_str.data(), name_str.size());
 }
 
 auto Instance::SetDefault(const std::string &name) -> void {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_instance_set_default, handle(), &name_str);
+	CheckedAPICall(duckdb_v2_instance_set_default, handle(), name_str.data(), name_str.size());
 }
 
 auto Instance::Connect() -> Connection {
@@ -862,17 +948,18 @@ auto Config::DescribeOption(size_t index) const -> OptionDescription {
 
 auto Config::DescribeOption(std::string_view name) const -> OptionDescription {
 	duckdb_v2_option_handle option = nullptr;
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_config_get_option_by_name, handle(), &name_str, &option);
+	auto name_str = std::string_view(name.data(), name.size());
+	CheckedAPICall(duckdb_v2_config_get_option_by_name, handle(), name_str.data(), name_str.size(), &option);
 	return detail::HandleFactory::Make<OptionDescription>(option);
 }
 
 auto Config::TryGetOption(std::string_view name) const -> std::optional<OptionValue> {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	auto name_str = std::string_view(name.data(), name.size());
 	duckdb_v2_value_handle value = nullptr;
 	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
 	duckdb_v2_error_info_handle err = nullptr;
-	const auto code = duckdb_v2_config_get_option_value(handle(), &name_str, &value, &scope, &err);
+	const auto code =
+	    duckdb_v2_config_get_option_value(handle(), name_str.data(), name_str.size(), &value, &scope, &err);
 	if (code == DUCKDB_V2_ERROR_INPUT_INVALID) {
 		// no setting goes by that name
 		duckdb_v2_error_info_destroy(&err);
@@ -893,10 +980,10 @@ auto Config::GetOption(std::string_view name) const -> OptionValue {
 }
 
 auto Config::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	auto setting_str = duckdb_v2_str {value.data(), value.size()};
-	CheckedAPICall(duckdb_v2_config_set_option_text, handle(), &name_str, &setting_str,
-	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
+	auto name_str = std::string_view(name.data(), name.size());
+	auto setting_str = std::string_view(value.data(), value.size());
+	CheckedAPICall(duckdb_v2_config_set_option_text, handle(), name_str.data(), name_str.size(), setting_str.data(),
+	               setting_str.size(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
 auto Config::operator[](std::string_view name) const -> OptionValue {
@@ -904,8 +991,8 @@ auto Config::operator[](std::string_view name) const -> OptionValue {
 }
 
 auto Config::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_config_set_option_value, handle(), &name_str, value.handle(),
+	auto name_str = std::string_view(name.data(), name.size());
+	CheckedAPICall(duckdb_v2_config_set_option_value, handle(), name_str.data(), name_str.size(), value.handle(),
 	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
@@ -948,21 +1035,21 @@ auto SqlStatement::GetStatementType() const -> StatementType {
 }
 
 auto SqlStatement::GetText() const -> std::string_view {
-	duckdb_v2_str text = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_sql_statement_get_text, handle(), &text);
-	return FromStr(text);
+	const char *text = nullptr;
+	idx_t text_length = 0;
+	CheckedAPICall(duckdb_v2_sql_statement_get_text, handle(), &text, &text_length);
+	return FromStr(text, text_length);
 }
 
 auto SqlStatement::AddCollection(std::string_view name, const ColumnDataCollection &collection,
                                  const std::vector<std::string> &column_names) -> void {
 	auto name_str = ToStr(name);
-	std::vector<duckdb_v2_identifier_t> names;
-	names.reserve(column_names.size());
+	StringArrays names(column_names.size());
 	for (auto &column_name : column_names) {
-		names.push_back(ToStr(column_name));
+		names.Push(column_name);
 	}
-	CheckedAPICall(duckdb_v2_statement_add_collection, handle(), &name_str, collection.handle(),
-	               names.empty() ? nullptr : names.data(), names.size());
+	CheckedAPICall(duckdb_v2_statement_add_collection, handle(), name_str.data(), name_str.size(), collection.handle(),
+	               names.ptrs(), names.lengths(), names.size());
 }
 
 auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
@@ -971,9 +1058,10 @@ auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
 	std::vector<std::string_view> names;
 	names.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
-		duckdb_v2_identifier_t name = {nullptr, 0};
-		CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), i, &name);
-		names.push_back(FromStr(name));
+		const char *name = nullptr;
+		idx_t name_length = 0;
+		CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), i, &name, &name_length);
+		names.push_back(FromStr(name, name_length));
 	}
 	return names;
 }
@@ -993,9 +1081,9 @@ auto StatementIterator::Next() -> SqlStatement {
 	return detail::HandleFactory::Make<SqlStatement>(statement);
 }
 
-auto Connection::ParseSQL(const char *sql, bool apply_invalidation_policy) -> StatementIterator {
+auto Connection::ParseSQL(std::string_view sql, bool apply_invalidation_policy) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, apply_invalidation_policy, &iterator);
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql.data(), sql.size(), apply_invalidation_policy, &iterator);
 	return detail::HandleFactory::Make<StatementIterator>(iterator);
 }
 
@@ -1021,7 +1109,7 @@ static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYP
 auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	duckdb_v2_token_iterator_handle iterator = nullptr;
 	auto sql_str = ToStr(sql);
-	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), &sql_str, &iterator);
+	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), sql_str.data(), sql_str.size(), &iterator);
 	TokenList list;
 	try {
 		while (true) {
@@ -1048,16 +1136,16 @@ auto Connection::Execute(const SqlStatement &statement, const Value *parameters,
 	// caller's SqlStatement keeps ownership and can be executed again.
 	ParameterArrays split(parameters, parameter_count);
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.values(),
-	               parameter_count, &result);
+	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.names_lengths(),
+	               split.values(), parameter_count, &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
 auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters) -> QueryResult {
 	ParameterArrays split(parameters.data(), parameters.size());
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.values(),
-	               static_cast<idx_t>(parameters.size()), &result);
+	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.names_lengths(),
+	               split.values(), static_cast<idx_t>(parameters.size()), &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
@@ -1115,15 +1203,15 @@ auto Connection::Prepare(const SqlStatement &statement, bool require_cacheable) 
 auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count) -> QueryResult {
 	ParameterArrays split(parameters, parameter_count);
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.values(), parameter_count,
-	               &result);
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.names_lengths(), split.values(),
+	               parameter_count, &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
 auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters) -> QueryResult {
 	ParameterArrays split(parameters.data(), parameters.size());
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.values(),
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.names_lengths(), split.values(),
 	               static_cast<idx_t>(parameters.size()), &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
@@ -1330,30 +1418,36 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 
 auto Factory::ParseType(std::string_view text) const -> LogicalType {
 	duckdb_v2_logical_type_handle type = nullptr;
-	auto text_str = duckdb_v2_str {text.data(), text.size()};
-	CheckedAPICall(duckdb_v2_factory_create_type_from_text, handle(), &text_str, &type);
+	auto text_str = std::string_view(text.data(), text.size());
+	CheckedAPICall(duckdb_v2_factory_create_type_from_text, handle(), text_str.data(), text_str.size(), &type);
 	return detail::HandleFactory::Make<LogicalType>(type);
+}
+
+auto Context::ConnectInTransaction() const -> Connection {
+	duckdb_v2_connection_handle conn = nullptr;
+	CheckedAPICall(duckdb_v2_connection_create_in_transaction, handle(), &conn);
+	return detail::HandleFactory::Make<Connection>(conn, true);
 }
 
 auto Context::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
 	auto log_type_str = ToStr(log_type);
 	auto message_str = ToStr(message);
-	CheckedAPICall(duckdb_v2_context_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), &log_type_str,
-	               &message_str);
+	CheckedAPICall(duckdb_v2_context_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), log_type_str.data(),
+	               log_type_str.size(), message_str.data(), message_str.size());
 }
 
 auto Connection::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
 	auto log_type_str = ToStr(log_type);
 	auto message_str = ToStr(message);
-	CheckedAPICall(duckdb_v2_connection_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), &log_type_str,
-	               &message_str);
+	CheckedAPICall(duckdb_v2_connection_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), log_type_str.data(),
+	               log_type_str.size(), message_str.data(), message_str.size());
 }
 
 auto Instance::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
 	auto log_type_str = ToStr(log_type);
 	auto message_str = ToStr(message);
-	CheckedAPICall(duckdb_v2_instance_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), &log_type_str,
-	               &message_str);
+	CheckedAPICall(duckdb_v2_instance_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), log_type_str.data(),
+	               log_type_str.size(), message_str.data(), message_str.size());
 }
 
 auto Factory::CreateType(std::string_view name) const -> LogicalType {
@@ -1389,8 +1483,8 @@ auto Factory::CreateType(const QualifiedName &name) const -> LogicalType {
 auto Factory::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_factory_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
-	               static_cast<idx_t>(params.size()), &type);
+	CheckedAPICall(duckdb_v2_factory_create_type_from_name, handle(), name.handle(), split.names(),
+	               split.names_lengths(), split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::HandleFactory::Make<LogicalType>(type);
 }
 
@@ -1402,7 +1496,7 @@ auto Factory::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params)
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
 	CheckedAPICall(duckdb_v2_factory_create_type_from_id, handle(), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
-	               split.names(), split.values(), static_cast<idx_t>(params.size()), &type);
+	               split.names(), split.names_lengths(), split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::HandleFactory::Make<LogicalType>(type);
 }
 
@@ -1435,15 +1529,17 @@ auto LogicalType::GetTypeId() const -> LogicalTypeId {
 }
 
 auto LogicalType::GetName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_logical_type_get_name, handle(), &name);
-	return FromStr(name);
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_logical_type_get_name, handle(), &name, &name_length);
+	return FromStr(name, name_length);
 }
 
 auto LogicalType::WithAlias(Factory &factory, std::string_view alias) const -> LogicalType {
 	duckdb_v2_logical_type_handle new_type = nullptr;
 	auto alias_name_str = ToStr(alias);
-	CheckedAPICall(duckdb_v2_factory_create_type_with_alias, factory.handle(), handle(), &alias_name_str, &new_type);
+	CheckedAPICall(duckdb_v2_factory_create_type_with_alias, factory.handle(), handle(), alias_name_str.data(),
+	               alias_name_str.size(), &new_type);
 	return detail::HandleFactory::Make<LogicalType>(new_type);
 }
 
@@ -1513,18 +1609,28 @@ auto LogicalType::GetParamCount() const -> idx_t {
 }
 
 auto LogicalType::GetParam(idx_t index) const -> TypeParam {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_logical_type_get_param, handle(), index, &name, &value);
-	return TypeParam {std::string(FromStr(name)), detail::HandleFactory::Make<Value>(value)};
+	CheckedAPICall(duckdb_v2_logical_type_get_param, handle(), index, &name, &name_length, &value);
+	return TypeParam {std::string(FromStr(name, name_length)), detail::HandleFactory::Make<Value>(value)};
 }
 
-auto LogicalType::GetDecimalWidth() const -> uint8_t {
-	return GetParam(0).GetValue().Get<uint8_t>();
+// A DECIMAL's width and scale parameters are UINTEGER values; engines before the width cap was lifted hand over
+// UTINYINT.
+static auto ReadDecimalParam(const Value &param) -> uint32_t {
+	if (param.GetLogicalType().GetTypeId() == LogicalTypeId::UTINYINT) {
+		return param.Get<uint8_t>();
+	}
+	return param.Get<uint32_t>();
 }
 
-auto LogicalType::GetDecimalScale() const -> uint8_t {
-	return GetParam(1).GetValue().Get<uint8_t>();
+auto LogicalType::GetDecimalWidth() const -> uint32_t {
+	return ReadDecimalParam(GetParam(0).GetValue());
+}
+
+auto LogicalType::GetDecimalScale() const -> uint32_t {
+	return ReadDecimalParam(GetParam(1).GetValue());
 }
 
 auto LogicalType::GetEnumSize() const -> idx_t {
@@ -1582,7 +1688,7 @@ auto LogicalType::GetUnionMemberType(idx_t index) const -> LogicalType {
 
 auto LogicalType::GetDecimalInternalTypeId() const -> LogicalTypeId {
 	// The committed DECIMAL storage tiers: width <= 4 int16, <= 9 int32,
-	// <= 18 int64, <= 38 int128. Pinned against the engine in [capi_v2].
+	// <= 18 int64, <= 38 int128, wider BIGNUM. Pinned against the engine in [capi_v2].
 	auto width = GetDecimalWidth();
 	if (width <= 4) {
 		return LogicalTypeId::SMALLINT;
@@ -1593,7 +1699,10 @@ auto LogicalType::GetDecimalInternalTypeId() const -> LogicalTypeId {
 	if (width <= 18) {
 		return LogicalTypeId::BIGINT;
 	}
-	return LogicalTypeId::HUGEINT;
+	if (width <= 38) {
+		return LogicalTypeId::HUGEINT;
+	}
+	return LogicalTypeId::BIGNUM;
 }
 
 auto LogicalType::GetEnumInternalTypeId() const -> LogicalTypeId {
@@ -1624,15 +1733,17 @@ auto Schema::GetFieldCount() const -> idx_t {
 	return count;
 }
 auto Schema::GetFieldName(idx_t index) const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	duckdb_v2_logical_type_handle type = nullptr; // borrowed; unused here
-	CheckedAPICall(duckdb_v2_schema_get_field, handle(), index, &name, &type);
-	return FromStr(name);
+	CheckedAPICall(duckdb_v2_schema_get_field, handle(), index, &name, &name_length, &type);
+	return FromStr(name, name_length);
 }
 auto Schema::GetFieldType(idx_t index) const -> LogicalType {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	duckdb_v2_logical_type_handle borrowed = nullptr;
-	CheckedAPICall(duckdb_v2_schema_get_field, handle(), index, &name, &borrowed);
+	CheckedAPICall(duckdb_v2_schema_get_field, handle(), index, &name, &name_length, &borrowed);
 	// get_field borrows the type; copy it into an owned handle the wrapper manages.
 	duckdb_v2_logical_type_handle owned = nullptr;
 	CheckedAPICall(duckdb_v2_logical_type_copy, borrowed, &owned);
@@ -1661,6 +1772,24 @@ auto Connection::GetQueryMetrics() const -> QueryMetrics {
 	duckdb_v2_query_metrics_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_connection_get_query_metrics, handle(), &_h);
 	return detail::HandleFactory::Make<QueryMetrics>(_h);
+}
+
+namespace {
+// Collects the text a text sink delivers
+void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
+	WithExceptionGuard(err, [&] {
+		if (text && text_length) {
+			static_cast<std::string *>(user_data)->append(text, text_length);
+		}
+	});
+}
+} // namespace
+
+auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
+	               &out);
+	return out;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1707,6 +1836,12 @@ auto Value::GetChild(idx_t index) const -> Value {
 	duckdb_v2_value_handle child = nullptr;
 	CheckedAPICall(duckdb_v2_value_get_child, handle(), index, &child);
 	return detail::HandleFactory::Make<Value>(child);
+}
+
+auto Value::VariantToValue() const -> Value {
+	duckdb_v2_value_handle converted = nullptr;
+	CheckedAPICall(duckdb_v2_value_variant_to_value, handle(), &converted);
+	return detail::HandleFactory::Make<Value>(converted);
 }
 
 template <>
@@ -1802,16 +1937,18 @@ auto Value::Get() const -> double {
 
 template <>
 auto Value::Get() const -> varchar_t {
-	duckdb_v2_str value;
-	CheckedAPICall(duckdb_v2_value_get_varchar, handle(), &value);
-	return varchar_t(value.ptr, value.len);
+	const char *value = nullptr;
+	idx_t value_length = 0;
+	CheckedAPICall(duckdb_v2_value_get_varchar, handle(), &value, &value_length);
+	return varchar_t(value, value_length);
 }
 
 template <>
 auto Value::Get() const -> blob_t {
-	duckdb_v2_str value;
-	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &value);
-	return blob_t(value.ptr, value.len);
+	const char *value = nullptr;
+	idx_t value_length = 0;
+	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &value, &value_length);
+	return blob_t(value, value_length);
 }
 
 template <>
@@ -1825,9 +1962,9 @@ auto Value::Get() const -> LogicalType {
 // Value Constructors
 //----------------------------------------------------------------------------------------------------------------------
 
-#define MAKE_VALUE_IMPL(factory, name, value)                                                                          \
+#define MAKE_VALUE_IMPL(factory, name, ...)                                                                            \
 	duckdb_v2_value_handle handle = nullptr;                                                                           \
-	CheckedAPICall(name, factory.handle(), value, &handle);                                                            \
+	CheckedAPICall(name, factory.handle(), __VA_ARGS__, &handle);                                                      \
 	return detail::HandleFactory::Make<Value>(handle);
 
 // Connection
@@ -1893,12 +2030,12 @@ auto Value::Create(Factory &factory, double value) -> Value {
 
 auto Value::Create(Factory &factory, blob_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_blob, &value_str)
+	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_blob, value_str.data(), value_str.size())
 }
 
 auto Value::Create(Factory &factory, varchar_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_varchar, &value_str)
+	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_varchar, value_str.data(), value_str.size())
 }
 
 auto Value::Create(Factory &factory, const LogicalType &value) -> Value {
@@ -2039,10 +2176,10 @@ auto Value::Create(Factory &factory, interval_t value) -> Value {
 	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_interval, &value_interval)
 }
 
-void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
+void Value::GetDecimal(int128_t &out, uint32_t width, uint32_t scale) const {
 	duckdb_v2_hugeint_t payload {};
-	uint8_t actual_width = 0;
-	uint8_t actual_scale = 0;
+	uint32_t actual_width = 0;
+	uint32_t actual_scale = 0;
 	CheckedAPICall(duckdb_v2_value_get_decimal, handle(), &payload, &actual_width, &actual_scale);
 	if (actual_width != width || actual_scale != scale) {
 		throw InvalidInputException("Get<width, scale>: value is DECIMAL(" + std::to_string(actual_width) + ", " +
@@ -2052,7 +2189,15 @@ void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
 	out = FromC(payload);
 }
 
-auto Value::CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value {
+auto Value::GetDecimal() const -> RuntimeDecimal {
+	duckdb_v2_hugeint_t payload {};
+	RuntimeDecimal result {};
+	CheckedAPICall(duckdb_v2_value_get_decimal, handle(), &payload, &result.width, &result.scale);
+	result.value = FromC(payload);
+	return result;
+}
+
+auto Value::CreateDecimal(Factory &factory, int128_t value, uint32_t width, uint32_t scale) -> Value {
 	duckdb_v2_value_handle out = nullptr;
 	auto value_hugeint = ToC(value);
 	CheckedAPICall(duckdb_v2_value_create_decimal, factory.handle(), &value_hugeint, width, scale, &out);
@@ -2091,16 +2236,18 @@ auto bignum_t::Encode(const Decoded &value) -> std::vector<uint8_t> {
 
 template <>
 auto Value::Get() const -> bit_t {
-	duckdb_v2_str payload;
-	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &payload);
-	return bit_t(payload.ptr, static_cast<uint32_t>(payload.len));
+	const char *payload = nullptr;
+	idx_t payload_length = 0;
+	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &payload, &payload_length);
+	return bit_t(payload, static_cast<uint32_t>(payload_length));
 }
 
 template <>
 auto Value::Get() const -> bignum_t {
-	duckdb_v2_str payload;
-	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &payload);
-	return bignum_t(payload.ptr, static_cast<uint32_t>(payload.len));
+	const char *payload = nullptr;
+	idx_t payload_length = 0;
+	CheckedAPICall(duckdb_v2_value_get_blob, handle(), &payload, &payload_length);
+	return bignum_t(payload, static_cast<uint32_t>(payload_length));
 }
 
 template <>
@@ -2112,12 +2259,12 @@ auto Value::Get() const -> uuid_t {
 
 auto Value::Create(Factory &factory, bit_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_bit, &value_str)
+	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_bit, value_str.data(), value_str.size())
 }
 
 auto Value::Create(Factory &factory, bignum_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_bignum, &value_str)
+	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_bignum, value_str.data(), value_str.size())
 }
 
 auto Value::Create(Factory &factory, uuid_t value) -> Value {
@@ -2182,15 +2329,14 @@ namespace {
 
 // STRUCT crosses as parallel name and child arrays.
 struct StructArrays {
-	explicit StructArrays(const std::vector<std::pair<std::string, Value>> &values) {
-		names.reserve(values.size());
+	explicit StructArrays(const std::vector<std::pair<std::string, Value>> &values) : names(values.size()) {
 		children.reserve(values.size());
 		for (const auto &field : values) {
-			names.push_back(ToStr(field.first));
+			names.Push(field.first);
 			children.push_back(field.second.handle());
 		}
 	}
-	std::vector<duckdb_v2_identifier_t> names;
+	StringArrays names;
 	std::vector<duckdb_v2_value_handle> children;
 };
 
@@ -2199,8 +2345,8 @@ struct StructArrays {
 auto Value::CreateStruct(Factory &factory, NamedValueList values) -> Value {
 	StructArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_struct, factory.handle(), DataOrNull(split.names), DataOrNull(split.children),
-	               static_cast<idx_t>(values.size()), &out);
+	CheckedAPICall(duckdb_v2_value_create_struct, factory.handle(), split.names.ptrs(), split.names.lengths(),
+	               DataOrNull(split.children), static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
 
@@ -2341,9 +2487,10 @@ auto Vector::TryCast(Factory &factory, Vector &target, std::string *error_messag
 	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_TRY,
 	               &converted, error_message ? &cast_error : nullptr);
 	if (cast_error) {
-		duckdb_v2_str text = {nullptr, 0};
-		duckdb_v2_error_info_get_text(cast_error, &text);
-		error_message->assign(text.ptr ? std::string(text.ptr, text.len) : std::string());
+		const char *text = nullptr;
+		idx_t text_length = 0;
+		duckdb_v2_error_info_get_text(cast_error, &text, &text_length);
+		error_message->assign(std::string(FromStr(text, text_length)));
 		duckdb_v2_error_info_destroy(&cast_error);
 	}
 	return converted;
@@ -2449,7 +2596,7 @@ auto Vector::SetString(idx_t index, varchar_t value) -> void {
 
 void ValidateUTF8(std::string_view text) {
 	auto text_str = ToStr(text);
-	CheckedAPICall(duckdb_v2_validate_utf8, &text_str);
+	CheckedAPICall(duckdb_v2_validate_utf8, text_str.data(), text_str.size());
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2750,17 +2897,17 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 	this->release();
 	std::string out;
 
-	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
+	auto sink = [](const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&] {
-			if (text->ptr && text->len) {
-				static_cast<std::string *>(user_data)->append(text->ptr, text->len);
+			if (text && text_length) {
+				static_cast<std::string *>(user_data)->append(text, text_length);
 			}
 		});
 	};
 
 	auto null_value_str = ToStr(null_value);
-	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, &null_value_str, render_mode,
-	               limit, sink, &out);
+	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, null_value_str.data(),
+	               null_value_str.size(), render_mode, limit, sink, &out);
 	return out;
 }
 
@@ -2874,23 +3021,21 @@ ArrowExporter::ArrowExporter(Context &context, const std::vector<LogicalType> &t
 	// LogicalType is a Handle with a vtable, so its storage is not layout-compatible with a raw
 	// handle array; extract into contiguous buffers.
 	std::vector<duckdb_v2_logical_type_handle> type_handles;
-	std::vector<duckdb_v2_str> name_views;
+	StringArrays name_arrays(names.size());
 	type_handles.reserve(types.size());
-	name_views.reserve(names.size());
 	for (const auto &type : types) {
 		type_handles.push_back(type.handle());
 	}
 	for (const auto &name : names) {
-		name_views.push_back(ToStr(name));
+		name_arrays.Push(name);
 	}
-	if (type_handles.size() != name_views.size()) {
+	if (type_handles.size() != name_arrays.size()) {
 		throw InvalidInputException("ArrowExporter: one name is required per column type");
 	}
 	duckdb_v2_arrow_exporter_handle exporter = nullptr;
 	CheckedAPICall(duckdb_v2_arrow_exporter_create, context.handle(),
-	               type_handles.empty() ? nullptr : type_handles.data(),
-	               name_views.empty() ? nullptr : name_views.data(), static_cast<idx_t>(type_handles.size()),
-	               batch_size, &exporter);
+	               type_handles.empty() ? nullptr : type_handles.data(), name_arrays.ptrs(), name_arrays.lengths(),
+	               static_cast<idx_t>(type_handles.size()), batch_size, &exporter);
 	impl = exporter;
 }
 
@@ -2941,36 +3086,38 @@ FunctionDocs::~FunctionDocs() {
 
 auto FunctionDocs::SetDescription(std::string_view description) -> FunctionDocs & {
 	auto view = ToStr(description);
-	CheckedAPICall(duckdb_v2_function_docs_set_description, handle(), &view);
+	CheckedAPICall(duckdb_v2_function_docs_set_description, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto FunctionDocs::AddExample(std::string_view title, std::string_view example) -> FunctionDocs & {
 	auto title_view = ToStr(title);
 	auto example_view = ToStr(example);
-	CheckedAPICall(duckdb_v2_function_docs_add_example, handle(), &title_view, &example_view);
+	CheckedAPICall(duckdb_v2_function_docs_add_example, handle(), title_view.data(), title_view.size(),
+	               example_view.data(), example_view.size());
 	return *this;
 }
 
 auto FunctionDocs::AddCategory(std::string_view category) -> FunctionDocs & {
 	auto view = ToStr(category);
-	CheckedAPICall(duckdb_v2_function_docs_add_category, handle(), &view);
+	CheckedAPICall(duckdb_v2_function_docs_add_category, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, FunctionParameterKind kind)
     -> FunctionSignature & {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), &name_str, type.handle(),
-	               static_cast<duckdb_v2_value_handle>(nullptr), static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
+	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), name_str.data(), name_str.size(),
+	               type.handle(), static_cast<duckdb_v2_value_handle>(nullptr),
+	               static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
 	return *this;
 }
 
 auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, const Value &default_value,
                                      FunctionParameterKind kind) -> FunctionSignature & {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), &name_str, type.handle(),
-	               default_value.handle(), static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
+	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), name_str.data(), name_str.size(),
+	               type.handle(), default_value.handle(), static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
 	return *this;
 }
 
@@ -3045,16 +3192,18 @@ auto FunctionBindInput::TryGetConstantArgument(idx_t index) const -> std::option
 }
 
 auto FunctionBindInput::GetArgName(idx_t index) const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_function_bind_get_arg_name, BindInfo(args), index, &name);
-	return std::string(FromStr(name));
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_name, BindInfo(args), index, &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto FunctionBindInput::FindArg(const std::string &name) const -> std::optional<idx_t> {
 	idx_t index = 0;
 	bool found = false;
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_function_bind_get_arg_index, BindInfo(args), &name_str, &index, &found);
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_index, BindInfo(args), name_str.data(), name_str.size(), &index,
+	               &found);
 	if (!found) {
 		return std::nullopt;
 	}
@@ -3172,6 +3321,16 @@ auto Stats::SetCanHaveValid(bool value) -> void {
 	CheckedAPICall(duckdb_v2_stats_set_can_have_valid, handle(), value);
 }
 
+auto Stats::GetValue() const -> Value {
+	duckdb_v2_value_handle out = nullptr;
+	CheckedAPICall(duckdb_v2_stats_get_value, handle(), &out);
+	return detail::HandleFactory::Make<Value>(out);
+}
+
+auto Stats::SetValue(const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_stats_set_value, handle(), value.handle());
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
@@ -3247,7 +3406,13 @@ auto ScalarFunction::Create(Factory &factory) -> ScalarFunction {
 
 auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), view.data(), view.size());
+	return *this;
+}
+
+auto ScalarFunction::SetSchema(const std::string &schema) & -> ScalarFunction & {
+	auto view = ToStr(schema);
+	CheckedAPICall(duckdb_v2_scalar_function_set_schema, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -3662,7 +3827,7 @@ auto AggregateFunction::Create(Factory &factory) -> AggregateFunction {
 
 auto AggregateFunction::SetName(const std::string &name) & -> AggregateFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_aggregate_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_aggregate_function_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -4207,6 +4372,8 @@ struct TableFunctionInfo {
 	TableFunction::ClaimBatchCallback claim_batch_callback = nullptr;
 	TableFunction::GetBindInfoCallback get_bind_info_callback = nullptr;
 	TableFunction::StatsCallback stats_callback = nullptr;
+	TableFunction::MetricsCallback metrics_callback = nullptr;
+	TableFunction::ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
@@ -4217,13 +4384,14 @@ struct TableFunctionInfo {
 	                  TableFunction::PartitioningCallback partitioning_callback,
 	                  TableFunction::ClaimBatchCallback claim_batch_callback,
 	                  TableFunction::GetBindInfoCallback get_bind_info_callback,
-	                  TableFunction::StatsCallback stats_callback, detail::UserData user_data)
+	                  TableFunction::StatsCallback stats_callback, TableFunction::MetricsCallback metrics_callback,
+	                  TableFunction::ToStringCallback to_string_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
 	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
 	      partitioning_callback(partitioning_callback), claim_batch_callback(claim_batch_callback),
 	      get_bind_info_callback(get_bind_info_callback), stats_callback(stats_callback),
-	      user_data(std::move(user_data)) {
+	      metrics_callback(metrics_callback), to_string_callback(to_string_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
@@ -4235,6 +4403,7 @@ struct TableFunctionInfo {
 		       partitioning_callback == other.partitioning_callback &&
 		       claim_batch_callback == other.claim_batch_callback &&
 		       get_bind_info_callback == other.get_bind_info_callback && stats_callback == other.stats_callback &&
+		       metrics_callback == other.metrics_callback && to_string_callback == other.to_string_callback &&
 		       user_data.get() == other.user_data.get();
 	}
 };
@@ -4287,12 +4456,29 @@ TableFunction::~TableFunction() {
 auto TableFunction::Create(Factory &factory) -> TableFunction {
 	duckdb_v2_table_function_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_table_function_create, factory.handle(), &_h);
-	return detail::HandleFactory::Make<TableFunction>(_h);
+	auto result = detail::HandleFactory::Make<TableFunction>(_h);
+	duckdb_v2_data_source_handle source = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_create, factory.handle(), &source);
+	result.data_source = std::shared_ptr<void>(source, [](void *ptr) {
+		auto source_handle = static_cast<duckdb_v2_data_source_handle>(ptr);
+		duckdb_v2_data_source_destroy(&source_handle);
+	});
+	return result;
+}
+
+auto TableFunction::DataSourceHandle() -> void * {
+	return data_source.get();
 }
 
 auto TableFunction::SetName(const std::string &name) & -> TableFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_table_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_table_function_set_name, handle(), view.data(), view.size());
+	return *this;
+}
+
+auto TableFunction::SetStability(FunctionStability value) & -> TableFunction & {
+	CheckedAPICall(duckdb_v2_table_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	               ToCValue(value));
 	return *this;
 }
 
@@ -4342,16 +4528,17 @@ auto TableFunction::SetBindCallback(BindCallback callback) & -> TableFunction & 
 
 auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		init_global_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4360,23 +4547,25 @@ auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> Tabl
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	init_global_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		init_local_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_init_local_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_local_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4385,23 +4574,25 @@ auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableF
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	init_local_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		exec_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_exec_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4410,23 +4601,25 @@ auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & 
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	exec_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		progress_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_progress_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_progress_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_progress_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_progress_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4435,7 +4628,8 @@ auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFun
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	progress_callback = callback;
 	return *this;
 }
@@ -4467,16 +4661,17 @@ auto TableFunction::SetFilterPushdownCallback(FilterPushdownCallback callback) &
 
 auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_partition_data_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		partition_data_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_partition_data_info_handle info,
-	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	static auto trampoline = [](duckdb_v2_data_source_partition_data_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_partition_data_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<PartitionDataInput>(static_cast<void *>(info),
@@ -4485,7 +4680,8 @@ auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_partition_data_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	partition_data_callback = callback;
 	return *this;
 }
@@ -4517,16 +4713,17 @@ auto TableFunction::SetPartitioningCallback(PartitioningCallback callback) & -> 
 
 auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_claim_batch_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		claim_batch_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_claim_batch_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_claim_batch_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_claim_batch_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4535,7 +4732,8 @@ auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> Tabl
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_claim_batch_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	claim_batch_callback = callback;
 	return *this;
 }
@@ -4595,24 +4793,101 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	return *this;
 }
 
+static_assert(static_cast<uint8_t>(TableFunction::VirtualColumn::FILE_ROW_NUMBER) ==
+                  DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
+              "TableFunction::VirtualColumn::FILE_ROW_NUMBER mismatch");
+
+auto TableFunction::GetVirtualColumn(idx_t column_index) -> VirtualColumn {
+	if (!IsVirtualColumn(column_index)) {
+		throw InvalidInputException("The column index " + std::to_string(column_index) +
+		                            " stands for a declared column, not a virtual one");
+	}
+	switch (column_index - VIRTUAL_COLUMN_START) {
+	case DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER:
+		return VirtualColumn::FILE_ROW_NUMBER;
+	default:
+		throw InvalidInputException("The column index " + std::to_string(column_index) +
+		                            " stands for an unknown virtual column");
+	}
+}
+
+auto TableFunction::AddVirtualColumn(VirtualColumn column) & -> TableFunction & {
+	CheckedAPICall(duckdb_v2_table_function_add_virtual_column, handle(),
+	               static_cast<DUCKDB_V2_TABLE_VIRTUAL_COLUMN>(column));
+	return *this;
+}
+
+auto TableFunction::SetMetricsCallback(MetricsCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_data_source_set_metrics_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
+		metrics_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_data_source_metrics_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_data_source_metrics_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::HandleFactory::Make<MetricsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.metrics_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_data_source_set_metrics_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
+	metrics_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetToStringCallback(ToStringCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_to_string_callback, handle(), nullptr);
+		to_string_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_to_string_info_handle info, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_to_string_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::HandleFactory::Make<ToStringInput>(static_cast<void *>(info));
+			function.to_string_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_to_string_callback, handle(), trampoline);
+	to_string_callback = callback;
+	return *this;
+}
+
 auto TableFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
 	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
 	    filter_pushdown_callback, partition_data_callback, partitioning_callback, claim_batch_callback,
-	    get_bind_info_callback, stats_callback, std::move(user_data)));
+	    get_bind_info_callback, stats_callback, metrics_callback, to_string_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
+	CheckedAPICall(duckdb_v2_table_function_set_data_source, handle(),
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()));
 }
 
 auto TableFunction::BindInput::AddResultColumn(const std::string &name, const LogicalType &type) -> void {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	auto name_str = std::string_view(name.data(), name.size());
 	CheckedAPICall(duckdb_v2_table_function_bind_add_result_column,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &name_str, type.handle());
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), name_str.data(), name_str.size(),
+	               type.handle());
 }
 
 void *TableFunction::BindInput::GetUserDataInternal() const {
@@ -4640,28 +4915,28 @@ auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> 
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_table_function_init_global_set_global_state,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_global_state,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &opaque);
 }
 
 void *TableFunction::InitGlobalInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_bind_data,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::InitGlobalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::InitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
-	CheckedAPICall(duckdb_v2_table_function_init_global_set_max_threads,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), max_threads);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_max_threads,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), max_threads);
 }
 
 auto TableFunction::InitGlobalInput::GetContext() -> Context & {
@@ -4670,42 +4945,42 @@ auto TableFunction::InitGlobalInput::GetContext() -> Context & {
 
 auto TableFunction::InitGlobalInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_count,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_column_count,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::InitGlobalInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_index,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_column_index,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void TableFunction::InitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_table_function_init_local_set_local_state,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_local_set_local_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &opaque);
 }
 
 void *TableFunction::InitLocalInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_bind_data,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::InitLocalInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_global_state,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_global_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::InitLocalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
@@ -4716,51 +4991,51 @@ auto TableFunction::InitLocalInput::GetContext() -> Context & {
 
 auto TableFunction::InitLocalInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_count,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_column_count,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::InitLocalInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_index,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_column_index,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void *TableFunction::ExecInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_bind_data,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_bind_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
+	               &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ExecInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_global_state,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_global_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::ExecInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_local_state,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_local_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::ExecInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_user_data,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
+	               &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ExecInput::GetOutputChunk() const -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_output_chunk,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &chunk);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_output_chunk,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &chunk);
 	// Borrowed: the engine owns the chunk and reuses it across invocations.
 	return detail::HandleFactory::Make<DataChunk>(chunk, false);
 }
@@ -4771,46 +5046,84 @@ auto TableFunction::ExecInput::GetContext() -> Context & {
 
 auto TableFunction::ExecInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_column_count,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_column_count,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::ExecInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_column_index,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_column_index,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void *TableFunction::ProgressInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_bind_data,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_bind_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ProgressInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_global_state,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::ProgressInput::TryGetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &global_state);
+	return global_state;
 }
 
 void *TableFunction::ProgressInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_user_data,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_user_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ProgressInput::SetProgress(double progress) -> void {
-	CheckedAPICall(duckdb_v2_table_function_progress_set_progress,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), progress);
+	CheckedAPICall(duckdb_v2_data_source_progress_set_progress,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), progress);
 }
 
 auto TableFunction::ProgressInput::GetContext() -> Context & {
+	return context;
+}
+
+void *TableFunction::MetricsInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_bind_data,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::MetricsInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_global_state,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &global_state);
+	return global_state;
+}
+
+void *TableFunction::MetricsInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_user_data,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::MetricsInput::SetMetric(std::string_view name, uint64_t value) -> void {
+	CheckedAPICall(duckdb_v2_data_source_metrics_set, static_cast<duckdb_v2_data_source_metrics_info_handle>(args),
+	               name.data(), name.size(), value);
+}
+
+auto TableFunction::MetricsInput::GetContext() -> Context & {
 	return context;
 }
 
@@ -4868,69 +5181,69 @@ auto TableFunction::FilterPushdownInput::GetContext() -> Context & {
 
 void *TableFunction::PartitionDataInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_bind_data,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_bind_data,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::PartitionDataInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_global_state,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_global_state,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::PartitionDataInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_local_state,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_local_state,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::PartitionDataInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_user_data,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::PartitionDataInput::RequiresBatchIndex() const -> bool {
 	bool required = false;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_batch_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_requires_batch_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &required);
 	return required;
 }
 
 auto TableFunction::PartitionDataInput::RequiresPartitionColumns() const -> bool {
 	bool required = false;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_partition_columns,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_requires_partition_columns,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &required);
 	return required;
 }
 
 auto TableFunction::PartitionDataInput::GetPartitionColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_count,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_partition_column_count,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::PartitionDataInput::GetPartitionColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_partition_column_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 auto TableFunction::PartitionDataInput::SetBatchIndex(idx_t batch_index) -> void {
-	CheckedAPICall(duckdb_v2_table_function_partition_data_set_batch_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), batch_index);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_set_batch_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), batch_index);
 }
 
 auto TableFunction::PartitionDataInput::SetPartitionValue(idx_t index, const Value &value) -> void {
-	CheckedAPICall(duckdb_v2_table_function_partition_data_set_partition_value,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, value.handle());
+	CheckedAPICall(duckdb_v2_data_source_partition_data_set_partition_value,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), index, value.handle());
 }
 
 auto TableFunction::PartitionDataInput::GetContext() -> Context & {
@@ -4991,36 +5304,36 @@ auto TableFunction::PartitioningInput::GetContext() -> Context & {
 
 void *TableFunction::ClaimBatchInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_bind_data,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_bind_data,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ClaimBatchInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_global_state,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_global_state,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::ClaimBatchInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_local_state,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_local_state,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::ClaimBatchInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_user_data,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_set_claimed,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_set_claimed,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), claimed);
 }
 
 void *TableFunction::GetBindInfoInput::GetBindDataInternal() const {
@@ -5054,7 +5367,8 @@ auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, co
 auto TableFunction::GetBindInfoInput::SetOption(const std::string &key, const Value &value) -> void {
 	auto view = ToStr(key);
 	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_option,
-	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &view, value.handle());
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), view.data(), view.size(),
+	               value.handle());
 }
 
 auto TableFunction::ClaimBatchInput::GetContext() -> Context & {
@@ -5063,6 +5377,27 @@ auto TableFunction::ClaimBatchInput::GetContext() -> Context & {
 
 auto TableFunction::GetBindInfoInput::GetContext() -> Context & {
 	return context;
+}
+
+void *TableFunction::ToStringInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_to_string_get_bind_data,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::ToStringInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_to_string_get_user_data,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::ToStringInput::Set(std::string_view key, std::string_view value) -> void {
+	CheckedAPICall(duckdb_v2_table_function_to_string_set,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), key.data(),
+	               static_cast<idx_t>(key.size()), value.data(), static_cast<idx_t>(value.size()));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5085,25 +5420,25 @@ auto MultiFileFunction::Create(Factory &factory) -> MultiFileFunction {
 
 auto MultiFileFunction::SetName(const std::string &name) & -> MultiFileFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_multi_file_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto MultiFileFunction::SetSingleFileFunction(const std::string &name) & -> MultiFileFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_multi_file_function_set_single_file_function, handle(), &view);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_single_file_function, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto MultiFileFunction::SetReaderType(const std::string &reader_type) & -> MultiFileFunction & {
 	auto view = ToStr(reader_type);
-	CheckedAPICall(duckdb_v2_multi_file_function_set_reader_type, handle(), &view);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_reader_type, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto MultiFileFunction::SetFileExtension(const std::string &extension) & -> MultiFileFunction & {
 	auto view = ToStr(extension);
-	CheckedAPICall(duckdb_v2_multi_file_function_set_file_extension, handle(), &view);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_file_extension, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -5187,9 +5522,10 @@ auto Expression::GetColumnIndex() const -> idx_t {
 }
 
 auto Expression::GetFunctionName() const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_expression_function_get_name, handle(), &name);
-	return std::string(FromStr(name));
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_expression_function_get_name, handle(), &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto Expression::GetFunctionQualifiedName() const -> QualifiedName {
@@ -5224,7 +5560,7 @@ auto CustomType::Create(Factory &factory) -> CustomType {
 
 auto CustomType::SetName(const std::string &name) & -> CustomType & {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_custom_type_set_name, handle(), &name_str);
+	CheckedAPICall(duckdb_v2_custom_type_set_name, handle(), name_str.data(), name_str.size());
 	return *this;
 }
 
@@ -5363,18 +5699,29 @@ CopyFunction::~CopyFunction() {
 auto CopyFunction::Create(Factory &factory) -> CopyFunction {
 	duckdb_v2_copy_function_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_copy_function_create, factory.handle(), &_h);
-	return detail::HandleFactory::Make<CopyFunction>(_h);
+	auto result = detail::HandleFactory::Make<CopyFunction>(_h);
+	duckdb_v2_data_source_handle source = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_create, factory.handle(), &source);
+	result.data_source = std::shared_ptr<void>(source, [](void *ptr) {
+		auto source_handle = static_cast<duckdb_v2_data_source_handle>(ptr);
+		duckdb_v2_data_source_destroy(&source_handle);
+	});
+	return result;
+}
+
+auto CopyFunction::DataSourceHandle() -> void * {
+	return data_source.get();
 }
 
 auto CopyFunction::SetName(const std::string &name) & -> CopyFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_copy_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_copy_function_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto CopyFunction::SetFileExtension(const std::string &extension) & -> CopyFunction & {
 	auto view = ToStr(extension);
-	CheckedAPICall(duckdb_v2_copy_function_set_file_extension, handle(), &view);
+	CheckedAPICall(duckdb_v2_copy_function_set_file_extension, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -5586,16 +5933,17 @@ auto CopyFunction::SetCopyFromBindCallback(CopyFromBindCallback callback) & -> C
 
 auto CopyFunction::SetCopyFromInitGlobalCallback(CopyFromInitGlobalCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_init_global_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_init_global_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_init_global_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_init_global_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromInitGlobalInput>(static_cast<void *>(info),
@@ -5604,23 +5952,25 @@ auto CopyFunction::SetCopyFromInitGlobalCallback(CopyFromInitGlobalCallback call
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_init_global_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_init_global_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromInitLocalCallback(CopyFromInitLocalCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_init_local_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_init_local_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_init_local_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_local_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_init_local_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromInitLocalInput>(static_cast<void *>(info),
@@ -5629,23 +5979,25 @@ auto CopyFunction::SetCopyFromInitLocalCallback(CopyFromInitLocalCallback callba
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_init_local_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_init_local_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromExecCallback(CopyFromExecCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_exec_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_exec_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_exec_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_exec_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input =
@@ -5654,23 +6006,25 @@ auto CopyFunction::SetCopyFromExecCallback(CopyFromExecCallback callback) & -> C
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_exec_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_exec_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromProgressCallback(CopyFromProgressCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_progress_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_progress_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_progress_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_progress_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_progress_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_progress_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromProgressInput>(static_cast<void *>(info),
@@ -5679,7 +6033,8 @@ auto CopyFunction::SetCopyFromProgressCallback(CopyFromProgressCallback callback
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_progress_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_progress_callback = callback;
 	return *this;
 }
@@ -5696,6 +6051,13 @@ auto CopyFunction::PrepareRegistration() -> void {
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
+	// The scan callbacks of the COPY FROM side live in the data source, which only that side takes. It is attached
+	// anew on every registration, so the function scans with the callbacks set now.
+	if (copy_from_bind_callback || copy_from_init_global_callback || copy_from_init_local_callback ||
+	    copy_from_exec_callback || copy_from_progress_callback) {
+		CheckedAPICall(duckdb_v2_copy_from_set_data_source, handle(),
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()));
+	}
 }
 
 void *CopyFunction::CopyToBindInput::GetUserDataInternal() const {
@@ -5714,9 +6076,11 @@ void CopyFunction::CopyToBindInput::SetBindDataInternal(void *data, bool (*equal
 }
 
 auto CopyFunction::CopyToBindInput::GetFilePath() const -> std::string {
-	duckdb_v2_str path = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_copy_to_bind_get_file_path, static_cast<duckdb_v2_copy_to_bind_info_handle>(args), &path);
-	return std::string(FromStr(path));
+	const char *path = nullptr;
+	idx_t path_length = 0;
+	CheckedAPICall(duckdb_v2_copy_to_bind_get_file_path, static_cast<duckdb_v2_copy_to_bind_info_handle>(args), &path,
+	               &path_length);
+	return std::string(FromStr(path, path_length));
 }
 
 auto CopyFunction::CopyToBindInput::GetColumnCount() const -> idx_t {
@@ -5727,10 +6091,11 @@ auto CopyFunction::CopyToBindInput::GetColumnCount() const -> idx_t {
 }
 
 auto CopyFunction::CopyToBindInput::GetColumnName(idx_t index) const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	CheckedAPICall(duckdb_v2_copy_to_bind_get_column_name, static_cast<duckdb_v2_copy_to_bind_info_handle>(args), index,
-	               &name);
-	return std::string(FromStr(name));
+	               &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto CopyFunction::CopyToBindInput::GetColumnType(idx_t index) const -> LogicalType {
@@ -5748,10 +6113,11 @@ auto CopyFunction::CopyToBindInput::GetOptionCount() const -> idx_t {
 }
 
 auto CopyFunction::CopyToBindInput::GetOptionName(idx_t index) const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	CheckedAPICall(duckdb_v2_copy_to_bind_get_option_name, static_cast<duckdb_v2_copy_to_bind_info_handle>(args), index,
-	               &name);
-	return std::string(FromStr(name));
+	               &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto CopyFunction::CopyToBindInput::GetOptionValue(idx_t index) const -> Value {
@@ -5810,9 +6176,11 @@ void *CopyFunction::CopyToInitInput::GetUserDataInternal() const {
 }
 
 auto CopyFunction::CopyToInitInput::GetFilePath() const -> std::string {
-	duckdb_v2_str path = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_copy_to_init_get_file_path, static_cast<duckdb_v2_copy_to_init_info_handle>(args), &path);
-	return std::string(FromStr(path));
+	const char *path = nullptr;
+	idx_t path_length = 0;
+	CheckedAPICall(duckdb_v2_copy_to_init_get_file_path, static_cast<duckdb_v2_copy_to_init_info_handle>(args), &path,
+	               &path_length);
+	return std::string(FromStr(path, path_length));
 }
 
 auto CopyFunction::CopyToInitInput::GetContext() -> Context & {
@@ -5969,10 +6337,11 @@ void CopyFunction::CopyFromBindInput::SetBindDataInternal(void *data, bool (*equ
 }
 
 auto CopyFunction::CopyFromBindInput::GetFilePath() const -> std::string {
-	duckdb_v2_str path = {nullptr, 0};
+	const char *path = nullptr;
+	idx_t path_length = 0;
 	CheckedAPICall(duckdb_v2_copy_from_bind_get_file_path, static_cast<duckdb_v2_copy_from_bind_info_handle>(args),
-	               &path);
-	return std::string(FromStr(path));
+	               &path, &path_length);
+	return std::string(FromStr(path, path_length));
 }
 
 auto CopyFunction::CopyFromBindInput::GetColumnCount() const -> idx_t {
@@ -5983,10 +6352,11 @@ auto CopyFunction::CopyFromBindInput::GetColumnCount() const -> idx_t {
 }
 
 auto CopyFunction::CopyFromBindInput::GetColumnName(idx_t index) const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	CheckedAPICall(duckdb_v2_copy_from_bind_get_column_name, static_cast<duckdb_v2_copy_from_bind_info_handle>(args),
-	               index, &name);
-	return std::string(FromStr(name));
+	               index, &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto CopyFunction::CopyFromBindInput::GetColumnType(idx_t index) const -> LogicalType {
@@ -6004,10 +6374,11 @@ auto CopyFunction::CopyFromBindInput::GetOptionCount() const -> idx_t {
 }
 
 auto CopyFunction::CopyFromBindInput::GetOptionName(idx_t index) const -> std::string {
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	CheckedAPICall(duckdb_v2_copy_from_bind_get_option_name, static_cast<duckdb_v2_copy_from_bind_info_handle>(args),
-	               index, &name);
-	return std::string(FromStr(name));
+	               index, &name, &name_length);
+	return std::string(FromStr(name, name_length));
 }
 
 auto CopyFunction::CopyFromBindInput::GetOptionValue(idx_t index) const -> Value {
@@ -6028,28 +6399,28 @@ auto CopyFunction::CopyFromBindInput::GetContext() -> Context & {
 
 void CopyFunction::CopyFromInitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_copy_from_init_global_set_global_state,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_global_state,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &opaque);
 }
 
 void *CopyFunction::CopyFromInitGlobalInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_global_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromInitGlobalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_global_get_user_data,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
 
 auto CopyFunction::CopyFromInitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
-	CheckedAPICall(duckdb_v2_copy_from_init_global_set_max_threads,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), max_threads);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_max_threads,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), max_threads);
 }
 
 auto CopyFunction::CopyFromInitGlobalInput::GetContext() -> Context & {
@@ -6058,28 +6429,28 @@ auto CopyFunction::CopyFromInitGlobalInput::GetContext() -> Context & {
 
 void CopyFunction::CopyFromInitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_copy_from_init_local_set_local_state,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_local_set_local_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &opaque);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_global_state,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_global_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_user_data,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
@@ -6090,28 +6461,28 @@ auto CopyFunction::CopyFromInitLocalInput::GetContext() -> Context & {
 
 void *CopyFunction::CopyFromExecInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_bind_data, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
+	CheckedAPICall(duckdb_v2_data_source_exec_get_bind_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
 	               &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_global_state, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_global_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetLocalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_local_state, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_local_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &data);
 	return RequireCopyLocalState(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_user_data, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
+	CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
 	               &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
@@ -6119,8 +6490,8 @@ void *CopyFunction::CopyFromExecInput::GetUserDataInternal() const {
 
 auto CopyFunction::CopyFromExecInput::GetOutputChunk() const -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_output_chunk, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &chunk);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_output_chunk,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &chunk);
 	// Borrowed: the engine owns the chunk and reuses it across invocations.
 	return detail::HandleFactory::Make<DataChunk>(chunk, false);
 }
@@ -6131,29 +6502,29 @@ auto CopyFunction::CopyFromExecInput::GetContext() -> Context & {
 
 void *CopyFunction::CopyFromProgressInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_bind_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromProgressInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_global_state,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromProgressInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_user_data,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_user_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
 
 auto CopyFunction::CopyFromProgressInput::SetProgress(double progress) -> void {
-	CheckedAPICall(duckdb_v2_copy_from_progress_set_progress,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), progress);
+	CheckedAPICall(duckdb_v2_data_source_progress_set_progress,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), progress);
 }
 
 auto CopyFunction::CopyFromProgressInput::GetContext() -> Context & {
@@ -6361,7 +6732,7 @@ auto PragmaFunction::Create(Factory &factory) -> PragmaFunction {
 
 auto PragmaFunction::SetName(const std::string &name) & -> PragmaFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_pragma_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_pragma_function_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -6399,7 +6770,7 @@ auto PragmaFunction::SetQueryCallback(QueryCallback callback) & -> PragmaFunctio
 			    detail::HandleFactory::Make<QueryInput>(static_cast<void *>(info), static_cast<void *>(context));
 			auto query = function.query_callback(input);
 			auto query_str = ToStr(query);
-			CheckedAPICall(duckdb_v2_pragma_function_query_set_query, result, &query_str);
+			CheckedAPICall(duckdb_v2_pragma_function_query_set_query, result, query_str.data(), query_str.size());
 		});
 	};
 
@@ -6480,13 +6851,13 @@ auto MacroFunction::CreateTable(Factory &factory) -> MacroFunction {
 
 auto MacroFunction::SetName(const std::string &name) & -> MacroFunction & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_macro_function_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_macro_function_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
 auto MacroFunction::SetBody(std::string_view body) & -> MacroFunction & {
 	auto view = ToStr(body);
-	CheckedAPICall(duckdb_v2_macro_function_set_body, handle(), &view);
+	CheckedAPICall(duckdb_v2_macro_function_set_body, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -6563,7 +6934,7 @@ auto LogSink::Create(Factory &factory) -> LogSink {
 
 auto LogSink::SetName(const std::string &name) & -> LogSink & {
 	auto view = ToStr(name);
-	CheckedAPICall(duckdb_v2_log_sink_set_name, handle(), &view);
+	CheckedAPICall(duckdb_v2_log_sink_set_name, handle(), view.data(), view.size());
 	return *this;
 }
 
@@ -6581,13 +6952,14 @@ auto LogSink::SetWriteCallback(WriteCallback callback) & -> LogSink & {
 	// The C-side callback is one shared trampoline; the user's callback is looked
 	// up through the info table riding the user_data slot (set by Register).
 	static auto trampoline = [](duckdb_v2_log_sink_write_info_handle info, void *user_data, int64_t timestamp,
-	                            DUCKDB_V2_LOG_LEVEL level, DUCKDB_V2_LOG_SCOPE scope, const duckdb_v2_str *type,
-	                            const duckdb_v2_str *message, duckdb_v2_error_info_handle *err) {
+	                            DUCKDB_V2_LOG_LEVEL level, DUCKDB_V2_LOG_SCOPE scope, const char *type,
+	                            idx_t type_length, const char *message, idx_t message_length,
+	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			const auto &sink = *static_cast<const LogSinkInfo *>(user_data);
-			auto entry = detail::HandleFactory::Make<Entry>(static_cast<void *>(info), user_data, timestamp,
-			                                                static_cast<LogLevel>(level), static_cast<LogScope>(scope),
-			                                                FromStr(*type), FromStr(*message));
+			auto entry = detail::HandleFactory::Make<Entry>(
+			    static_cast<void *>(info), user_data, timestamp, static_cast<LogLevel>(level),
+			    static_cast<LogScope>(scope), FromStr(type, type_length), FromStr(message, message_length));
 			sink.write_callback(entry);
 		});
 	};
@@ -6692,53 +7064,54 @@ auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
 auto FileSystem::Exists(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool exists = false;
-	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), &path_str, &exists);
+	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), path_str.data(), path_str.size(), &exists);
 	return exists;
 }
 
 auto FileSystem::IsRemote(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool is_remote = false;
-	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), &path_str, &is_remote);
+	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), path_str.data(), path_str.size(), &is_remote);
 	return is_remote;
 }
 
 auto FileSystem::Expand(const std::string &path) const -> std::string {
-	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
+	auto sink = [](const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&] {
-			if (text->ptr && text->len) {
-				static_cast<std::string *>(user_data)->assign(text->ptr, text->len);
+			if (text && text_length) {
+				static_cast<std::string *>(user_data)->assign(text, text_length);
 			}
 		});
 	};
 	auto path_str = ToStr(path);
 	std::string out;
-	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), &path_str, sink, &out);
+	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), path_str.data(), path_str.size(), sink, &out);
 	return out;
 }
 
 auto FileSystem::Glob(const std::string &pattern) const -> std::vector<std::string> {
-	auto callback = [](const duckdb_v2_str *path, void *user_data, duckdb_v2_error_info_handle *err) {
-		WithExceptionGuard(err, [&] {
-			static_cast<std::vector<std::string> *>(user_data)->emplace_back(path->ptr ? path->ptr : "", path->len);
-		});
+	auto callback = [](const char *path, idx_t path_length, void *user_data, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(
+		    err, [&] { static_cast<std::vector<std::string> *>(user_data)->emplace_back(FromStr(path, path_length)); });
 	};
 	auto pattern_str = ToStr(pattern);
 	std::vector<std::string> matches;
-	CheckedAPICall(duckdb_v2_file_system_path_glob, handle(), &pattern_str, callback, &matches);
+	CheckedAPICall(duckdb_v2_file_system_path_glob, handle(), pattern_str.data(), pattern_str.size(), callback,
+	               &matches);
 	return matches;
 }
 
 auto FileSystem::Move(const std::string &source, const std::string &target) const -> void {
 	auto source_str = ToStr(source);
 	auto target_str = ToStr(target);
-	CheckedAPICall(duckdb_v2_file_system_path_move, handle(), &source_str, &target_str);
+	CheckedAPICall(duckdb_v2_file_system_path_move, handle(), source_str.data(), source_str.size(), target_str.data(),
+	               target_str.size());
 }
 
 auto FileSystem::Remove(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool removed = false;
-	CheckedAPICall(duckdb_v2_file_system_path_remove, handle(), &path_str, &removed);
+	CheckedAPICall(duckdb_v2_file_system_path_remove, handle(), path_str.data(), path_str.size(), &removed);
 	return removed;
 }
 
@@ -6753,7 +7126,8 @@ auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFla
 auto FileSystem::OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle {
 	duckdb_v2_file_handle result = nullptr;
 	auto file_path_str = ToStr(path);
-	CheckedAPICall(duckdb_v2_file_system_open, handle(), &file_path_str, options.handle(), &result);
+	CheckedAPICall(duckdb_v2_file_system_open, handle(), file_path_str.data(), file_path_str.size(), options.handle(),
+	               &result);
 	return detail::HandleFactory::Make<FileHandle>(result);
 }
 
@@ -6778,7 +7152,7 @@ auto FileOpenOptions::SetFlag(FileFlags flag) & -> FileOpenOptions & {
 
 auto FileOpenOptions::SetValue(std::string_view name, const Value &value) & -> FileOpenOptions & {
 	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), &name_str, value.handle());
+	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), name_str.data(), name_str.size(), value.handle());
 	return *this;
 }
 
@@ -6910,18 +7284,17 @@ QualifiedName::~QualifiedName() {
 auto QualifiedName::Parse(std::string_view text) -> QualifiedName {
 	duckdb_v2_qname_handle _h = nullptr;
 	auto text_str = ToStr(text);
-	CheckedAPICall(duckdb_v2_qname_parse, &text_str, &_h);
+	CheckedAPICall(duckdb_v2_qname_parse, text_str.data(), text_str.size(), &_h);
 	return detail::HandleFactory::Make<QualifiedName>(_h);
 }
 
 auto QualifiedName::Create(const std::vector<std::string> &parts) -> QualifiedName {
-	std::vector<duckdb_v2_identifier_t> views;
-	views.reserve(parts.size());
+	StringArrays views(parts.size());
 	for (auto &part : parts) {
-		views.push_back(ToStr(part));
+		views.Push(part);
 	}
 	duckdb_v2_qname_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_qname_create, views.empty() ? nullptr : views.data(), views.size(), &_h);
+	CheckedAPICall(duckdb_v2_qname_create, views.ptrs(), views.lengths(), views.size(), &_h);
 	return detail::HandleFactory::Make<QualifiedName>(_h);
 }
 
@@ -6932,9 +7305,10 @@ auto QualifiedName::GetPartCount() const -> idx_t {
 }
 
 auto QualifiedName::GetPart(idx_t index) const -> std::string_view {
-	duckdb_v2_identifier_t part = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_qname_get_part, handle(), index, &part);
-	return FromStr(part);
+	const char *part = nullptr;
+	idx_t part_length = 0;
+	CheckedAPICall(duckdb_v2_qname_get_part, handle(), index, &part, &part_length);
+	return FromStr(part, part_length);
 }
 
 auto QualifiedName::GetName() const -> std::string_view {
@@ -7023,9 +7397,10 @@ QueryMetricsNode::~QueryMetricsNode() {
 }
 
 auto QueryMetricsNode::GetName() const -> std::string_view {
-	duckdb_v2_str name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_query_metrics_node_get_name, handle(), &name);
-	return FromStr(name);
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_query_metrics_node_get_name, handle(), &name, &name_length);
+	return FromStr(name, name_length);
 }
 
 auto QueryMetricsNode::GetChildCount() const -> idx_t {
@@ -7047,9 +7422,10 @@ auto QueryMetricsNode::GetMetricCount() const -> idx_t {
 }
 
 auto QueryMetricsNode::GetMetricName(idx_t index) const -> std::string_view {
-	duckdb_v2_str name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_query_metrics_node_get_metric_name, handle(), index, &name);
-	return FromStr(name);
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_query_metrics_node_get_metric_name, handle(), index, &name, &name_length);
+	return FromStr(name, name_length);
 }
 
 auto QueryMetricsNode::GetMetricValue(idx_t index) const -> Value {
@@ -7062,7 +7438,8 @@ auto QueryMetricsNode::GetMetric(std::string_view name) const -> std::optional<V
 	const auto name_str = ToStr(name);
 	duckdb_v2_value_handle value = nullptr;
 	bool present = false;
-	CheckedAPICall(duckdb_v2_query_metrics_node_get_metric, handle(), &name_str, &value, &present);
+	CheckedAPICall(duckdb_v2_query_metrics_node_get_metric, handle(), name_str.data(), name_str.size(), &value,
+	               &present);
 	if (!present) {
 		return std::nullopt;
 	}
@@ -7189,30 +7566,30 @@ auto ReplacementScan::Input::AddArgument(const Value &value) -> void {
 auto ReplacementScan::Input::AddNamedArgument(std::string_view name, const Value &value) -> void {
 	auto name_str = ToStr(name);
 	CheckedAPICall(duckdb_v2_replacement_scan_add_named_argument,
-	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), &name_str, value.handle());
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), name_str.data(), name_str.size(),
+	               value.handle());
 }
 
 auto ReplacementScan::Input::SetCollection(const ColumnDataCollection &collection,
                                            const std::vector<std::string> &column_names) -> void {
-	std::vector<duckdb_v2_identifier_t> names;
-	names.reserve(column_names.size());
+	StringArrays names(column_names.size());
 	for (auto &name : column_names) {
-		names.push_back(ToStr(name));
+		names.Push(name);
 	}
 	CheckedAPICall(duckdb_v2_replacement_scan_set_collection, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
-	               collection.handle(), names.empty() ? nullptr : names.data(), names.size());
+	               collection.handle(), names.ptrs(), names.lengths(), names.size());
 }
 
 auto ReplacementScan::Input::SetSubquery(std::string_view sql) -> void {
 	auto sql_str = ToStr(sql);
 	CheckedAPICall(duckdb_v2_replacement_scan_set_subquery, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
-	               &sql_str);
+	               sql_str.data(), sql_str.size());
 }
 
 auto ReplacementScan::Input::SetAlias(std::string_view alias) -> void {
 	auto alias_str = ToStr(alias);
 	CheckedAPICall(duckdb_v2_replacement_scan_set_alias, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
-	               &alias_str);
+	               alias_str.data(), alias_str.size());
 }
 
 auto ReplacementScan::Input::GetContext() -> Context & {
@@ -7380,9 +7757,10 @@ ColumnDescription::~ColumnDescription() {
 }
 
 auto ColumnDescription::GetName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_column_description_get_name, handle(), &name);
-	return FromStr(name);
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	CheckedAPICall(duckdb_v2_column_description_get_name, handle(), &name, &name_length);
+	return FromStr(name, name_length);
 }
 
 auto ColumnDescription::GetType() const -> LogicalType {

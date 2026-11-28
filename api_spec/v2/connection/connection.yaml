@@ -30,6 +30,49 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
+  connection_create_in_transaction:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Opens a connection that runs in the transaction of a context.
+
+      Lets a callback run SQL inside the transaction it is called in, such as
+      a table function's bind callback reading a table. The connection sees
+      everything the context's transaction sees, including its uncommitted
+      changes and the context's temporary objects, and what it changes is
+      part of that transaction. A statement of the connection that fails
+      invalidates the transaction as a failure of the context's own statement
+      would. It starts with the context's search path (`USE`, `SET
+      schema`, `SET search_path`), so unqualified names resolve as they do in
+      the context's own statements.
+
+      The connection cannot start, commit or roll back a transaction: those
+      statements fail with ERROR_DATABASE_TRANSACTION, and like any failing
+      statement invalidate the transaction. The connection stays in the
+      transaction until it is destroyed, which neither commits nor rolls the transaction
+      back. Destroy it before the transaction ends, typically before the
+      callback returns: a transaction that is committed while such a
+      connection is still open is rolled back instead, and the connection's
+      statements fail from then on. Interrupting the context's query also
+      interrupts the connection's. The caller destroys it via
+      `[[connection_destroy]]`.
+    role: constructor
+    belongs_to: connection
+    parameters:
+      ctx:
+        type: context
+        description: "The context whose transaction the connection runs in. It must have an active transaction."
+      out_conn:
+        type: connection
+        indirection: 1
+        kind: OUT
+        description: "Receives the new connection handle."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
   connection_destroy:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-08-04" ]

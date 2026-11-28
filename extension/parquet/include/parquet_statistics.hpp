@@ -41,6 +41,7 @@ class Statistics;
 
 namespace duckdb {
 class Allocator;
+class ParquetReader;
 class TableFilter;
 enum class LogicalTypeId : uint8_t;
 
@@ -82,9 +83,12 @@ struct ParquetStatisticsUtils {
 	GetBloomFilterHashStrategy(const ParquetColumnSchema &schema,
 	                           ParquetIntervalBloomFilterVersion interval_bloom_filter_version);
 
+	static bool HasBloomFilterConstants(const TableFilter &filter, ParquetBloomFilterHashStrategy hash_strategy);
+	//! The reader plus the row group and column ordinals are needed to decrypt the bloom filter of an encrypted file
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator,
-	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy);
+	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy,
+	                                const ParquetReader &reader, int16_t row_group_ordinal, idx_t column_ordinal);
 
 	static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
 	                                                     const duckdb_parquet::Statistics &parquet_stats);
@@ -124,7 +128,7 @@ public:
 	static unique_ptr<ParquetBloomFilter> Create(Allocator &allocator, idx_t num_entries, double target);
 	static optional_idx EstimateSize(idx_t num_entries, double target);
 	static unique_ptr<ParquetBloomFilter> TryCreate(Allocator &allocator, idx_t num_entries, double target,
-	                                                shared_ptr<ParquetBloomFilterMemory> memory);
+	                                                const shared_ptr<ParquetBloomFilterMemory> &memory);
 	void FilterInsert(uint64_t x);
 	bool FilterCheck(uint64_t x);
 	void Shrink(Allocator &allocator, idx_t new_block_count);

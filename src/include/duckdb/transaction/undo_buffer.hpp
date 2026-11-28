@@ -16,6 +16,7 @@
 namespace duckdb {
 class BufferManager;
 class ClientContext;
+class DatabaseInstance;
 class CommitDropState;
 class DuckTransaction;
 class StorageCommitState;
@@ -27,7 +28,6 @@ struct UndoBufferProperties {
 	idx_t estimated_size = 0;
 	bool has_updates = false;
 	bool has_deletes = false;
-	bool has_index_deletes = false;
 	bool has_catalog_changes = false;
 	bool has_dropped_entries = false;
 };
@@ -46,7 +46,7 @@ public:
 	};
 
 public:
-	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
+	explicit UndoBuffer(DuckTransaction &transaction, DatabaseInstance &db);
 
 	//! Write a specified entry to the undo buffer
 	UndoBufferReference CreateEntry(UndoFlags type, idx_t len);

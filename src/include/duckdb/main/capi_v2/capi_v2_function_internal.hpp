@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -135,7 +136,9 @@ private:
 	const named_argument_map_t &named;
 };
 
-//! The statistics a stats callback reads or narrows. Argument statistics are read-only: they have no mutable view
+//! The statistics a stats callback reads or narrows, or statistics a function builds itself with
+//! duckdb_v2_stats_create. Argument statistics are read-only: they have no mutable view. Created statistics own their
+//! BaseStatistics.
 class CV2Stats {
 public:
 	explicit CV2Stats(const BaseStatistics &stats) : stats(stats) {
@@ -145,16 +148,27 @@ public:
 		result.mutable_stats = &stats;
 		return result;
 	}
+	//! Heap-allocated owning statistics, freed by duckdb_v2_stats_destroy
+	static unique_ptr<CV2Stats> Owned(BaseStatistics &&stats) {
+		auto owned = make_uniq<BaseStatistics>(std::move(stats));
+		auto result = make_uniq<CV2Stats>(Writable(*owned));
+		result->owned = std::move(owned);
+		return result;
+	}
 
 	const BaseStatistics &GetStats() const {
 		return stats;
 	}
 	//! Throws when the statistics are read-only
 	BaseStatistics &GetMutableStats(const char *function_name);
+	bool IsOwned() const {
+		return owned != nullptr;
+	}
 
 private:
 	const BaseStatistics &stats;
 	optional_ptr<BaseStatistics> mutable_stats;
+	unique_ptr<BaseStatistics> owned;
 };
 
 inline auto Convert(duckdb_v2_stats_handle stats) -> CV2Stats * {
@@ -169,6 +183,112 @@ inline auto Convert(duckdb_v2_function_bind_info_handle info) -> CV2FunctionBind
 }
 inline auto Convert(CV2FunctionBindInfo *info) -> duckdb_v2_function_bind_info_handle {
 	return reinterpret_cast<duckdb_v2_function_bind_info_handle>(info);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Operators
+//----------------------------------------------------------------------------------------------------------------------
+//! The callbacks and user data of a custom streaming operator. Copied into what runs it, which shares the user data.
+class CV2OperatorInfo {
+public:
+	void *GetUserData() const {
+		return user_data ? user_data->GetData() : nullptr;
+	}
+
+public:
+	duckdb_v2_operator_init_global_callback_fn init_global_cb = nullptr;
+	duckdb_v2_operator_init_local_callback_fn init_local_cb = nullptr;
+	duckdb_v2_operator_execute_callback_fn execute_cb = nullptr;
+	duckdb_v2_operator_finalize_callback_fn finalize_cb = nullptr;
+	shared_ptr<CV2UserData> user_data;
+};
+
+//! An operator being built through the C API
+class CV2Operator {
+public:
+	explicit CV2Operator(DatabaseInstance &db) : db(db) {
+	}
+
+public:
+	//! The database it was created for: the only one whose objects can run it.
+	DatabaseInstance &db;
+	CV2OperatorInfo info;
+};
+
+inline auto Convert(duckdb_v2_operator_handle op) -> CV2Operator * {
+	return reinterpret_cast<CV2Operator *>(op);
+}
+inline auto Convert(CV2Operator *op) -> duckdb_v2_operator_handle {
+	return reinterpret_cast<duckdb_v2_operator_handle>(op);
+}
+
+class CV2OperatorInitGlobalInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+
+	duckdb_v2_opaque out_global_state = {};
+	optional_idx out_max_threads;
+};
+
+inline auto Convert(duckdb_v2_operator_init_global_info_handle info) -> CV2OperatorInitGlobalInfo * {
+	return reinterpret_cast<CV2OperatorInitGlobalInfo *>(info);
+}
+inline auto Convert(CV2OperatorInitGlobalInfo *info) -> duckdb_v2_operator_init_global_info_handle {
+	return reinterpret_cast<duckdb_v2_operator_init_global_info_handle>(info);
+}
+
+class CV2OperatorInitLocalInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+
+	duckdb_v2_opaque out_local_state = {};
+};
+
+inline auto Convert(duckdb_v2_operator_init_local_info_handle info) -> CV2OperatorInitLocalInfo * {
+	return reinterpret_cast<CV2OperatorInitLocalInfo *>(info);
+}
+inline auto Convert(CV2OperatorInitLocalInfo *info) -> duckdb_v2_operator_init_local_info_handle {
+	return reinterpret_cast<duckdb_v2_operator_init_local_info_handle>(info);
+}
+
+class CV2OperatorExecuteInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+	void *in_local_state = nullptr;
+	optional_ptr<DataChunk> input;
+	optional_ptr<DataChunk> output;
+
+	OperatorResultType out_result = OperatorResultType::NEED_MORE_INPUT;
+};
+
+inline auto Convert(duckdb_v2_operator_execute_info_handle info) -> CV2OperatorExecuteInfo * {
+	return reinterpret_cast<CV2OperatorExecuteInfo *>(info);
+}
+inline auto Convert(CV2OperatorExecuteInfo *info) -> duckdb_v2_operator_execute_info_handle {
+	return reinterpret_cast<duckdb_v2_operator_execute_info_handle>(info);
+}
+
+class CV2OperatorFinalizeInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+	void *in_local_state = nullptr;
+	optional_ptr<DataChunk> output;
+
+	bool out_have_more_output = false;
+};
+
+inline auto Convert(duckdb_v2_operator_finalize_info_handle info) -> CV2OperatorFinalizeInfo * {
+	return reinterpret_cast<CV2OperatorFinalizeInfo *>(info);
+}
+inline auto Convert(CV2OperatorFinalizeInfo *info) -> duckdb_v2_operator_finalize_info_handle {
+	return reinterpret_cast<duckdb_v2_operator_finalize_info_handle>(info);
 }
 
 } // namespace duckdb::capiv2

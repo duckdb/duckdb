@@ -13,11 +13,12 @@ FROM range(1000);
 statement ok
 ANALYZE current_domain_values;
 
-# Range filters use the generic multiplicity-aware row-survival domain.
+# The scan estimates 200 surviving rows. Its later inclusive [0, 100] range
+# bound caps the single-key group estimate at 101 values.
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k < 100 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~200 rows.*SEQ_SCAN.*Filters: k < 100.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~101 rows.*SEQ_SCAN.*Filters: k < 100.*
 
 query I rowsort
 SELECT k FROM current_domain_values WHERE k < 5 GROUP BY k;
@@ -33,37 +34,38 @@ SELECT k FROM current_domain_values WHERE k < 5 GROUP BY k;
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k IN (2, 4, 4, 8) GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~4 rows.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~4 rows.*
 
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k = 2 OR k = 8 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~2 rows.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~2 rows.*
 
 # A supported equality remains the tightest bound in a conjunction.
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k = 10 AND k < 20 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*SEQ_SCAN.*Filters: k = 10.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~1 row.*SEQ_SCAN.*Filters: k = 10.*
 
 # LIMIT, OFFSET and LIMIT PERCENT all reduce the current domain.
 query II
 EXPLAIN SELECT k, count(*) FROM (SELECT k FROM current_domain_values LIMIT 10 OFFSET 999) limited GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~1 row.*
 
 query II
 EXPLAIN SELECT k, count(*) FROM (SELECT k FROM current_domain_values LIMIT 10 PERCENT) limited GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~100 rows.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~100 rows.*
 
 # Repeated values use multiplicity-aware row survival below a LIMIT.
+# Preserve its fractional estimate until publication (approximately 64.56 with NDV 98).
 query II
 EXPLAIN SELECT repeated, count(*)
 FROM (SELECT repeated FROM current_domain_values LIMIT 100) limited
 GROUP BY repeated;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~65 rows.*(STREAMING_)?LIMIT.*Limit: 100.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~64 rows.*(STREAMING_)?LIMIT.*Limit: 100.*
 
 # Direct evidence follows its column through a window and projection.
 query II
@@ -71,7 +73,7 @@ EXPLAIN SELECT k, count(*), max(rn)
 FROM (SELECT k, row_number() OVER () rn FROM current_domain_values WHERE k = 20) windowed
 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*STREAMING_WINDOW.*SEQ_SCAN.*Filters: k = 20.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~1 row.*STREAMING_WINDOW.*SEQ_SCAN.*Filters: k = 20.*
 
 statement ok
 CREATE TABLE current_domain_union_left AS SELECT range::INTEGER k FROM range(10);
@@ -95,7 +97,7 @@ FROM (
 ) unioned
 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~20 rows.*
+physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY[^~]*~20 rows.*
 
 # Volatile zero-argument expressions are not constant singleton domains.
 statement ok
@@ -138,7 +140,7 @@ FROM (
 ----
 100
 
-# Recursive CTE outputs use their fixpoint fallback cardinality.
+# The fixpoint fallback uses the unrounded term estimate: 1 + 1000 * 0.2.
 query II
 EXPLAIN WITH RECURSIVE vals(i) AS (
 	SELECT 1
@@ -147,7 +149,17 @@ EXPLAIN WITH RECURSIVE vals(i) AS (
 )
 SELECT i FROM vals;
 ----
-physical_plan	<REGEX>:(?s).*REC_CTE.*CTE Name: vals.*~1,001 rows.*REC_CTE_SCAN.*~1 row.*
+physical_plan	<REGEX>:(?s).*REC_CTE.*CTE Name: vals.*~201 rows.*REC_CTE_SCAN.*~1 row.*
+
+query I
+WITH RECURSIVE vals(i) AS (
+	SELECT 1
+	UNION ALL
+	SELECT i + 1 FROM vals WHERE i < 10
+)
+SELECT sum(i) FROM vals;
+----
+55
 
 # Join terms in a recursive CTE retain the same fallback and output layout.
 query II
@@ -158,4 +170,49 @@ EXPLAIN WITH RECURSIVE vals(i) AS (
 )
 SELECT i FROM vals;
 ----
-physical_plan	<REGEX>:(?s).*REC_CTE.*CTE Name: vals.*~1,001 rows.*CROSS_PRODUCT.*REC_CTE_SCAN.*~1 row.*
+physical_plan	<REGEX>:(?s).*REC_CTE.*CTE Name: vals.*~201 rows.*CROSS_PRODUCT.*REC_CTE_SCAN.*~1 row.*
+
+query I
+WITH RECURSIVE vals(i) AS (
+	SELECT 1
+	UNION ALL
+	SELECT i + 1 FROM vals, (VALUES (1)) extra(j) WHERE i < 10
+)
+SELECT sum(i) FROM vals;
+----
+55
+
+# Partial ranges retain the default selectivity, including combined endpoints.
+query II
+EXPLAIN SELECT repeated FROM current_domain_values WHERE 90 <= k AND k < 100;
+----
+physical_plan	<REGEX>:(?s).*SEQ_SCAN.*Filters:.*k >= 90.*k < 100.*~200 rows.*
+
+query I
+SELECT sum(repeated) FROM current_domain_values WHERE 90 <= k AND k < 100;
+----
+945
+
+query II
+EXPLAIN SELECT repeated FROM current_domain_values WHERE k <= 0;
+----
+physical_plan	<REGEX>:(?s).*SEQ_SCAN.*Filters: k <= 0.*~200 rows.*
+
+# A filter above a materialized CTE uses the CTE's domain for equality selectivity.
+statement ok
+SET disabled_optimizers='cte_filter_pusher';
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT k FROM current_domain_values)
+SELECT * FROM c WHERE k = 10;
+----
+physical_plan	<REGEX>:(?s).*FILTER.*~1 row.*CTE_SCAN.*
+
+query I
+WITH c AS MATERIALIZED (SELECT k FROM current_domain_values)
+SELECT * FROM c WHERE k = 10;
+----
+10
+
+statement ok
+RESET disabled_optimizers;

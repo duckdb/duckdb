@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_multimap.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/optimizer/join_order/relation_index.hpp"
@@ -23,6 +24,7 @@ public:
 public:
 	string ToString() const;
 	bool Empty() const;
+	bool Contains(RelationIndex relation) const;
 	static bool IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub);
 	static bool Intersects(const JoinRelationSet &left, const JoinRelationSet &right);
 
@@ -31,19 +33,14 @@ public:
 	idx_t count;
 	//! Bitmask over the relation indexes for fast subset/intersection checks
 	vector<idx_t> bitmask;
+
+private:
+	//! First word containing a relation (zero for empty sets)
+	idx_t first_word = 0;
 };
 
-//! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to
-//! them
+//! Owns and interns relation sets so equal sets always refer to the same object.
 class JoinRelationSetManager {
-public:
-	//! Contains a node with a JoinRelationSet and child relations
-	// FIXME: this structure is inefficient, could use a bitmap for lookup instead (todo: profile)
-	struct JoinRelationTreeNode {
-		unique_ptr<JoinRelationSet> relation;
-		unordered_map<RelationIndex, unique_ptr<JoinRelationTreeNode>> children;
-	};
-
 public:
 	//! Get an empty JoinRelationSet
 	JoinRelationSet &GetEmptyJoinRelationSet();
@@ -61,7 +58,8 @@ public:
 	void Print();
 
 private:
-	JoinRelationTreeNode root;
+	//! Hash collisions retain distinct sets; entries own the stable relation-set objects.
+	unordered_multimap<hash_t, unique_ptr<JoinRelationSet>> relation_sets;
 	optional_ptr<JoinRelationSet> empty_relation_set;
 };
 

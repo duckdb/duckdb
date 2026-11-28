@@ -1,6 +1,6 @@
 include_directories(../third_party/catch)
 include_directories(../third_party/sqlite/include)
-include_directories(include)
+include_directories(BEFORE include)
 include_directories(extension/debug_fs/include)
 
 if(${DISABLE_THREADS})
@@ -59,9 +59,9 @@ if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(mbedtls)
   add_subdirectory(encryption)
 endif()
-add_subdirectory(extension)
-add_subdirectory(helpers)
-add_subdirectory(sqlite)
+if(NOT EXTENSION_TESTS_ONLY)
+  add_subdirectory(extension)
+endif()
 
 if(NOT WIN32 AND NOT SUN)
   if(${ENABLE_UNITTEST_CPP_TESTS})
@@ -69,64 +69,97 @@ if(NOT WIN32 AND NOT SUN)
   endif()
 endif()
 
-add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
-
-# Enable best-effort stack traces for fatal signals in the test runner without
-# enabling stack traces for every DuckDB exception.
-if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED) OR APPLE)
-  target_compile_definitions(unittest PRIVATE DUCKDB_UNITTEST_CRASH_STACKTRACE)
+if(TARGET shell)
+  set_target_properties(shell PROPERTIES ENABLE_EXPORTS ON)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED)
-  set_target_properties(unittest PROPERTIES ENABLE_EXPORTS ON)
+if(${ENABLE_UNITTEST_CPP_TESTS})
+  duckdb_add_test_bundle(duckdb_tests SOURCES ${UNITTEST_OBJECT_FILES})
+  target_compile_definitions(duckdb_tests_loadable_extension
+                             PRIVATE DUCKDB_TEST_BUNDLE_DEBUG_FS)
+  if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED) OR APPLE)
+    target_compile_definitions(duckdb_tests_loadable_extension
+                               PRIVATE DUCKDB_UNITTEST_CRASH_STACKTRACE)
+  endif()
+  target_include_directories(
+    duckdb_tests_loadable_extension
+    PRIVATE "${PROJECT_SOURCE_DIR}/test/extension/debug_fs/include")
+  target_link_libraries(duckdb_tests_loadable_extension duckdb_fsst
+                        duckdb_mbedtls)
+  if(WIN32)
+    link_extension_libraries(duckdb_tests_loadable_extension "")
+  endif()
 endif()
 
-set(RUN_WRAPPER_UNITTEST_NAME "unittest")
-if(WIN32)
-  set(RUN_WRAPPER_UNITTEST_NAME "unittest.exe")
-  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/run.py" @ONLY)
-  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.bat.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/run.bat" @ONLY)
-else()
-  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/run" @ONLY)
-  file(
-    CHMOD
-    "${CMAKE_CURRENT_BINARY_DIR}/run"
-    PERMISSIONS
-    OWNER_READ
-    OWNER_WRITE
-    OWNER_EXECUTE
-    GROUP_READ
-    GROUP_EXECUTE
-    WORLD_READ
-    WORLD_EXECUTE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux"
+   AND NOT CMAKE_CROSSCOMPILING
+   AND CMAKE_SIZEOF_VOID_P EQUAL 8
+   AND ENABLE_UNITTEST_CPP_TESTS
+   AND TARGET duckdb)
+  # Exercise real allocator failures without installing hooks in the library.
+  add_executable(
+    block_allocator_fault_injection api/block_allocator_fault_injection.cpp
+                                    ../src/storage/block_allocator.cpp)
+  target_link_libraries(block_allocator_fault_injection duckdb pthread)
+  target_link_options(
+    block_allocator_fault_injection
+    PRIVATE
+    -Wl,--wrap=malloc
+    -Wl,--wrap=_Znwm
+    -Wl,--wrap=_ZdlPv
+    -Wl,--wrap=_ZdlPvm
+    -Wl,--wrap=mmap
+    -Wl,--wrap=mprotect
+    -Wl,--wrap=munmap)
+  set_target_properties(block_allocator_fault_injection
+                        PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
+  target_sources(duckdb_tests_loadable_extension
+                 PRIVATE api/test_block_allocator_fault_injection.cpp)
+  add_dependencies(duckdb_tests_loadable_extension
+                   block_allocator_fault_injection)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
+if(TARGET shell)
+  set(RUN_WRAPPER_DUCKDB_NAME "duckdb")
+  set(RUN_WRAPPER_TEST_ROOTS "")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+      list(APPEND RUN_WRAPPER_TEST_ROOTS
+           "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_TEST_PATH}")
+    endif()
+  endforeach()
+  set(RUN_WRAPPER_DEFAULT_ARGS "")
+  if(WIN32)
+    set(RUN_WRAPPER_DUCKDB_NAME "duckdb.exe")
+    configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/run.py" @ONLY)
+    configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.bat.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/run.bat" @ONLY)
+    set(RUN_WRAPPER_DEFAULT_ARGS "--workers;1")
+    configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/unittest.py" @ONLY)
+    configure_file(
+      "${PROJECT_SOURCE_DIR}/scripts/ci/test_unittest_wrapper.bat.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/unittest.bat" @ONLY)
+  else()
+    configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/run" @ONLY)
+    set(RUN_WRAPPER_DEFAULT_ARGS "--workers;1")
+    configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/unittest" @ONLY)
+    foreach(RUN_WRAPPER_NAME run unittest)
+      file(
+        CHMOD
+        "${CMAKE_CURRENT_BINARY_DIR}/${RUN_WRAPPER_NAME}"
+        PERMISSIONS
+        OWNER_READ
+        OWNER_WRITE
+        OWNER_EXECUTE
+        GROUP_READ
+        GROUP_EXECUTE
+        WORLD_READ
+        WORLD_EXECUTE)
+    endforeach()
+  endif()
 endif()
-
-if(TARGET duckdb AND NOT WIN32)
-  # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
-  # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(
-    unittest
-    duckdb
-    test_helpers
-    duckdb_re2
-    duckdb_mbedtls
-    duckdb_fsst
-    duckdb_cpp_api)
-else()
-  # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
-  target_link_libraries(unittest duckdb_static test_helpers duckdb_cpp_api)
-  link_extension_libraries(unittest "")
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  target_link_libraries(unittest atomic)
-endif()
-
-duckdb_codesign_for_debugging(unittest)

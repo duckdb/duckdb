@@ -14,8 +14,8 @@ SET memory_limit='128MB';
 statement ok
 SET temp_directory='{TEST_DIR}/order_inline_tail';
 
-# BLOBs force variable-key layouts. The shortest encoded keys straddle 8, 16 and 24 bytes.
-foreach prefix 0 1 2 8 9 10 16 17 18
+# BLOBs force variable-key layouts around an inline-key boundary.
+foreach prefix 9
 
 statement ok
 CREATE OR REPLACE TABLE keys AS

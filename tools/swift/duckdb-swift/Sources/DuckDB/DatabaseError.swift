@@ -26,6 +26,8 @@
 public enum DatabaseError: Error {
   /// Provided decimal overflows the internal database representaion
   case decimalUnrepresentable
+  /// Decimal value read from the database could not be converted to the requested type without losing digits
+  case decimalNotConvertible(reason: String?)
   /// Supplied item could not be appended
   case appenderFailedToAppendItem(reason: String?)
   /// Row could not be ended with the appender in its current state

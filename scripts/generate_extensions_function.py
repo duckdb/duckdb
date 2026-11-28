@@ -4,6 +4,8 @@ import re
 import argparse
 import glob
 import sys
+import subprocess
+import shlex
 from typing import Set, Tuple, cast
 import pathlib
 from typing import NamedTuple
@@ -43,7 +45,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.csv")
-DUCKDB_PATH = os.path.join(*args.shell.split('/'))
+DUCKDB_PATH = os.path.normpath(args.shell)
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
 EXTENSION_DEPENDENCIES = {
@@ -160,7 +162,8 @@ class Function(NamedTuple):
 class FunctionOverload(NamedTuple):
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
 
@@ -168,11 +171,12 @@ class ExtensionFunctionOverload(NamedTuple):
     extension: str
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
     @staticmethod
-    def create_map(input: List[Tuple[str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
+    def create_map(input: List[Tuple[str, str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
         output: Dict[Function, List["ExtensionFunctionOverload"]] = {}
         for x in input:
             function = Function(x[0], catalog_type_from_type(x[2]))
@@ -180,8 +184,11 @@ class ExtensionFunctionOverload(NamedTuple):
             signature = x[3]
             splits = signature.split('>')
             return_type = LogicalType(splits[1])
-            parameters = [LogicalType(param) for param in splits[0][1:-1].split(',')]
-            extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
+            parameter_types = tuple(LogicalType(param) for param in splits[0][1:-1].split(','))
+            parameter_names = tuple(x[4][1:-1].split(",")) if x[4][1:-1] else ()
+            extension_function = ExtensionFunctionOverload(
+                x[1], function.name, function.type, parameter_types, parameter_names, return_type
+            )
             if function not in output:
                 output[function] = []
             output[function].append(extension_function)
@@ -273,8 +280,8 @@ class ParsedEntries:
         self.types = {}
         self.copy_functions = {}
 
-        file = open(file_path, 'r')
-        file_blob = file.read()
+        with open(file_path, 'r') as file:
+            file_blob = file.read()
 
         # Get the extension functions
         ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
@@ -285,7 +292,7 @@ class ParsedEntries:
         # Get the extension function overloads
         ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
         res = parse_records(ext_function_overloads_file_blob)
-        res = [(x[0], x[1], x[2], x[3]) for x in res]
+        res = [(x[0], x[1], x[2], x[3], x[4] if len(x) > 4 else "[]") for x in res]
         self.function_overloads = ExtensionFunctionOverload.create_map(res)
 
         # Get the extension settings
@@ -373,11 +380,26 @@ def get_query(sql_query, load_query) -> list:
     import csv
     import io
 
-    query = f'{DUCKDB_PATH} -unsigned -csv -c "{load_query}{sql_query}" '
-    query_result = os.popen(query).read()
-    f = io.StringIO(query_result)
+    command = [
+        DUCKDB_PATH,
+        '-unsigned',
+        '-no-builtin-extensions',
+        '-no-init',
+        '-csv',
+        '-c',
+        load_query + sql_query,
+    ]
+    query_result = subprocess.run(command, capture_output=True, text=True)
+    if query_result.returncode != 0:
+        raise RuntimeError(
+            f"Extension metadata query failed (exit {query_result.returncode}): {shlex.join(command)}\n"
+            f"stdout:\n{query_result.stdout}\nstderr:\n{query_result.stderr}"
+        )
+    f = io.StringIO(query_result.stdout)
     reader = csv.reader(f)
-    header = next(reader)
+    header = next(reader, None)
+    if header is None:
+        raise RuntimeError(f"Extension metadata query returned no CSV header: {shlex.join(command)}")
     result = []
     for line in reader:
         result_obj = {}
@@ -409,9 +431,10 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             function_name,
             function_type,
             parameter_types,
+            parameters,
             return_type
         from duckdb_functions()
-        where function_type <> 'window'
+        where function_type <> 'window' and schema_name NOT IN ('collations', 'encodings')
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
@@ -423,12 +446,18 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         function_name = func["function_name"].lower()
         function_type = func["function_type"]
         parameter_types = func["parameter_types"]
+        parameter_names = func["parameters"]
         return_type = func["return_type"]
-        function_parameters = transform_parameters(parameter_types)
+        function_parameter_types = transform_parameters(parameter_types)
+        function_parameter_names = tuple(x for x in parameter_names.lstrip('[').rstrip(']').split(', ') if len(x) > 0)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
         function_overload = FunctionOverload(
-            function_name, catalog_type_from_string(function_type), function_parameters, function_return
+            function_name,
+            catalog_type_from_string(function_type),
+            function_parameter_types,
+            function_parameter_names,
+            function_return,
         )
         if function not in functions:
             functions.add(function)
@@ -661,7 +690,12 @@ Please double check if '{args.extension_repository}' is the right location to lo
             for overload in function_overloads:
                 extension_overloads.append(
                     ExtensionFunctionOverload(
-                        extension_name, overload.name, overload.type, overload.parameters, overload.return_type
+                        extension_name,
+                        overload.name,
+                        overload.type,
+                        overload.parameter_types,
+                        overload.parameter_names,
+                        overload.return_type,
                     )
                 )
             result[function] = extension_overloads
@@ -761,9 +795,14 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
                 signature = "["
-                signature += ",".join([parameter.type for parameter in overload.parameters])
-                signature += "]>" + overload.return_type.type
+                signature += ",".join([parameter.type for parameter in overload.parameter_types])
+                signature += f']>{overload.return_type.type}", "'
                 result += signature
+                # add parameter names
+                param_names = "["
+                param_names += ",".join(overload.parameter_names)
+                param_names += "]"
+                result += param_names
                 result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
         return result
@@ -878,6 +917,7 @@ struct ExtensionFunctionOverloadEntry {
     char extension[48];
     CatalogType type;
     char signature[96];
+    char parameters[96];
 };
 """
 
@@ -1006,6 +1046,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "encodings",
     "excel",
     "fts",
+    "glue",
     "httpfs",
     "iceberg",
     "icu",
@@ -1078,7 +1119,8 @@ def main():
 
     for extension_name in extension_names:
         # For every extension, add the functions/settings added by the extension
-        extension_data.add_extension(extension_name)
+        if extension_name not in extension_data.added_extensions:
+            extension_data.add_extension(extension_name)
 
     # Add hardcoded extension entries (
     for key, value in HARDCODED_EXTENSION_FUNCTIONS.items():

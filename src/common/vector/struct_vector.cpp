@@ -172,6 +172,22 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const Logical
 	return result;
 }
 
+buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantReferenceInternal(const LogicalType &type, idx_t index,
+                                                                       count_t count) const {
+	if (!validity.RowIsValid(index)) {
+		// the children of a NULL constant struct are NULL as well
+		return VectorBuffer::ConstantReferenceInternal(type, index, count);
+	}
+	vector<Vector> result_children;
+	for (auto &child : children) {
+		result_children.emplace_back(child.GetType(), ConstantReference(child, index, count));
+	}
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(1ULL));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
+	return result;
+}
+
 void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
@@ -179,7 +195,7 @@ void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = nullptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

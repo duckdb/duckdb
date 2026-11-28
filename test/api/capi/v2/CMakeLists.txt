@@ -11,6 +11,7 @@ add_library_unity(
   test_capi_v2_column_data_collection.cpp
   test_capi_v2_common_type.cpp
   test_capi_v2_copy_function.cpp
+  test_capi_v2_crypto.cpp
   test_capi_v2_custom_option.cpp
   test_capi_v2_custom_type.cpp
   test_capi_v2_data_chunk.cpp
@@ -24,6 +25,7 @@ add_library_unity(
   test_capi_v2_query_metrics.cpp
   test_capi_v2_logging.cpp
   test_capi_v2_logical_type.cpp
+  test_capi_v2_operator.cpp
   test_capi_v2_option.cpp
   test_capi_v2_pragma_function.cpp
   test_capi_v2_prepared_statement.cpp
@@ -33,7 +35,10 @@ add_library_unity(
   test_capi_v2_replacement_scan.cpp
   test_capi_v2_result.cpp
   test_capi_v2_aggregate_function.cpp
+  test_capi_v2_data_source.cpp
   test_capi_v2_scalar_function.cpp
+  test_capi_v2_secret.cpp
+  test_capi_v2_object_cache.cpp
   test_capi_v2_statement_collection.cpp
   test_capi_v2_statement.cpp
   test_capi_v2_stats.cpp

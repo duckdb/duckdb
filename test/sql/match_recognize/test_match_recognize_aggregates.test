@@ -8,7 +8,7 @@
 # down.
 
 statement ok
-pragma threads=1;
+SET threads=1;
 
 # an aggregate in a condition and a union variable both travel with the matcher's bind data, so
 # every plan below is also taken through the serializer and back
@@ -367,6 +367,16 @@ SELECT rn, cls FROM (VALUES (1,5),(2,5),(3,5),(4,-1),(5,9)) t(rn,v) MATCH_RECOGN
 2	B
 3	B
 
+query IT
+SELECT rn, cls FROM (VALUES (1,1),(2,2),(3,3),(4,4),(5,10)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B) DEFINE A AS true, B AS reservoir_quantile(A.v) = 1
+) ORDER BY rn
+----
+1	A
+2	A
+3	B
+
 # ---------------------------------------------------------------- everything at once
 
 query IT
@@ -426,3 +436,15 @@ SELECT 1 FROM (VALUES (1,5),(2,7)) t(rn,v) MATCH_RECOGNIZE(
 )
 ----
 <REGEX>:Binder Error:.*DISTINCT, FILTER and ORDER BY are not supported.*
+
+# a histogram is folded like any other aggregate, and rebuilt when backtracking gives rows of A back
+query II
+SELECT rn, cls FROM (VALUES (1,1),(2,2),(3,1),(4,1),(5,3)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B) DEFINE A AS cardinality(histogram(A.v)) <= 2, B AS v = 1 AND histogram(A.v)[1] = 2
+) ORDER BY rn
+----
+1	A
+2	A
+3	A
+4	B

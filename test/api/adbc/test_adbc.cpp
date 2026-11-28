@@ -2402,6 +2402,14 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "temp"));
 		string expected = R"([
 		    {
+		        'db_schema_name': collations,
+		        'db_schema_tables': []
+		    },
+		    {
+		        'db_schema_name': encodings,
+		        'db_schema_tables': []
+		    },
+		    {
 		        'db_schema_name': information_schema,
 		        'db_schema_tables': []
 		    },
@@ -6608,6 +6616,22 @@ static idx_t ReadBatches(ArrowArrayStream &stream, idx_t limit) {
 	return count;
 }
 
+//! Read batches from `stream` until at least `minimum_count` rows have been read.
+static idx_t ReadRows(ArrowArrayStream &stream, idx_t minimum_count) {
+	idx_t count = 0;
+	while (count < minimum_count) {
+		ArrowArray array;
+		std::memset(&array, 0, sizeof(array));
+		REQUIRE(stream.get_next(&stream, &array) == 0);
+		if (!array.release) {
+			break;
+		}
+		count += NumericCast<idx_t>(array.length);
+		array.release(&array);
+	}
+	return count;
+}
+
 TEST_CASE("ADBC - Statement progress while a stream is consumed", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -6735,14 +6759,15 @@ TEST_CASE("ADBC - Statement progress rises as a query runs", "[adbc]") {
 
 	// The query advances as the stream is consumed, so reading more of it has to move the reading: a progress option
 	// that answered with a constant would pass every other check in this file.
-	REQUIRE(ReadBatches(stream, 20) == 20);
+	const idx_t progress_rows = 20 * DEFAULT_STANDARD_VECTOR_SIZE;
+	REQUIRE(ReadRows(stream, progress_rows) >= progress_rows);
 	auto early = StatementProgress(statement, ADBC_STATEMENT_OPTION_PROGRESS, db.adbc_error);
 	REQUIRE(early > 0);
 	// Read on until the reading moves. Batches already buffered are served without running the query further, so how
 	// much has to be read before it moves depends on the buffer, but read enough of the table and it must.
 	double later = early;
 	for (idx_t attempt = 0; attempt < 20 && later == early; attempt++) {
-		REQUIRE(ReadBatches(stream, 20) == 20);
+		REQUIRE(ReadRows(stream, progress_rows) >= progress_rows);
 		later = StatementProgress(statement, ADBC_STATEMENT_OPTION_PROGRESS, db.adbc_error);
 	}
 	REQUIRE(later > early);

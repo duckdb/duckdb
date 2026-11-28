@@ -1,0 +1,15 @@
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index d82f316..c745fde 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -1110,7 +1110,9 @@ unique_ptr<MultiFileList> DeltaMultiFileList::ComplexFilterPushdown(ClientContex
+ 	}
+ 
+ 	vector<FilterPushdownResult> pushdown_results;
+-	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
++	TableFilterSet filter_set;
++	combiner.GenerateTableScanFilters(filter_set, info.column_indexes, pushdown_results);
++	filter_set.Finalize();
+ 	if (!filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}

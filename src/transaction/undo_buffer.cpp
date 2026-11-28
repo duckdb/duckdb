@@ -21,8 +21,8 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
-    : transaction(transaction_p), allocator(DatabaseInstance::GetDatabase(context_p).GetBufferManager(), true) {
+UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, DatabaseInstance &db)
+    : transaction(transaction_p), allocator(db.GetBufferManager(), true) {
 }
 
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
@@ -104,7 +104,8 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	// we need to search for any index creation entries
+	// statements of connections that share the transaction can add entries concurrently
+	lock_guard<mutex> guard(allocator.lock);
 	return allocator.head.get();
 }
 
@@ -130,9 +131,6 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			auto info = reinterpret_cast<DeleteInfo *>(data);
 			if (info->is_consecutive) {
 				properties.estimated_size += sizeof(row_t) * info->count;
-			}
-			if (info->table->GetStorage().HasIndexes()) {
-				properties.has_index_deletes = true;
 			}
 			properties.has_deletes = true;
 			break;

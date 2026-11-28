@@ -1,6 +1,8 @@
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
@@ -149,7 +151,8 @@ public:
 
 public:
 	//! The registry is guarded by CopyToFileGlobalState::lock.
-	PendingFileState ReserveFile(string output_path, optional_ptr<const vector<Value>> partition_values);
+	PendingFileState ReserveFile(Context &context, string output_path,
+	                             optional_ptr<const vector<Value>> partition_values);
 	void PublishCreatedPath(PendingFileState &pending_file_state, string output_path);
 
 	idx_t WrittenFileCount() const {
@@ -1778,8 +1781,8 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 //===--------------------------------------------------------------------===//
 // Copy File Lifecycle
 //===--------------------------------------------------------------------===//
-static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       unique_ptr<GlobalFileState> state) {
+static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize,
+                                       const FunctionData &bind_data, unique_ptr<GlobalFileState> state) {
 	if (!finalize) {
 		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
 	}
@@ -1791,7 +1794,7 @@ static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		WorkOnTaskOrYield();
 	}
@@ -1805,7 +1808,7 @@ void CopyFileLifecycleExecutor::WaitAll(CopyFileLifecycleWaitMode mode) {
 		return;
 	}
 	while (pending_tasks.load(std::memory_order_acquire) > 0) {
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		WorkOnTaskOrYield();
 	}
 	ThrowError();
@@ -1854,7 +1857,7 @@ void CopyFileLifecycleExecutor::WorkOnTaskOrYield() {
 void CopyFileLifecycleExecutor::WaitForTaskSlot(CopyFileLifecycleWaitMode mode) {
 	while (pending_tasks >= max_pending_tasks) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		if (async_threads == 0 || mode == CopyFileLifecycleWaitMode::DRAIN) {
 			WorkOnTaskOrYield();
@@ -1927,7 +1930,7 @@ bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	return created;
 }
 
-PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
+PendingFileState CopyOutputFileRegistry::ReserveFile(Context &context, string output_path,
                                                      optional_ptr<const vector<Value>> partition_values) {
 	PendingFileState result;
 	result.output_path = std::move(output_path);
@@ -1944,7 +1947,7 @@ PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
 			const auto &partition_col_name = op.names[op.partition_columns[i]];
 			const auto &partition_value = (*partition_values)[i];
 			partition_keys.emplace_back(partition_col_name);
-			partition_values_as_varchar.push_back(partition_value.DefaultCastAs(LogicalType::VARCHAR));
+			partition_values_as_varchar.push_back(partition_value.CastAs(context, LogicalType::VARCHAR));
 		}
 		result.written_file_info->partition_keys =
 		    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(partition_keys),
@@ -2158,7 +2161,8 @@ public:
 
 class SortStrategyInput : public PartitionedCopyInput {
 public:
-	SortStrategyInput(const PartitionedCopy &partitioned_copy, unique_ptr<const SortStrategy> strategy);
+	SortStrategyInput(ClientContext &context, const PartitionedCopy &partitioned_copy,
+	                  unique_ptr<const SortStrategy> strategy);
 
 public:
 	unique_ptr<PartitionedCopyInputGlobalState> GetGlobalState(ClientContext &context) const override;
@@ -2181,6 +2185,8 @@ public:
 public:
 	const PartitionedCopy &partitioned_copy;
 	const unique_ptr<const SortStrategy> strategy;
+	//! DISTINCT FROM comparison of the partition columns
+	unique_ptr<Expression> partition_distinct_from;
 };
 
 //! A hash bin of a SortStrategyInput (or all bins of an overflow sort): sorted, materialized and masked for partition
@@ -2258,7 +2264,7 @@ public:
 
 private:
 	void TakeMaterializedBins(ExecutionContext &context, OperatorSourceInput &source_input);
-	void Mask(idx_t begin_block, idx_t end_block);
+	void Mask(Context &context, idx_t begin_block, idx_t end_block);
 	void PartitionBoundaries(idx_t row_begin, idx_t chunk_rows, vector<idx_t> &boundaries) const;
 	//! The chunk holding a row
 	idx_t ChunkOf(idx_t row) const;
@@ -2280,9 +2286,17 @@ private:
 	ValidityMask partition_mask;
 };
 
-SortStrategyInput::SortStrategyInput(const PartitionedCopy &partitioned_copy_p,
+SortStrategyInput::SortStrategyInput(ClientContext &context, const PartitionedCopy &partitioned_copy_p,
                                      unique_ptr<const SortStrategy> strategy_p)
     : partitioned_copy(partitioned_copy_p), strategy(std::move(strategy_p)) {
+	auto &op = partitioned_copy.op;
+	vector<LogicalType> key_types;
+	for (auto partition_column : op.partition_columns) {
+		key_types.push_back(op.expected_types[partition_column]);
+	}
+	auto key_type = WindowCollectionChunkScanner::PrefixStructType(key_types, key_types.size());
+	partition_distinct_from = BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM,
+	                                                                     key_type, 0, key_type, 1);
 }
 
 unique_ptr<PartitionedCopyInputGlobalState> SortStrategyInput::GetGlobalState(ClientContext &context) const {
@@ -2411,7 +2425,7 @@ void SortedBinGroup::ExecutePreparation(ExecutionContext &context, InterruptStat
 		break;
 	}
 	case MASK:
-		Mask(begin_block, end_block);
+		Mask(context.client.GetContext(), begin_block, end_block);
 		break;
 	default:
 		throw InternalException("Invalid SortedBinGroup preparation step");
@@ -2463,7 +2477,7 @@ idx_t SortedBinGroup::ChunkOf(idx_t row) const {
 	return NumericCast<idx_t>(entry - chunk_row_offsets.begin()) - 1;
 }
 
-void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
+void SortedBinGroup::Mask(Context &context, idx_t begin_block, idx_t end_block) {
 	D_ASSERT(collection);
 	D_ASSERT(partition_mask.IsMaskSet());
 
@@ -2492,7 +2506,8 @@ void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
 	auto &scan_cols = input.strategy->sort_ids;
 	const auto chunk_begin = ChunkOf(owned_begin);
 	const auto chunk_end = ChunkOf(owned_end - 1) + 1;
-	WindowDeltaScanner(*collection, chunk_begin, chunk_end, scan_cols, key_count,
+	WindowDeltaScanner(context, *input.partition_distinct_from, *collection, chunk_begin, chunk_end, scan_cols,
+	                   key_count,
 	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
 	                       const SelectionVector &distinct, const SelectionVector &) {
 		                   for (idx_t i = 0; i < ndistinct; i++) {
@@ -2572,6 +2587,7 @@ public:
 	unique_ptr<IntegerPartitionedTupleData> partitions;
 	PartitionedTupleDataAppendState append_state;
 	//! The key hashes feeding the partition count estimate
+	unique_ptr<ChunkHasher> key_hasher;
 	DataChunk hashes;
 	optional_ptr<ParallelHyperLogLogLocalState> hll;
 };
@@ -2798,7 +2814,7 @@ unique_ptr<SortStrategyInput> IntegerPartitionInput::CreateOverflowInput(ClientC
 	OperatorPartitionInfo unpartitioned_info;
 	auto strategy = SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, no_stats,
 	                                      unpartitioned_info, count);
-	return make_uniq<SortStrategyInput>(partitioned_copy, std::move(strategy));
+	return make_uniq<SortStrategyInput>(context, partitioned_copy, std::move(strategy));
 }
 
 unique_ptr<PartitionedCopyInputGlobalState> IntegerPartitionInput::GetGlobalState(ClientContext &context) const {
@@ -2813,6 +2829,8 @@ IntegerPartitionInput::GetLocalState(ExecutionContext &context, PartitionedCopyI
 	auto result = make_uniq<IntegerPartitionInputLocalState>();
 	result->partitions = CreatePartitions(context.client);
 	result->partitions->InitializeAppendState(result->append_state);
+	result->key_hasher =
+	    make_uniq<ChunkHasher>(context.client, partitioned_copy.op.expected_types, vector<idx_t> {key_col});
 	result->hashes.Initialize(Allocator::Get(context.client), {LogicalType::HASH});
 	result->hll = hll;
 	return std::move(result);
@@ -2826,7 +2844,7 @@ void IntegerPartitionInput::Sink(ExecutionContext &context, DataChunk &chunk, Pa
 	// the flush heuristic estimates the number of partitions from key hashes
 	auto &hashes = lstate.hashes;
 	hashes.Reset();
-	VectorOperations::Hash(chunk.data[key_col], hashes.data[0], chunk.size());
+	lstate.key_hasher->Hash(chunk, hashes.data[0]);
 	hashes.CheckCardinality(chunk.size());
 	lstate.hll->Update(hashes.data[0]);
 }
@@ -3736,7 +3754,7 @@ unique_ptr<const PartitionedCopyInput> PartitionedCopy::ConstructInput() const {
 	auto strategy =
 	    SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, op.partition_stats,
 	                          unpartitioned_info, op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
-	return make_uniq<SortStrategyInput>(*this, std::move(strategy));
+	return make_uniq<SortStrategyInput>(context, *this, std::move(strategy));
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
@@ -3793,7 +3811,7 @@ void PartitionedCopy::NotifyFlushProgress() {
 template <class FUNC>
 bool PartitionedCopy::TryBlockOnFlush(ExecutionContext &execution_context, InterruptState &interrupt_state,
                                       idx_t observed_progress, FUNC &&can_continue) {
-	context.InterruptCheck();
+	context.FastInterruptCheck();
 	Flush(execution_context, interrupt_state);
 	if (!interrupt_state.CanCallback()) {
 		copy_gstate.lifecycle_executor.WorkOnTaskOrYield();
@@ -3933,7 +3951,7 @@ public:
 		                                   event->Cast<BasePipelineEvent>().pipeline);
 		InterruptState interrupt_state(shared_from_this());
 		while (partitioned_copy.flushing.load(std::memory_order_relaxed) || partitioned_copy.HasDelayedPartitions()) {
-			event->GetClientContext().InterruptCheck();
+			event->GetClientContext().FastInterruptCheck();
 			if (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
 				partitioned_copy.Flush(execution_context, interrupt_state);
 			} else {
@@ -4510,29 +4528,35 @@ void CopyToFileGlobalState::Initialize() {
 	initialized = true;
 }
 
-void CopyToFileGlobalState::PrepareOutputDirectory() {
+void PhysicalCopyToFile::PrepareOutputDirectory(ClientContext &context, const string &directory,
+                                                CopyOverwriteMode overwrite_mode,
+                                                CopyOutputLifecycle &output_lifecycle) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	if (!fs.IsRemoteFile(op.file_path)) {
-		if (fs.FileExists(op.file_path)) {
-			if (op.overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-				fs.RemoveFile(op.file_path);
+	if (!FileSystem::IsRemoteFile(directory)) {
+		if (fs.FileExists(directory)) {
+			if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
+				fs.RemoveFile(directory);
 			} else {
 				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
 				                  "OVERWRITE option to overwrite the file",
-				                  op.file_path);
+				                  directory);
 			}
 		}
 	}
 
-	if (!fs.DirectoryExists(op.file_path)) {
-		if (fs.CreateDirectoryExtended(op.file_path, {CreateDirectoryMode::SINGLE})) {
-			output_lifecycle.RegisterCreatedDirectory(op.file_path);
+	if (!fs.DirectoryExists(directory)) {
+		if (fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
+			output_lifecycle.RegisterCreatedDirectory(directory);
 		} else {
-			CheckDirectory(fs, op.file_path, op.overwrite_mode);
+			CheckDirectory(fs, directory, overwrite_mode);
 		}
 	} else {
-		CheckDirectory(fs, op.file_path, op.overwrite_mode);
+		CheckDirectory(fs, directory, overwrite_mode);
 	}
+}
+
+void CopyToFileGlobalState::PrepareOutputDirectory() {
+	PhysicalCopyToFile::PrepareOutputDirectory(context, op.file_path, op.overwrite_mode, output_lifecycle);
 }
 
 void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
@@ -4569,7 +4593,7 @@ PendingFileState CopyToFileGlobalState::PrepareFileStateLocked(string output_pat
 	if (output_path.empty()) {
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
 	}
-	auto result = output_files.ReserveFile(std::move(output_path), partition_values);
+	auto result = output_files.ReserveFile(context.GetContext(), std::move(output_path), partition_values);
 	output_files.PublishCreatedPath(result, result.output_path);
 	return result;
 }
@@ -4619,7 +4643,8 @@ CopyToFileGlobalState::CreatePartitionFileStateOpenLocked(FileStateHandle &file_
 		return PendingFileStateOpen();
 	}
 	PendingFileStateOpen result;
-	result.pending_file_state = output_files.ReserveFile(std::move(output_path), partition_values);
+	result.pending_file_state =
+	    output_files.ReserveFile(context.GetContext(), std::move(output_path), partition_values);
 	result.open_job = make_shared_ptr<FileStateOpenJob>();
 	file_state.open_job = result.open_job;
 	return result;
@@ -4827,7 +4852,7 @@ CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, Execu
 // PhysicalCopyToFile
 //===--------------------------------------------------------------------===//
 PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function_p,
-                                       unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
+                                       cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
@@ -4884,7 +4909,7 @@ void PhysicalCopyToFile::ReturnColumnTypes(DataChunk &chunk, const vector<Identi
 	}
 }
 
-void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
+void PhysicalCopyToFile::ReturnStatistics(Context &context, DataChunk &chunk, CopyToFileInfo &info) {
 	auto &file_stats = *info.file_stats;
 
 	// filename VARCHAR
@@ -4909,7 +4934,7 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 	vector<Value> extra_values;
 	for (auto &entry : file_stats.extra_info) {
 		extra_keys.emplace_back(entry.first);
-		extra_values.push_back(entry.second.DefaultCastAs(LogicalType::VARIANT()));
+		extra_values.push_back(entry.second.CastAs(context, LogicalType::VARIANT()));
 	}
 	chunk.data[6].Append(
 	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), std::move(extra_keys), std::move(extra_values)));
@@ -5169,7 +5194,7 @@ static unique_ptr<PreparedBatchData> PrepareLegacyCopyBatch(unique_ptr<ColumnDat
 	return make_uniq<LegacyCopyPreparedBatch>(std::move(batch));
 }
 
-static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, FunctionData &bind_data,
+static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, const FunctionData &bind_data,
                                  GlobalFunctionData &gstate, PreparedBatchData &prepared_batch) {
 	if (!function.copy_to_initialize_local || !function.copy_to_sink || !function.copy_to_combine) {
 		throw InternalException("Legacy copy function is missing required sink/combine callbacks");
@@ -5306,7 +5331,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			if (use_tmp_file) {
 				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
 			}
-			ReturnStatistics(chunk, file_entry);
+			ReturnStatistics(context.client.GetContext(), chunk, file_entry);
 		}
 		if (return_column_types) {
 			if (gstate.output_files.WrittenFileCount() == 0) {

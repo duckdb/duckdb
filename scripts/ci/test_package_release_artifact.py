@@ -3,6 +3,7 @@
 import os
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -59,6 +60,30 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 self.assertEqual(archive.namelist(), ["duckdb.exe"])
                 self.assertEqual(archive.getinfo("duckdb.exe").compress_type, zipfile.ZIP_DEFLATED)
                 self.assertEqual(archive.read("duckdb.exe"), b"binary")
+
+    def test_test_release_artifact(self):
+        for executable, suffix in (("duckdb", "linux-amd64"), ("duckdb.exe", "windows-amd64")):
+            with self.subTest(executable=executable), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                cli = root / executable
+                cli.write_bytes(b"shell")
+                cli.chmod(0o755)
+                extension = root / "test.duckdb_extension"
+                extension.write_bytes(b"test extension")
+                self.run_make(
+                    "test-release-artifact",
+                    root,
+                    ARTIFACT_SUFFIX=suffix,
+                    CLI_BINARY=str(cli),
+                    TEST_EXTENSION_BINARY=str(extension),
+                )
+                with tarfile.open(root / f"duckdb-test-{suffix}.tar.gz", "r:gz") as archive:
+                    self.assertEqual(archive.getnames(), [executable, "extension/test/test.duckdb_extension"])
+                    self.assertEqual(archive.extractfile(executable).read(), b"shell")
+                    self.assertTrue(archive.getmember(executable).mode & stat.S_IXUSR)
+                    self.assertEqual(
+                        archive.extractfile("extension/test/test.duckdb_extension").read(), b"test extension"
+                    )
 
     def test_shared_libraries_release_artifact(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -132,6 +157,32 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 self.assertEqual(archive.extractfile(members["libduckdb_shell.a"]).read(), b"shell")
                 self.assertEqual(archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension")
 
+    def test_release_artifact_includes_native_test_probe(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "linux-build"
+            (source / "test").mkdir(parents=True)
+            (source / "duckdb").write_bytes(b"duckdb")
+            (source / "test" / "unittest").write_bytes(b"unittest")
+            (source / "test" / "run").write_text("# runner\n", encoding="utf-8")
+            probe = source / "test" / "block_allocator_fault_injection"
+            probe.write_bytes(b"probe")
+            probe.chmod(0o644)
+
+            archive_path = root / "release-artifact.tar.gz"
+            self.run_make(
+                "release-artifact",
+                root,
+                RELEASE_ARTIFACT_SOURCE_DIR=str(source),
+                RELEASE_ARTIFACT_STAGING_DIR=str(root / "staging"),
+                RELEASE_ARTIFACT_TARBALL=str(archive_path),
+            )
+
+            with tarfile.open(archive_path, mode="r:gz") as archive:
+                member = archive.getmember("release/test/block_allocator_fault_injection")
+                self.assertEqual(archive.extractfile(member).read(), b"probe")
+                self.assertTrue(member.mode & stat.S_IXUSR)
+
     def test_release_artifact_normalizes_windows_layout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -139,16 +190,34 @@ class PackageReleaseArtifactTest(unittest.TestCase):
             (source / "src").mkdir(parents=True)
             (source / "test" / "extension").mkdir(parents=True)
             (source / "extension" / "json").mkdir(parents=True)
+            (source / "extension" / "test").mkdir(parents=True)
 
-            for path in [source / "duckdb.exe", source / "test" / "unittest.exe"]:
-                path.write_bytes(b"executable")
-                path.chmod(0o644)
+            (source / "duckdb.exe").write_bytes(b"executable")
+            (source / "duckdb.exe").chmod(0o644)
             (source / "test" / "run.py").write_text("# runner\n", encoding="utf-8")
             (source / "test" / "run.bat").write_text("@echo off\n", encoding="utf-8")
+            (source / "test" / "unittest.py").write_text("# compatibility runner\n", encoding="utf-8")
+            (source / "test" / "unittest.bat").write_text("@echo off\n", encoding="utf-8")
             (source / "src" / "duckdb.dll").write_bytes(b"shared")
             (source / "src" / "duckdb_static.lib").write_bytes(b"static")
             (source / "extension" / "json" / "json_extension.lib").write_bytes(b"extension library")
-            (source / "test" / "extension" / "demo.duckdb_extension").write_bytes(b"test extension")
+            (source / "extension" / "test" / "test.duckdb_extension").write_bytes(b"test extension")
+            repository_extension = Path("repository/vtest/windows_amd64/test.duckdb_extension")
+            (source / repository_extension.parent).mkdir(parents=True)
+            (source / repository_extension).write_bytes(b"test extension")
+            (source / "test" / "extension" / "loadable_extension_demo.duckdb_extension").write_bytes(b"test fixture")
+            (source / "test" / "extension" / "duckdb_tests.duckdb_extension").write_bytes(b"test bundle")
+            if sys.platform == "darwin":
+                subprocess.run(
+                    [
+                        "xattr",
+                        "-w",
+                        "com.duckdb.test",
+                        "metadata",
+                        str(source / "test" / "extension" / "duckdb_tests.duckdb_extension"),
+                    ],
+                    check=True,
+                )
 
             archive_path = root / "release-artifact.tar.gz"
             environment = os.environ.copy()
@@ -171,17 +240,24 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 members = {member.name: member for member in archive.getmembers()}
                 expected = {
                     "release/duckdb.exe",
-                    "release/test/unittest.exe",
                     "release/test/run.py",
                     "release/test/run.bat",
+                    "release/test/unittest.py",
+                    "release/test/unittest.bat",
                     "release/src/duckdb.dll",
                     "release/src/duckdb_static.lib",
                     "release/extension/json/json_extension.lib",
-                    "release/test/extension/demo.duckdb_extension",
+                    f"release/{repository_extension.as_posix()}",
+                    "release/test/extension/loadable_extension_demo.duckdb_extension",
+                    "release/test/extension/duckdb_tests.duckdb_extension",
                 }
-                self.assertTrue(expected.issubset(members))
+                self.assertTrue(expected.issubset(members), expected - members.keys())
+                self.assertFalse(any(Path(name).name.startswith("._") for name in members), members.keys())
+                self.assertNotIn("release/extension/test/test.duckdb_extension", members)
+                self.assertEqual(
+                    archive.extractfile(members[f"release/{repository_extension.as_posix()}"]).read(), b"test extension"
+                )
                 self.assertTrue(members["release/duckdb.exe"].mode & stat.S_IXUSR)
-                self.assertTrue(members["release/test/unittest.exe"].mode & stat.S_IXUSR)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
@@ -58,20 +60,10 @@ const uhugeint_t Uhugeint::POWERS_OF_TEN[] {
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(100)};
 
 string Uhugeint::ToString(uhugeint_t input) {
-	uhugeint_t remainder;
-	string result;
-	while (true) {
-		if (!input.lower && !input.upper) {
-			break;
-		}
-		input = Uhugeint::DivMod(input, 10, remainder);
-		result = string(1, UnsafeNumericCast<char>('0' + remainder.lower)) + result; // NOLINT
-	}
-	if (result.empty()) {
-		// value is zero
-		return "0";
-	}
-	return result;
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(input, end);
+	return string(start, end);
 }
 
 //===--------------------------------------------------------------------===//
@@ -119,15 +111,13 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	}
 
 	// if any of these products are set to a non-zero value, there is always an overflow
-	if (products[2][1] || products[1][0] || products[2][0]) {
+	if (products[3][0] || products[3][1] || products[3][2] || products[2][0] || products[2][1] || products[1][0]) {
 		return false;
 	}
 
 	// if the high bits of any of these are set, there is always an overflow
-	if (products[1][1] & 0xffffffff00000000 || products[3][0] & 0xffffffff00000000 ||
-	    products[3][3] & 0xffffffff00000000 || products[3][2] & 0xffffffff00000000 ||
-	    products[3][1] & 0xffffffff00000000 || products[2][2] & 0xffffffff00000000 ||
-	    products[0][0] & 0xffffffff00000000) {
+	if (products[0][0] & 0xffffffff00000000 || products[1][1] & 0xffffffff00000000 ||
+	    products[2][2] & 0xffffffff00000000 || products[3][3] & 0xffffffff00000000) {
 		return false;
 	}
 
@@ -153,6 +143,11 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	third32 += fourth32 >> 32;
 	second32 += third32 >> 32;
 	first32 += second32 >> 32;
+
+	// check if the combination of the different products resulted in an overflow
+	if (first32 & 0xffffffff00000000) {
+		return false;
+	}
 
 	// remove carry from current digit
 	fourth32 &= 0xffffffff;
@@ -240,52 +235,26 @@ uhugeint_t Abs(uhugeint_t n) {
 	return (n);
 }
 
-static uint8_t Bits(uhugeint_t x) {
-	uint8_t out = 0;
-	if (x.upper) {
-		out = 64;
-		for (uint64_t upper = x.upper; upper; upper >>= 1) {
-			++out;
-		}
-	} else {
-		for (uint64_t lower = x.lower; lower; lower >>= 1) {
-			++out;
-		}
-	}
-	return out;
-}
-
 uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
 	if (rhs == 0) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	remainder = uhugeint_t(0);
-	if (rhs == uhugeint_t(1)) {
+	if (rhs == 1) {
+		remainder = uhugeint_t(0);
 		return lhs;
-	} else if (lhs == rhs) {
+	}
+	if (lhs == rhs) {
+		remainder = uhugeint_t(0);
 		return uhugeint_t(1);
-	} else if (lhs == uhugeint_t(0) || lhs < rhs) {
+	}
+	if (lhs < rhs) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
-
-	uhugeint_t result = 0;
-	for (uint8_t idx = Bits(lhs); idx > 0; --idx) {
-		result <<= 1;
-		remainder <<= 1;
-
-		if (((lhs >> (idx - 1U)) & 1) != 0) {
-			remainder += 1;
-		}
-
-		if (remainder >= rhs) {
-			remainder -= rhs;
-			result += 1;
-		}
-	}
-	return result;
+	const auto result = Uint128DivMod(lhs.upper, lhs.lower, rhs.upper, rhs.lower);
+	remainder = uhugeint_t(result.remainder_upper, result.remainder_lower);
+	return uhugeint_t(result.quotient_upper, result.quotient_lower);
 }
 
 template <>
@@ -407,23 +376,40 @@ bool Uhugeint::TryCast(uhugeint_t input, hugeint_t &result) {
 	return true;
 }
 
-template <>
-bool Uhugeint::TryCast(uhugeint_t input, float &result) {
-	double dbl_result;
-	Uhugeint::TryCast(input, dbl_result);
-	result = (float)dbl_result;
+template <class REAL_T>
+bool CastUhugeintToFloating(uhugeint_t input, REAL_T &result) {
+	static constexpr REAL_T TWO_TO_THE_64 = REAL_T(18446744073709551616.0);
+	if (std::numeric_limits<REAL_T>::digits >= 64) {
+		// Both halves convert exactly, so the sum is the only rounding.
+		result = REAL_T(input.upper) * TWO_TO_THE_64 + REAL_T(input.lower);
+		return true;
+	}
+	if (input.upper == 0) {
+		result = REAL_T(input.lower);
+		return true;
+	}
+	// The top 64 bits with every lower bit folded into the last one round to the mantissa as the whole value does.
+	const auto leading = CountZeros<uint64_t>::Leading(input.upper);
+	// The lower half shifts in two steps because a shift by 64, when leading is 0, is undefined.
+	const uint64_t top =
+	    (input.upper << leading) | ((input.lower >> 1) >> (63 - leading)) | uint64_t((input.lower << leading) != 0);
+	result = REAL_T(top) * REAL_T(uint64_t(1) << (63 - leading)) * REAL_T(2);
 	return true;
 }
 
-template <class REAL_T>
-bool CastUhugeintToFloating(uhugeint_t input, REAL_T &result) {
-	result = REAL_T(input.lower) + REAL_T(input.upper) * REAL_T(NumericLimits<uint64_t>::Maximum());
-	return true;
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, float &result) {
+	return CastUhugeintToFloating<float>(input, result);
 }
 
 template <>
 bool Uhugeint::TryCast(uhugeint_t input, double &result) {
 	return CastUhugeintToFloating<double>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, long double &result) {
+	return CastUhugeintToFloating<long double>(input, result);
 }
 
 template <class DST>
@@ -516,8 +502,9 @@ bool ConvertFloatingToUhugeint(REAL_T value, uhugeint_t &result) {
 	if (value < 0 || value >= 340282366920938463463374607431768211456.0) {
 		return false;
 	}
-	result.lower = (uint64_t)fmod(value, REAL_T(NumericLimits<uint64_t>::Maximum()));
-	result.upper = (uint64_t)(value / REAL_T(NumericLimits<uint64_t>::Maximum()));
+	static constexpr REAL_T TWO_TO_THE_64 = REAL_T(18446744073709551616.0);
+	result.lower = static_cast<uint64_t>(std::fmod(value, TWO_TO_THE_64));
+	result.upper = static_cast<uint64_t>(value / TWO_TO_THE_64);
 	return true;
 }
 

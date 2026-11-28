@@ -8,12 +8,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op) {
 	// Visit the child nodes.
 	D_ASSERT(op.children.size() == 2);
 	D_ASSERT(op.condition);
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 
-	// Create the blockwise NL join.
-	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(op.condition), op.join_type,
-	                                     op.estimated_cardinality);
+	// Create the blockwise NL join, which emits full child layouts.
+	auto pruned = ExtractPrunedJoinProjection(op, left, right, true, true);
+	auto &join =
+	    Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(op.condition), op.join_type, op.estimated_cardinality);
+	return RestorePrunedJoinProjection(op, join, std::move(pruned));
 }
 
 } // namespace duckdb

@@ -10,7 +10,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
 	                                       std::move(op.exported_tables));
 	// Plan the underlying copy statements, if any.
 	if (!op.children.empty()) {
-		auto &plan = CreatePlan(*op.children[0]);
+		auto &plan = CreatePlanRecursive(*op.children[0]);
 		export_op.children.push_back(plan);
 	}
 	return export_op;

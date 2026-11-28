@@ -5,9 +5,22 @@
   "skip_compiled": true,
   "skip_tests": [
     {
+      "reason": "Rebinding combines the signed-zero atan2 bounds into one filter batch, exposing native FilterCombiner expression matching that also fails over VALUES without scan filters or SQL export",
+      "paths": [
+        "test/optimizer/filter_pushdown/signed_zero_scan_filters.test"
+      ]
+    },
+    {
       "reason": "The generated SQL changes the query pipelines whose tasks the fixture counts",
       "paths": [
         "test/sql/json/table/json_table_in_out_threads.test"
+      ]
+    },
+    {
+      "reason": "The generated SQL is planned differently, which changes how often the volatile expressions the fixture counts are evaluated",
+      "paths": [
+        "test/optimizer/join_to_semi_join_volatile.test",
+        "test/optimizer/pushdown/filter_projection_map.test"
       ]
     },
     {
@@ -31,7 +44,11 @@
         "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
-        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+        "test/sql/optimizer/statistics/list_length_stats_propagation.test",
+        "test/sql/optimizer/statistics/list_length_stats_functions.test",
+        "test/sql/storage/list_length_stats_checkpoint.test",
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/sql/optimizer/test_rowid_vector_pruning.test"
       ]
     },
     {
@@ -129,6 +146,36 @@
       "reason": "FIXME: name-bound sum_no_overflow delegates its binding to sum, so the rendered SQL rebinds the checked HUGEINT sum and no longer raises",
       "paths": [
         "test/sql/aggregate/aggregates/sum_no_overflow_fallible.test"
+      ]
+    },
+    {
+      "reason": "The cast inversion moves the VARCHAR cast onto the constant, so the rendered SQL spells out its DECIMAL(300,100) type, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
+      "paths": [
+        "test/sql/settings/max_decimal_width.test"
+      ]
+    },
+    {
+      "reason": "The generated SQL spells out the window self-join as a GROUP BY, which lowers mode to count and arg_max instead of building the mode states the fixture overflows",
+      "paths": [
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
+      ]
+    },
+    {
+      "reason": "The rendered SQL spells out the DECIMAL(40,0) type of the stored column a constant is compared with, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
+      "paths": [
+        "test/sql/index/art/storage/test_art_decimal_key_width.test"
+      ]
+    },
+    {
+      "reason": "The SQL export of a chain of projections that each read their input column twice takes time exponential in the depth of the chain; the fixture pins that the native estimate of the distinct rows reads the plan once per column",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_estimates.test"
+      ]
+    },
+    {
+      "reason": "The generated SQL groups the correlated column of a subquery with a plain GROUP BY, which rebinds under the default or struct-nested collation and merges the outer rows the native plan keeps apart",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_correlated_collation.test"
       ]
     }
   ]

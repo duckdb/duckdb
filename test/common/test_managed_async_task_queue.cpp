@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "test_exception_matcher.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/async_task_queue.hpp"
@@ -121,7 +122,7 @@ unique_ptr<Connection> TaskQueueConnectionWithoutAsyncThreads(DuckDB &db) {
 TEST_CASE("ManagedAsyncTaskQueue runs all registered tasks", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 4);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 	REQUIRE(queue.IsAsync());
 
 	std::atomic<idx_t> counter(0);
@@ -137,7 +138,7 @@ TEST_CASE("ManagedAsyncTaskQueue runs all registered tasks", "[async_task_queue]
 TEST_CASE("ManagedAsyncTaskQueue runs tasks concurrently", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 4);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
 	ConcurrencyLatch latch;
 	for (idx_t i = 0; i < 4; i++) {
@@ -153,7 +154,7 @@ TEST_CASE("ManagedAsyncTaskQueue runs tasks concurrently", "[async_task_queue]")
 TEST_CASE("ManagedAsyncTaskQueue honors max_active_tasks concurrency cap", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 4);
-	ManagedAsyncTaskQueue queue(*con->context, 1);
+	ManagedAsyncTaskQueue queue(con->context->GetContext(), 1);
 
 	ConcurrencyLatch latch;
 	for (idx_t i = 0; i < 3; i++) {
@@ -171,7 +172,7 @@ TEST_CASE("ManagedAsyncTaskQueue honors max_active_tasks concurrency cap", "[asy
 TEST_CASE("ManagedAsyncTaskQueue runs synchronously without async threads", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithoutAsyncThreads(db);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 	REQUIRE(!queue.IsAsync());
 
 	std::atomic<idx_t> counter(0);
@@ -189,37 +190,27 @@ TEST_CASE("ManagedAsyncTaskQueue runs synchronously without async threads", "[as
 TEST_CASE("ManagedAsyncTaskQueue rethrows asynchronous task errors", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 2);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
 	queue.Register(make_uniq<ThrowingTask>(), 16);
-	try {
-		queue.Close();
-		FAIL("Expected async task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Close(), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 }
 
 TEST_CASE("ManagedAsyncTaskQueue rethrows synchronous task errors", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithoutAsyncThreads(db);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
-	try {
-		queue.Register(make_uniq<ThrowingTask>(), 16);
-		FAIL("Expected synchronous task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Register(make_uniq<ThrowingTask>(), 16), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 	queue.Close();
 }
 
 TEST_CASE("ManagedAsyncTaskQueue applies backpressure without deadlock", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 2);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
 	std::atomic<idx_t> counter(0);
 	const idx_t task_count = 20;
@@ -235,7 +226,7 @@ TEST_CASE("ManagedAsyncTaskQueue applies backpressure without deadlock", "[async
 TEST_CASE("ManagedAsyncTaskQueue close drains without explicit WaitAll and is idempotent", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 2);
-	ManagedAsyncTaskQueue queue(*con->context);
+	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
 	std::atomic<idx_t> counter(0);
 	const idx_t task_count = 10;
@@ -253,7 +244,7 @@ TEST_CASE("ManagedAsyncTaskQueue close drains without explicit WaitAll and is id
 TEST_CASE("ManagedAsyncTaskQueue closes after failure with pending tasks", "[async_task_queue]") {
 	DuckDB db(nullptr);
 	auto con = TaskQueueConnectionWithAsyncThreads(db, 1);
-	ManagedAsyncTaskQueue queue(*con->context, 1);
+	ManagedAsyncTaskQueue queue(con->context->GetContext(), 1);
 
 	std::atomic<idx_t> counter(0);
 	ConcurrencyLatch latch;
@@ -265,11 +256,6 @@ TEST_CASE("ManagedAsyncTaskQueue closes after failure with pending tasks", "[asy
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	try {
-		queue.Close();
-		FAIL("Expected async task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Close(), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 }

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/helper.hpp"
@@ -7,6 +8,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 using namespace duckdb;
 
@@ -27,7 +29,7 @@ public:
 
 	void CorruptPayload(WALType target_type) {
 		auto target = FindPayload(target_type);
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
@@ -56,7 +58,7 @@ private:
 	};
 
 	vector<Entry> ReadEntries() {
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
@@ -152,7 +154,7 @@ TEST_CASE("WAL checkpoint prescan skips unnecessary framed payloads", "[storage]
 		{
 			auto config = GetTestConfig();
 			config->options.checkpoint_wal_size = idx_t(-1);
-			config->options.checkpoint_on_shutdown = false;
+			config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 			DuckDB db(helper.GetDatabasePath(), config.get());
 			Connection con(db);
 			REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -167,7 +169,7 @@ TEST_CASE("WAL checkpoint prescan skips unnecessary framed payloads", "[storage]
 		helper.CorruptPayload(test.wal_type);
 
 		auto config = GetTestConfig();
-		config->options.abort_on_wal_failure = true;
+		config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
 		DuckDB db(helper.GetDatabasePath(), config.get());
 		Connection con(db);
 		auto result = con.Query(test.query);
@@ -181,7 +183,7 @@ TEST_CASE("WAL replay validates DML payloads skipped during prescan", "[storage]
 	{
 		auto config = GetTestConfig();
 		config->options.checkpoint_wal_size = idx_t(-1);
-		config->options.checkpoint_on_shutdown = false;
+		config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 		DuckDB db(helper.GetDatabasePath(), config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -194,13 +196,11 @@ TEST_CASE("WAL replay validates DML payloads skipped during prescan", "[storage]
 	helper.CorruptPayload(WALType::INSERT_TUPLE);
 
 	auto config = GetTestConfig();
-	config->options.abort_on_wal_failure = true;
-	try {
+	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
+	auto replay = [&]() {
 		DuckDB db(helper.GetDatabasePath(), config.get());
-		FAIL("Expected WAL replay to fail");
-	} catch (Exception &ex) {
-		ErrorData error(ex);
-		REQUIRE(error.Type() == ExceptionType::SERIALIZATION);
-		REQUIRE(error.RawMessage().find("field id mismatch, expected: 101, got: 0") != string::npos);
-	}
+	};
+	REQUIRE_THROWS_MATCHES(
+	    replay(), std::exception,
+	    ExceptionMatches(ExceptionType::SERIALIZATION, Catch::Contains("field id mismatch, expected: 101, got: 0")));
 }

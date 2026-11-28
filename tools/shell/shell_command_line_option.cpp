@@ -1,5 +1,6 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
+#include "shell_thread_stack_size.hpp"
 #include "terminal.hpp"
 
 namespace duckdb_shell {
@@ -83,6 +84,12 @@ MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
 
 MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
 	state.config.SetOptionByName("allow_unsigned_extensions", true);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult DisableBuiltinExtensions(ShellState &state, const vector<string> &args) {
+	state.config.options.load_extensions = false;
+	state.config.options.register_extension_overloads = false;
 	return MetadataResult::SUCCESS;
 }
 
@@ -380,6 +387,8 @@ static const CommandLineOption command_line_options[] = {
     {"markdown", 0, "", MarkOutputModeFlag, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
     {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
     {"no-agent", 0, "", SetAgentMode<OptionType::OFF>, nullptr, "never render output for an AI coding agent"},
+    {"no-builtin-extensions", 0, "", DisableBuiltinExtensions, nullptr,
+     "skip loading built-in extensions and registering autoload placeholders"},
     {"no-init", 0, "", SkipInit, nullptr, "skip processing the init file"},
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
@@ -394,6 +403,8 @@ static const CommandLineOption command_line_options[] = {
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", MarkOutputModeFlag, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
+    {"thread-stack-size", 1, "BYTES", SetThreadStackSize, nullptr,
+     "set the default worker thread stack size (Linux/glibc only)"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},

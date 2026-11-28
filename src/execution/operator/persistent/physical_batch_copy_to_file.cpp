@@ -33,7 +33,7 @@ struct ActiveFlushGuard {
 };
 
 PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types,
-                                                 CopyFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                                 CopyFunction function_p, cow_ptr<FunctionData> bind_data_p,
                                                  idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types),
                        estimated_cardinality),
@@ -101,8 +101,20 @@ public:
 	atomic<bool> initialized {false};
 	//! The total number of rows copied to the file
 	atomic<idx_t> rows_copied;
-	//! Global copy state
+	//! Global copy state of the file being written
 	unique_ptr<GlobalFunctionData> global_state;
+	//! The state every batch is prepared against: the first file's, which rotation keeps open until the end
+	atomic<optional_ptr<GlobalFunctionData>> prepare_state {nullptr};
+	//! The first file's state once rotation has moved past it
+	unique_ptr<GlobalFunctionData> first_file_state;
+	//! Path of the file being written
+	string current_file_path;
+	//! Batches flushed to the file being written
+	idx_t current_file_batches = 0;
+	//! Files opened so far
+	idx_t file_count = 0;
+	//! Files a rotating copy has written, in order (for RETURN_FILES and RETURN_STATS)
+	vector<unique_ptr<CopyToFileInfo>> rotated_files;
 	//! Unpartitioned batches
 	map<idx_t, unique_ptr<FixedRawBatchData>> raw_batches;
 	//! The prepared batch data by batch index - ready to flush
@@ -128,21 +140,42 @@ public:
 		if (initialized.load(std::memory_order_relaxed)) {
 			return;
 		}
-		output_lifecycle.RegisterFile(op.file_path);
-		auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		OpenFile(context, op);
+		prepare_state.store(*global_state, std::memory_order_release);
+		initialized.store(true, std::memory_order_release);
+	}
+
+	//! Opens the output file, or the next file of a rotating copy
+	void OpenFile(ClientContext &context, const PhysicalBatchCopyToFile &op) {
+		auto path = op.file_path;
+		if (op.Rotate()) {
+			auto &fs = FileSystem::GetFileSystem(context);
+			path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, file_count);
+		}
+		output_lifecycle.RegisterFile(path);
+		auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*new_global_state, op);
 		}
 		unique_ptr<CopyToFileInfo> new_written_file_info;
+		if (op.Rotate() ||
+		    GetCopyFunctionBaseReturnType(op.return_type) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+			new_written_file_info = make_uniq<CopyToFileInfo>(path);
+		}
 		if (GetCopyFunctionBaseReturnType(op.return_type) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-			new_written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			new_written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *new_global_state,
 			                                           *new_written_file_info->file_stats);
 		}
 		global_state = std::move(new_global_state);
-		written_file_info = std::move(new_written_file_info);
-		initialized.store(true, std::memory_order_release);
+		if (op.Rotate()) {
+			rotated_files.push_back(std::move(new_written_file_info));
+		} else {
+			written_file_info = std::move(new_written_file_info);
+		}
+		current_file_path = std::move(path);
+		current_file_batches = 0;
+		file_count++;
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage,
@@ -347,6 +380,14 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 			PhysicalCopyToFile::MoveTmpFile(context, file_path);
 		}
 	}
+	if (gstate.first_file_state) {
+		// nothing is prepared anymore
+		gstate.prepare_state.store(nullptr, std::memory_order_release);
+		if (function.copy_to_finalize) {
+			function.copy_to_finalize(context, *bind_data, *gstate.first_file_state);
+		}
+		gstate.first_file_state.reset();
+	}
 	gstate.output_lifecycle.MarkSuccessful();
 	return SinkFinalizeType::READY;
 }
@@ -397,7 +438,8 @@ public:
 		auto memory_usage = batch_data->memory_usage;
 		const CopyFunctionBatchAnalyzer batch_analyzer(*batch_data->collection, op.batch_size, op.batch_size_bytes);
 		auto prepared_batch =
-		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(batch_data->collection));
+		    op.function.prepare_batch(context, *op.bind_data, *gstate.prepare_state.load(std::memory_order_acquire),
+		                              std::move(batch_data->collection));
 		gstate.AddBatchData(batch_index, std::move(prepared_batch), memory_usage, batch_analyzer);
 		if (batch_index == gstate.flushed_batch_index) {
 			gstate.task_manager.AddTask(make_uniq<RepartitionedFlushTask>());
@@ -422,6 +464,10 @@ void PhysicalBatchCopyToFile::AddRawBatchData(ClientContext &context, GlobalSink
 
 static bool CorrectSizeForBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
                                 const optional_idx &batch_size_bytes) {
+	if (!batch_size.IsValid()) {
+		// no row target (only ROW_GROUP_SIZE_BYTES): the byte target alone decides
+		return CopyFunctionBatchAnalyzer(batch, batch_size, batch_size_bytes).IsAcceptable();
+	}
 	if (batch_size.GetIndex() == 0) {
 		// a batch size of 0 indicates we are happy with any batch size
 		return true;
@@ -598,16 +644,44 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 			batch_data = std::move(entry->second);
 			gstate.batch_data.erase(entry);
 		}
+		RotateFile(context, gstate_p);
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalBatchCopyToFile", "FlushBatch",
-		           {{"file", file_path},
+		           {{"file", gstate.current_file_path},
 		            {"rows", to_string(batch_data->batch_analyzer.current_batch_size)},
 		            {"size", to_string(batch_data->batch_analyzer.current_batch_size_bytes)},
 		            {"reason", EnumUtil::ToString(batch_data->batch_analyzer.ToReason())}});
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
+		gstate.current_file_batches++;
 		batch_data->prepared_data.reset();
 		memory_manager.ReduceUnflushedMemory(batch_data->memory_usage);
 		gstate.flushed_batch_index++;
 	}
+}
+
+void PhysicalBatchCopyToFile::RotateFile(ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+	if (!Rotate() || gstate.current_file_batches == 0) {
+		// never rotate a file that holds no data yet
+		return;
+	}
+	const bool size_reached = file_size_bytes.IsValid() && function.file_size_bytes &&
+	                          function.file_size_bytes(*gstate.global_state) >= file_size_bytes.GetIndex();
+	const bool batches_reached =
+	    batches_per_file.IsValid() && gstate.current_file_batches >= batches_per_file.GetIndex();
+	if (!size_reached && !batches_reached) {
+		return;
+	}
+	// only the flushing thread gets here, and prepares do not use global_state
+	if (gstate.file_count == 1) {
+		// batches are still prepared against the first file's state: finalize it last
+		gstate.first_file_state = std::move(gstate.global_state);
+	} else {
+		if (function.copy_to_finalize) {
+			function.copy_to_finalize(context, *bind_data, *gstate.global_state);
+		}
+		gstate.global_state.reset();
+	}
+	gstate.OpenFile(context, *this);
 }
 
 //===--------------------------------------------------------------------===//
@@ -697,6 +771,10 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	auto minimum_memory_per_thread =
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread);
+	if (Rotate()) {
+		D_ASSERT(!use_tmp_file);
+		PhysicalCopyToFile::PrepareOutputDirectory(context, file_path, overwrite_mode, result->output_lifecycle);
+	}
 	if (write_empty_file) {
 		// if we are writing the file also if it is empty - initialize now
 		result->Initialize(context, *this);
@@ -707,11 +785,70 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class BatchCopyGlobalSourceState : public GlobalSourceState {
+public:
+	idx_t offset = 0;
+
+	idx_t MaxThreads() override {
+		return 1;
+	}
+};
+
+unique_ptr<GlobalSourceState> PhysicalBatchCopyToFile::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<BatchCopyGlobalSourceState>();
+}
+
+SourceResultType PhysicalBatchCopyToFile::GetRotatedFiles(ExecutionContext &context, DataChunk &chunk,
+                                                          OperatorSourceInput &input) const {
+	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
+	auto &files = g.rotated_files;
+	auto return_column_types = CopyFunctionReturnsColumnTypes(return_type);
+	switch (GetCopyFunctionBaseReturnType(return_type)) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		vector<Value> file_list;
+		for (auto &file : files) {
+			file_list.emplace_back(file->file_path);
+		}
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		chunk.data[1].Append(Value::LIST(LogicalType::VARCHAR, std::move(file_list)));
+		break;
+	}
+	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
+		auto &source_state = input.global_state.Cast<BatchCopyGlobalSourceState>();
+		const auto next_end = MinValue<idx_t>(source_state.offset + STANDARD_VECTOR_SIZE, files.size());
+		for (idx_t file_idx = source_state.offset; file_idx < next_end; file_idx++) {
+			PhysicalCopyToFile::ReturnStatistics(context.client.GetContext(), chunk, *files[file_idx]);
+		}
+		if (return_column_types) {
+			if (files.empty()) {
+				// WRITE_EMPTY_FILE false writes no file without rows
+				PhysicalCopyToFile::ReturnNoFileStatistics(chunk);
+			}
+			PhysicalCopyToFile::ReturnColumnTypes(chunk, query_names, query_types);
+		}
+		source_state.offset = next_end;
+		return next_end < files.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	}
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+	if (return_column_types) {
+		PhysicalCopyToFile::ReturnColumnTypes(chunk, query_names, query_types);
+	}
+	return SourceResultType::FINISHED;
+}
+
 SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                           OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	auto return_column_types = CopyFunctionReturnsColumnTypes(return_type);
+	if (Rotate()) {
+		return GetRotatedFiles(context, chunk, input);
+	}
 	switch (GetCopyFunctionBaseReturnType(return_type)) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
@@ -728,7 +865,7 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
 		if (g.written_file_info) {
 			g.written_file_info->file_path = std::move(fp);
-			PhysicalCopyToFile::ReturnStatistics(chunk, *g.written_file_info);
+			PhysicalCopyToFile::ReturnStatistics(context.client.GetContext(), chunk, *g.written_file_info);
 		} else if (return_column_types) {
 			// WRITE_EMPTY_FILE false writes no file without rows
 			PhysicalCopyToFile::ReturnNoFileStatistics(chunk);

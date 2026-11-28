@@ -40,7 +40,7 @@ public:
 	}
 	explicit VariantPathComponent(const string &key) : lookup_mode(VariantChildLookupMode::BY_KEY), key(key) {
 	}
-	explicit VariantPathComponent(uint32_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
+	explicit VariantPathComponent(int64_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
 	}
 
 	bool operator==(const VariantPathComponent &other) const {
@@ -63,7 +63,8 @@ public:
 public:
 	VariantChildLookupMode lookup_mode;
 	string key;
-	uint32_t index;
+	//! 0-based, negative indexes count from the end of the array
+	int64_t index;
 };
 
 struct VariantNestedData {
@@ -125,6 +126,8 @@ public:
 	Vector &keys;
 };
 
+//! The type tag of a value in the encoded VARIANT layout. Storage-level only: code that does not read or write the
+//! encoded bytes should use LogicalType / LogicalTypeId (see VariantNode::GetType)
 enum class VariantLogicalType : uint8_t {
 	VARIANT_NULL = 0,
 	BOOL_TRUE = 1,
@@ -161,8 +164,20 @@ enum class VariantLogicalType : uint8_t {
 	BITSTRING = 32,
 	GEOMETRY = 33,
 	TIMESTAMP_NANOS_TZ = 34,
+	GEOGRAPHY = 35,
 	ENUM_SIZE /* always kept as last item of the enum */
 };
+
+//! Storage-level helpers: all other variant code should work with LogicalType(Id) instead of VariantLogicalType
+//! VARIANT_NULL -> SQLNULL, BOOL_TRUE/BOOL_FALSE -> BOOLEAN, OBJECT -> STRUCT, ARRAY -> LIST
+DUCKDB_API LogicalTypeId VariantTypeToLogicalTypeId(VariantLogicalType type);
+//! Inverse of VariantTypeToLogicalTypeId, returns false for types that cannot be stored in a VARIANT
+//! 'bool_value' selects BOOL_TRUE/BOOL_FALSE for BOOLEAN
+DUCKDB_API bool TryVariantTypeFromLogicalTypeId(LogicalTypeId id, VariantLogicalType &result, bool bool_value = false);
+//! The LogicalType of a VARIANT value of the given type id. Properties that the id does not carry are defaulted:
+//! DECIMAL has no width/scale, STRUCT (OBJECT) has no children, LIST (ARRAY) holds VARIANT
+DUCKDB_API LogicalType VariantDefaultType(LogicalTypeId id);
+DUCKDB_API VariantLogicalType VariantTypeFromLogicalTypeId(LogicalTypeId id, bool bool_value = false);
 
 struct UnifiedVariantVectorData {
 public:

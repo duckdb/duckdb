@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+export COPYFILE_DISABLE=1
 
 usage() {
-	echo "Usage: $0 <cli|cli-zip|shared-libs|static-libs> <artifact-suffix> <input> [...]" >&2
+	echo "Usage: $0 <cli|cli-zip|test|shared-libs|static-libs> <artifact-suffix> <input> [...]" >&2
 	exit 1
 }
 
@@ -30,6 +31,12 @@ cli)
 cli-zip)
 	artifact_name="duckdb-cli-${artifact_suffix}.zip"
 	if [[ $# -ne 1 ]]; then
+		usage
+	fi
+	;;
+test)
+	artifact_name="duckdb-test-${artifact_suffix}.tar.gz"
+	if [[ $# -ne 2 ]]; then
 		usage
 	fi
 	;;
@@ -62,7 +69,7 @@ members=()
 stage_file() {
 	local source_path="$1"
 	local member_name
-	member_name="$(basename "$source_path")"
+	member_name="${2:-$(basename "$source_path")}"
 
 	if [[ ! -e "$source_path" && ! -L "$source_path" ]]; then
 		echo "Release artifact input does not exist: $source_path" >&2
@@ -73,17 +80,21 @@ stage_file() {
 		exit 1
 	fi
 
+	mkdir -p "$(dirname "$staging_dir/$member_name")"
 	cp -Pp "$source_path" "$staging_dir/$member_name"
 	members+=("$member_name")
 }
 
-if [[ "$artifact_kind" == "cli" || "$artifact_kind" == "cli-zip" ]]; then
+if [[ "$artifact_kind" == "cli" || "$artifact_kind" == "cli-zip" || "$artifact_kind" == "test" ]]; then
 	cli_name="$(basename "$1")"
 	if [[ "$cli_name" != "duckdb" && "$cli_name" != "duckdb.exe" ]]; then
 		echo "CLI input must be named duckdb or duckdb.exe: $1" >&2
 		exit 1
 	fi
 	stage_file "$1"
+	if [[ "$artifact_kind" == "test" ]]; then
+		stage_file "$2" extension/test/test.duckdb_extension
+	fi
 else
 	for library in "$@"; do
 		stage_file "$library"

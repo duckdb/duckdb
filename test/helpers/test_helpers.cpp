@@ -1,7 +1,10 @@
 // #define CATCH_CONFIG_RUNNER
 #include "test_reporter.hpp"
+#include "bound_file_system.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -10,6 +13,12 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -18,6 +27,11 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
+#include "duckdb/planner/planner.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -26,40 +40,60 @@
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
-static case_insensitive_set_t required_requires;
-static bool delete_test_path = true;
-static bool emit_on_skip = false; // --emit-on-skip opt-in: emit a [SKIP_TEST] marker per skipped test
+struct TestHelperState {
+	case_insensitive_set_t required_requires;
+	set<string> env_passthrough_names;
+	bool emit_test_events = false;
+	bool delete_test_path = true;
+	bool emit_on_skip = false; // --emit-on-skip opt-in: emit a [SKIP_TEST] marker per skipped test
 
-// --temp-dir-* family state: TEMP_DIR = $ROOT/[RUN_ID]/[TEST_ID]
-static bool temp_dir_run_id_in_path = true; // --temp-dir-run-id {on|off}: RUN_ID as a path level
-static string temp_dir_run_id;              // RUN_ID value (--run-id, or generated when absent)
-static bool temp_dir_test_id = true;
-static TempDirDestroy temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
-// --database-destroy: independent of the temp-dir dispositions (see test_helpers.hpp).
-static DatabaseDestroy database_destroy = DatabaseDestroy::ON_SUCCESS;
+	// --temp-dir-* family state: TEMP_DIR = $ROOT/[RUN_ID]/[TEST_ID]
+	bool temp_dir_run_id_in_path = true; // --temp-dir-run-id {on|off}: RUN_ID as a path level
+	string temp_dir_run_id;              // RUN_ID value (--run-id, or generated when absent)
+	bool temp_dir_test_id = true;
+	TempDirDestroy temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
+	// --database-destroy: independent of the temp-dir dispositions (see test_helpers.hpp).
+	DatabaseDestroy database_destroy = DatabaseDestroy::ON_SUCCESS;
 
-// The primary (--temp-dir-root, may be remote) and, when that is remote, the local tree behind
-// LOCAL_TEMP_DIR. Paths, not strings: easily composed, and remoteness is a state instead of a parse.
-static Path primary_root = Path::FromString(TESTING_DIRECTORY_NAME);
-static Path local_root;                     // resolved lazily; see LocalRoot()
-static bool local_root_resolved = false;    // Path() is ".", not empty, so track this separately
-static string local_temp_dir_root_override; // --local-temp-dir-root ("" -> the default local root)
+	// The primary (--temp-dir-root, may be remote) and, when that is remote, the local tree behind
+	// LOCAL_TEMP_DIR. Paths, not strings: easily composed, and remoteness is a state instead of a parse.
+	Path primary_root = Path::FromString(TESTING_DIRECTORY_NAME);
+	Path local_root;                     // resolved lazily; see LocalRoot()
+	bool local_root_resolved = false;    // Path() is ".", not empty, so track this separately
+	string local_temp_dir_root_override; // --local-temp-dir-root ("" -> the default local root)
 
-// Levels THIS invocation created, split by lifecycle step so each destroy reclaims only its own. One
-// set, not one per root: a remote root is env-var passthrough only -- unittest holds no credentials, so
-// it can never mkdir or reap one, and the local tree is the only thing with a lifecycle.
-static vector<string> run_created_levels;  // $ROOT..$RUN_ID
-static vector<string> home_created_levels; // the HOME sandbox sibling
+	// Levels THIS invocation created, split by lifecycle step so each destroy reclaims only its own. One
+	// set, not one per root: a remote root is env-var passthrough only -- unittest holds no credentials, so
+	// it can never mkdir or reap one, and the local tree is the only thing with a lifecycle.
+	vector<string> run_created_levels;  // $ROOT..$RUN_ID
+	vector<string> home_created_levels; // the HOME sandbox sibling
 
-//! The $TEST_ID dir a test materialized, and the levels its path created. Keyed by TEST_ID rather
-//! than held in one global: test files can run concurrently, and every thread working on one test
-//! (a concurrentloop spawns several) has to find that test's entry.
-struct ActiveTestTempDir {
-	string leaf;
-	vector<string> created_levels;
+	//! The $TEST_ID dir a test materialized, and the levels its path created. Keyed by TEST_ID rather
+	//! than held in one global: test files can run concurrently, and every thread working on one test
+	//! (a concurrentloop spawns several) has to find that test's entry.
+	struct ActiveTestTempDir {
+		string leaf;
+		vector<string> created_levels;
+	};
+	unordered_map<string, ActiveTestTempDir> active_tests;
 };
+static TestHelperState helper_state;
 static mutex active_test_lock;
-static unordered_map<string, ActiveTestTempDir> active_tests;
+
+shared_ptr<TestHelperState> CaptureTestHelperState() {
+	lock_guard<mutex> guard(active_test_lock);
+	return make_shared_ptr<TestHelperState>(helper_state);
+}
+
+void RestoreTestHelperState(const TestHelperState &state) {
+	lock_guard<mutex> guard(active_test_lock);
+	helper_state = state;
+}
+
+void ResetTestHelperState() {
+	lock_guard<mutex> guard(active_test_lock);
+	helper_state = TestHelperState();
+}
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -94,24 +128,74 @@ duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> 
 	                                              client_properties);
 }
 
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary) {
+	// construct the `SELECT * FROM <table_ref>` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(table_ref);
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	// construct the `CREATE [OR REPLACE] [TEMP] VIEW <name> AS` statement using the select statement
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
+	info->temporary = temporary;
+	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
+	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto statement = make_uniq<CreateStatement>();
+	statement->info = std::move(info);
+	// Execute the CREATE VIEW
+	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+}
+
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query) {
+	auto &context = *con.context;
+	Parser parser(context);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("TestExtractPlan can only plan a single statement");
+	}
+	unique_ptr<LogicalOperator> plan;
+	context.RunFunctionInTransaction([&]() {
+		Planner planner(context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		D_ASSERT(planner.plan);
+
+		Optimizer optimizer(*planner.binder, context);
+		plan = optimizer.Optimize(std::move(planner.plan));
+
+		LogicalPlanVerifier::Verify(context, *plan);
+		// the resolver checks the column references against the operator types, which the optimizer leaves stale
+		plan->ResolveOperatorTypes();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+	});
+	return plan;
+}
+
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 	return NO_FAIL(*result);
 }
 
+FileSystem &TestLocalFileSystem() {
+	static LocalFileSystem local_fs;
+	static BoundFileSystem fs(local_fs, nullptr);
+	return fs;
+}
+
 void TestDeleteDirectory(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	try {
-		if (fs->DirectoryExists(path)) {
-			fs->RemoveDirectory(path);
+		if (fs.DirectoryExists(path)) {
+			fs.RemoveDirectory(path);
 		}
 	} catch (...) {
 	}
 }
 
 void TestDeleteFile(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	try {
-		fs->TryRemoveFile(path);
+		fs.TryRemoveFile(path);
 	} catch (...) {
 	}
 }
@@ -126,7 +210,7 @@ string TestGetCurrentDirectory() {
 }
 
 void DeleteDatabase(string path) {
-	if (database_destroy == DatabaseDestroy::OFF) {
+	if (helper_state.database_destroy == DatabaseDestroy::OFF) {
 		return; // retain: never touch DB files
 	}
 	TestDeleteFile(path);
@@ -134,13 +218,13 @@ void DeleteDatabase(string path) {
 }
 
 void TestCreateDirectory(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->CreateDirectory(path);
+	auto &fs = TestLocalFileSystem();
+	fs.CreateDirectory(path);
 }
 
 string TestJoinPath(string path1, string path2) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	return fs->JoinPath(path1, path2);
+	auto &fs = TestLocalFileSystem();
+	return fs.JoinPath(path1, path2);
 }
 
 string TestMakeAbsolute(const string &path, const string &anchor) {
@@ -153,25 +237,24 @@ string TestMakeAbsolute(const string &path, const string &anchor) {
 }
 
 void SetEmitOnSkip(bool emit) {
-	emit_on_skip = emit;
+	helper_state.emit_on_skip = emit;
 }
 
 bool EmitOnSkipEnabled() {
-	return emit_on_skip;
+	return helper_state.emit_on_skip;
 }
 
 void AddRequire(string require) {
-	required_requires.insert(require);
+	helper_state.required_requires.insert(require);
 }
 
 bool IsRequired(string require) {
-	return required_requires.count(require);
+	return helper_state.required_requires.count(require);
 }
 
 // -----------------------------------------------------------------------------
 // --env-passthrough NAME: env vars pre-registered for {NAME} substitution -- see test_helpers.hpp.
 // Case-SENSITIVE, matching both env var names and the test_env map these land in.
-static duckdb::set<string> env_passthrough_names;
 
 // Every name the runner resolves for itself -- passing one through would silently replace it with the
 // ambient shell's. Covers both namespaces, because ReplaceKeywords substitutes env vars BEFORE
@@ -194,17 +277,17 @@ bool IsReservedEnvName(const string &name) {
 }
 
 void AddEnvPassthrough(string name) {
-	env_passthrough_names.insert(name);
+	helper_state.env_passthrough_names.insert(name);
 }
 
 const duckdb::set<string> &GetEnvPassthroughNames() {
-	return env_passthrough_names;
+	return helper_state.env_passthrough_names;
 }
 
 bool ValidateEnvPassthrough(string &error) {
 	string missing;
 	string reserved;
-	for (auto &name : env_passthrough_names) {
+	for (auto &name : helper_state.env_passthrough_names) {
 		if (!std::getenv(name.c_str())) {
 			missing += (missing.empty() ? "" : ", ") + name;
 		}
@@ -237,11 +320,11 @@ void SetLocalTempDirRoot(const string &root) {
 	if (Path::FromString(root).IsRemote()) {
 		throw std::runtime_error("--local-temp-dir-root must be a local path, got: " + root);
 	}
-	local_temp_dir_root_override = root;
+	helper_state.local_temp_dir_root_override = root;
 }
 
 string GetLocalTempDirRoot() {
-	return local_temp_dir_root_override;
+	return helper_state.local_temp_dir_root_override;
 }
 
 void SetTempDirRoot(const string &root) {
@@ -250,11 +333,11 @@ void SetTempDirRoot(const string &root) {
 	if (root.empty()) {
 		throw std::runtime_error("--temp-dir-root requires a non-empty value");
 	}
-	primary_root = Path::FromString(root);
+	helper_state.primary_root = Path::FromString(root);
 }
 
 string GetTempDirRoot() {
-	return primary_root.ToString();
+	return helper_state.primary_root.ToString();
 }
 
 string GetTempDirRunId() {
@@ -264,14 +347,14 @@ string GetTempDirRunId() {
 void SetRunId(const string &id) {
 	// Any value but "auto" is a caller-fixed id -- pytest passes one so a run's many unittest
 	// batches co-locate under a single RUN_ID.
-	temp_dir_run_id = (id == "auto") ? "" : id;
+	helper_state.temp_dir_run_id = (id == "auto") ? "" : id;
 }
 
 bool SetTempDirRunIdInPath(const string &mode) {
 	if (mode == "on") {
-		temp_dir_run_id_in_path = true;
+		helper_state.temp_dir_run_id_in_path = true;
 	} else if (mode == "off") {
-		temp_dir_run_id_in_path = false;
+		helper_state.temp_dir_run_id_in_path = false;
 	} else {
 		return false;
 	}
@@ -280,9 +363,9 @@ bool SetTempDirRunIdInPath(const string &mode) {
 
 bool SetTempDirTestId(const string &mode) {
 	if (mode == "on") {
-		temp_dir_test_id = true;
+		helper_state.temp_dir_test_id = true;
 	} else if (mode == "off") {
-		temp_dir_test_id = false;
+		helper_state.temp_dir_test_id = false;
 	} else {
 		return false;
 	}
@@ -291,11 +374,11 @@ bool SetTempDirTestId(const string &mode) {
 
 bool SetTempDirDestroy(const string &mode) {
 	if (mode == "never") {
-		temp_dir_destroy = TempDirDestroy::NEVER;
+		helper_state.temp_dir_destroy = TempDirDestroy::NEVER;
 	} else if (mode == "on-success") {
-		temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
+		helper_state.temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
 	} else if (mode == "always") {
-		temp_dir_destroy = TempDirDestroy::ALWAYS;
+		helper_state.temp_dir_destroy = TempDirDestroy::ALWAYS;
 	} else {
 		return false;
 	}
@@ -304,11 +387,11 @@ bool SetTempDirDestroy(const string &mode) {
 
 bool SetDatabaseDestroy(const string &mode) {
 	if (mode == "on") {
-		database_destroy = DatabaseDestroy::ON;
+		helper_state.database_destroy = DatabaseDestroy::ON;
 	} else if (mode == "off") {
-		database_destroy = DatabaseDestroy::OFF;
+		helper_state.database_destroy = DatabaseDestroy::OFF;
 	} else if (mode == "on-success") {
-		database_destroy = DatabaseDestroy::ON_SUCCESS;
+		helper_state.database_destroy = DatabaseDestroy::ON_SUCCESS;
 	} else {
 		return false;
 	}
@@ -316,7 +399,7 @@ bool SetDatabaseDestroy(const string &mode) {
 }
 
 bool DatabaseDestroyFires(bool success) {
-	switch (database_destroy) {
+	switch (helper_state.database_destroy) {
 	case DatabaseDestroy::ON:
 		return true;
 	case DatabaseDestroy::ON_SUCCESS:
@@ -335,15 +418,15 @@ static string GenerateAutoRunId() {
 // The caller's --run-id, or a generated one, cached for the invocation. Always resolved, even when
 // RUN_ID is not a path segment (TreeRunIdRoot gates that) -- the env var exists either way.
 static string ResolveRunId() {
-	if (temp_dir_run_id.empty()) {
-		temp_dir_run_id = GenerateAutoRunId();
+	if (helper_state.temp_dir_run_id.empty()) {
+		helper_state.temp_dir_run_id = GenerateAutoRunId();
 	}
-	return temp_dir_run_id;
+	return helper_state.temp_dir_run_id;
 }
 
 // $ROOT/[RUN_ID] -- stable across the invocation, no IO.
 static Path TreeRunIdRoot(const Path &root) {
-	if (!temp_dir_run_id_in_path) {
+	if (!helper_state.temp_dir_run_id_in_path) {
 		return root;
 	}
 	return root.Join(ResolveRunId());
@@ -354,16 +437,17 @@ static Path TreeRunIdRoot(const Path &root) {
 // make them so. Resolved lazily: the local tree must be absolute (it outlives any test chdir) and the cwd
 // is only final once main() has changed into it.
 static const Path &LocalRoot() {
-	if (!primary_root.IsRemote()) {
-		return primary_root;
+	if (!helper_state.primary_root.IsRemote()) {
+		return helper_state.primary_root;
 	}
-	if (!local_root_resolved) {
-		const string &raw =
-		    local_temp_dir_root_override.empty() ? string(TESTING_DIRECTORY_NAME) : local_temp_dir_root_override;
-		local_root = Path::FromString(TestMakeAbsolute(raw, TestGetCurrentDirectory()));
-		local_root_resolved = true;
+	if (!helper_state.local_root_resolved) {
+		const string &raw = helper_state.local_temp_dir_root_override.empty()
+		                        ? string(TESTING_DIRECTORY_NAME)
+		                        : helper_state.local_temp_dir_root_override;
+		helper_state.local_root = Path::FromString(TestMakeAbsolute(raw, TestGetCurrentDirectory()));
+		helper_state.local_root_resolved = true;
 	}
-	return local_root;
+	return helper_state.local_root;
 }
 
 // A SIBLING of the run-id root, never inside it: HOME within a {TEST_DIR} that a test whitelists via
@@ -391,7 +475,7 @@ string TestNameToId(const string &name) {
 // TEST_ID for the currently-executing test ("" when TEST_ID off or no test is active,
 // e.g. at startup -- the test name isn't known until a test runs).
 static string ResolveTestId() {
-	if (!temp_dir_test_id) {
+	if (!helper_state.temp_dir_test_id) {
 		return "";
 	}
 	string name;
@@ -484,20 +568,20 @@ static bool DestroyFires(TempDirDestroy disposition, bool success) {
 
 // mkdir-p the local tree's $ROOT/[RUN_ID], recording what it created so destroy reclaims only that.
 static void PrepareLocalTree() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	RecordAndCreateLevels(*fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
+	auto &fs = TestLocalFileSystem();
+	RecordAndCreateLevels(fs, TreeRunIdRoot(LocalRoot()).ToString(), helper_state.run_created_levels);
 }
 
 static bool PrepareTempDirInternal(string &error) {
 	// Checked here, not at set time: it depends on two options, which arrive in any order from the CLI,
 	// the environment and a config file.
 	// Naming the same local root twice is redundant, not a conflict; only a divergent one is an error.
-	if (!GetLocalTempDirRoot().empty() && !primary_root.IsRemote() &&
-	    Path::Normalize(GetLocalTempDirRoot()) != primary_root.ToString()) {
+	if (!GetLocalTempDirRoot().empty() && !helper_state.primary_root.IsRemote() &&
+	    Path::Normalize(GetLocalTempDirRoot()) != helper_state.primary_root.ToString()) {
 		error = "--local-temp-dir-root conflicts with a local --temp-dir-root, which is already its own "
 		        "LOCAL_TEMP_DIR; it applies only to a remote root. To relocate the whole tree, set "
 		        "--temp-dir-root / DUCKDB_TEST_TEMP_DIR_ROOT instead (temp-dir-root: " +
-		        primary_root.ToString() + ", local-temp-dir-root: " + GetLocalTempDirRoot() + ")";
+		        helper_state.primary_root.ToString() + ", local-temp-dir-root: " + GetLocalTempDirRoot() + ")";
 		return false;
 	}
 	PrepareLocalTree();
@@ -505,8 +589,8 @@ static bool PrepareTempDirInternal(string &error) {
 	// would materialize $ROOT behind PrepareLocalTree's back, RecordAndCreateLevels would read it as
 	// pre-existing, and it would never be reclaimed. Unconditional -- some code errors if
 	// home_directory is set but absent.
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	RecordAndCreateLevels(*fs, GetTempDirHome(), home_created_levels);
+	auto &fs = TestLocalFileSystem();
+	RecordAndCreateLevels(fs, GetTempDirHome(), helper_state.home_created_levels);
 	return true;
 }
 
@@ -523,34 +607,34 @@ bool PrepareTempDir(string &error) {
 }
 
 void DestroyTempDir(bool success) {
-	if (!DestroyFires(temp_dir_destroy, success)) {
+	if (!DestroyFires(helper_state.temp_dir_destroy, success)) {
 		return;
 	}
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	// HOME first: it sits under $ROOT, so leaving it would fail the emptiness check in the ancestor
 	// walk below and strand a root this run owns. Reclaimed on the same created/adopted rule --
 	// co-located batches share one HOME path, and an adopted one may be another batch's live sandbox.
-	ReclaimTestDirectoryLevels(*fs, GetTempDirHome(), home_created_levels);
+	ReclaimTestDirectoryLevels(fs, GetTempDirHome(), helper_state.home_created_levels);
 	// The root subsumes any leftover per-test dirs; ancestors go only up to a pre-existing $ROOT.
-	ReclaimTestDirectoryLevels(*fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
+	ReclaimTestDirectoryLevels(fs, TreeRunIdRoot(LocalRoot()).ToString(), helper_state.run_created_levels);
 }
 
 // Fired at test end with THIS test's pass/fail. Only the $TEST_ID level is in scope -- $RUN_ID/$ROOT
 // were made by PrepareTempDir, so ReclaimTestDirectoryLevels stops there.
 void DestroyTestTempDir(bool success) {
-	ActiveTestTempDir entry;
+	TestHelperState::ActiveTestTempDir entry;
 	{
 		lock_guard<mutex> guard(active_test_lock);
-		auto it = active_tests.find(ResolveTestId());
-		if (it == active_tests.end()) {
+		auto it = helper_state.active_tests.find(ResolveTestId());
+		if (it == helper_state.active_tests.end()) {
 			return;
 		}
 		entry = std::move(it->second);
-		active_tests.erase(it);
+		helper_state.active_tests.erase(it);
 	}
-	if (!entry.leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		ReclaimTestDirectoryLevels(*fs, entry.leaf, entry.created_levels);
+	if (!entry.leaf.empty() && DestroyFires(helper_state.temp_dir_destroy, success)) {
+		auto &fs = TestLocalFileSystem();
+		ReclaimTestDirectoryLevels(fs, entry.leaf, entry.created_levels);
 	}
 }
 
@@ -564,25 +648,25 @@ static string MaterializeLocalTestPath() {
 	}
 	lock_guard<mutex> guard(active_test_lock);
 	auto test_id = ResolveTestId();
-	auto entry = active_tests.find(test_id);
-	if (entry != active_tests.end() && entry->second.leaf == path) {
+	auto entry = helper_state.active_tests.find(test_id);
+	if (entry != helper_state.active_tests.end() && entry->second.leaf == path) {
 		return path;
 	}
-	ActiveTestTempDir active;
+	TestHelperState::ActiveTestTempDir active;
 	active.leaf = path;
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (!fs->DirectoryExists(path)) {
-		RecordAndCreateLevels(*fs, path, active.created_levels);
+	auto &fs = TestLocalFileSystem();
+	if (!fs.DirectoryExists(path)) {
+		RecordAndCreateLevels(fs, path, active.created_levels);
 	}
-	active_tests[test_id] = std::move(active);
+	helper_state.active_tests[test_id] = std::move(active);
 	return path;
 }
 // -----------------------------------------------------------------------------
 
 string TestDirectoryPath() {
 	// A remote root is a pure string -- the test owns materialization there. Otherwise it IS the local tree.
-	if (primary_root.IsRemote()) {
-		return TreeTestPath(primary_root).ToString();
+	if (helper_state.primary_root.IsRemote()) {
+		return TreeTestPath(helper_state.primary_root).ToString();
 	}
 	return MaterializeLocalTestPath();
 }
@@ -592,14 +676,12 @@ string LocalTestDirectoryPath() {
 }
 
 void SetDeleteTestPath(bool delete_path) {
-	delete_test_path = delete_path;
+	helper_state.delete_test_path = delete_path;
 }
 
 bool DeleteTestPath() {
-	return delete_test_path;
+	return helper_state.delete_test_path;
 }
-
-static bool emit_test_events = false;
 
 static std::function<void(DuckDB &)> static_extension_loader;
 
@@ -614,27 +696,27 @@ void LoadStaticExtensions(DuckDB &db) {
 }
 
 void SetEmitTestEvents(bool emit) {
-	emit_test_events = emit;
+	helper_state.emit_test_events = emit;
 }
 
 bool EmitTestEventsEnabled() {
-	return emit_test_events;
+	return helper_state.emit_test_events;
 }
 
 void ClearTestDirectory() {
 	if (!DeleteTestPath()) {
 		return;
 	}
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto test_dir = TestDirectoryPath();
 	// try to clear any files we created in the test directory
-	fs->ListFiles(test_dir, [&](const string &file, bool is_dir) {
-		auto full_path = fs->JoinPath(test_dir, file);
+	fs.ListFiles(test_dir, [&](const string &file, bool is_dir) {
+		auto full_path = fs.JoinPath(test_dir, file);
 		try {
 			if (is_dir) {
-				fs->RemoveDirectory(full_path);
+				fs.RemoveDirectory(full_path);
 			} else {
-				fs->RemoveFile(full_path);
+				fs.RemoveFile(full_path);
 			}
 		} catch (...) {
 			// skip
@@ -661,25 +743,25 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
 	result->options.checkpoint_wal_size = test_config.GetCheckpointWALSize();
-	result->options.checkpoint_on_shutdown = test_config.GetCheckpointOnShutdown();
+	result->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(test_config.GetCheckpointOnShutdown()));
 #else
-	result->options.checkpoint_on_shutdown = false;
+	result->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 #endif
-	result->options.abort_on_wal_failure = true;
+	result->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
 #ifdef DUCKDB_RUN_SLOW_VERIFIERS
 	// This mode isn't slow, but we want test coverage both when it's enabled
 	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
-	result->options.trim_free_blocks = true;
+	result->SetOption(TrimFreeBlocksSetting::SettingIndex, Value::BOOLEAN(true));
 #endif
 	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
-		result->options.storage_compatibility = StorageCompatibility::FromString(storage_version);
+		result->SetOptionByName("storage_compatibility_version", storage_version);
 	}
 
 	auto max_threads = test_config.GetMaxThreads();
 	if (max_threads.IsValid()) {
-		result->options.maximum_threads = max_threads.GetIndex();
+		Settings::Set<ThreadsSetting>(*result, SetScope::GLOBAL, Value::BIGINT(max_threads.GetIndex()));
 	}
 
 	auto block_alloc_size = test_config.GetBlockAllocSize();
@@ -688,7 +770,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 		result->SetOptionByName("default_block_size", Value::UBIGINT(block_alloc_size.GetIndex()));
 	}
 
-	result->options.debug_initialize = test_config.GetDebugInitialize();
+	result->SetOptionByName("debug_initialize", EnumUtil::ToString(test_config.GetDebugInitialize()));
 	result->options.main_database_options = test_config.GetMainDatabaseOptions();
 	result->SetOptionByName("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;
@@ -741,18 +823,6 @@ bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Valu
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	return CHECK_COLUMN(*result, column_number, values);
-}
-
-string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
-		return result.GetError();
-	}
-	string error;
-	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
-		return error;
-	}
-	return "";
 }
 
 string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {

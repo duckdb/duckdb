@@ -41,8 +41,19 @@ public:
 
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
+	//! Same as IndexEntries(), skipping the entries of indexes that are being built.
+	TableIndexIterationHelper<shared_ptr<IndexEntry>> BuiltIndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Adds the entry of an index being built (requires the commit lock)
+	shared_ptr<IndexEntry> AddBuildingIndex(const BoundIndex &index_template, transaction_t build_commit,
+	                                        transaction_t build_transaction);
+	//! Returns the entry being built by the transaction, if any
+	shared_ptr<IndexEntry> FindBuildingIndex(transaction_t build_transaction) const;
+	//! Removes the entry if it is still being built
+	void RemoveBuildingIndex(const IndexEntry &entry);
+	//! Returns the number of indexes that are not being built
+	idx_t CountBuiltIndexes() const;
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -56,16 +67,19 @@ public:
 	void RevertAppend(DataChunk &chunk, row_t row_start);
 	//! Appends deleted rows to all unique indexes.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
-	//! Applies a removal or removal rollback to all index entries.
+	//! Applies a removal or removal rollback to the index entries added before the bound.
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
-	                       optional_idx active_checkpoint = optional_idx());
+	                       optional_idx active_checkpoint = optional_idx(),
+	                       VisibilityBound bound = VisibilityBound::IncludingUncommitted());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(idx_t index_oid);
 	//! Returns the entry matching the index OID.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	shared_ptr<IndexEntry> FindEntry(idx_t index_oid) const;
-	//! Binds unbound indexes possibly present after loading an extension.
-	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
+	//! Binds unbound indexes possibly present after loading an extension. An index whose stored keys bind to other
+	//! types here is refused, or left unbound when skip_mismatched_keys is set, for a read that can do without it.
+	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {},
+	          bool skip_mismatched_keys = false);
 	//! Returns true, if there are no index entries.
 	bool Empty() const {
 		return Count() == 0;
@@ -124,8 +138,8 @@ public:
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Persist index buffers and install replacements before returning their metadata.
 	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
-	//! Returns the physical table columns referenced by any index.
-	unordered_set<column_t> GetIndexedColumns() const;
+	//! Returns the physical table columns of the indexes added before the bound (by default all).
+	unordered_set<column_t> GetIndexedColumns(VisibilityBound bound = VisibilityBound::IncludingUncommitted()) const;
 	//! Returns the column sets of unique indexes matching the conflict target.
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
@@ -156,32 +170,38 @@ private:
 template <class T>
 class TableIndexIterationHelper {
 public:
-	explicit TableIndexIterationHelper(const TableIndexList &index_list);
+	TableIndexIterationHelper(const TableIndexList &index_list, bool skip_building_p);
 
 private:
 	annotated_unique_lock<annotated_mutex> lock;
 	const vector<shared_ptr<IndexEntry>> &index_entries;
+	bool skip_building;
 
 private:
 	class TableIndexIterator {
 	public:
-		explicit TableIndexIterator(optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries);
+		TableIndexIterator(optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries, bool skip_building_p);
 
 		optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries;
 		optional_idx index;
+		bool skip_building;
 
 	public:
 		TableIndexIterator &operator++();
 		bool operator!=(const TableIndexIterator &other) const;
 		T operator*() const;
+
+	private:
+		void Advance();
+		void SkipBuilding();
 	};
 
 public:
 	TableIndexIterator begin() { // NOLINT: match stl API
-		return TableIndexIterator(&index_entries);
+		return TableIndexIterator(&index_entries, skip_building);
 	}
 	TableIndexIterator end() { // NOLINT: match stl API
-		return TableIndexIterator(nullptr);
+		return TableIndexIterator(nullptr, skip_building);
 	}
 };
 

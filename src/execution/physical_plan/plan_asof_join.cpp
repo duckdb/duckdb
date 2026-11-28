@@ -109,16 +109,13 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalCo
 		const auto lhs_width = probe_types.size();
 		const auto rhs_width = build_types.size();
 
-		ExpressionIterator::EnumerateExpression(predicate, [&](Expression &child) {
-			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-				auto &ref = child.Cast<BoundReferenceExpression>();
-				if (ref.Index() < lhs_width) {
-					ref.IndexMutable() = ref.Index() + rhs_width;
-				} else {
-					ref.IndexMutable() = ref.Index() - lhs_width;
-				}
-			}
-		});
+		predicate = ExpressionIterator::PreorderReplace<BoundReferenceExpression>(
+		    std::move(predicate), [&](const BoundReferenceExpression &ref) {
+			    if (ref.Index() < lhs_width) {
+				    return ref.WithIndex(ref.Index() + rhs_width);
+			    }
+			    return ref.WithIndex(ref.Index() - lhs_width);
+		    });
 
 		join_op.conditions.emplace_back(std::move(predicate));
 	}
@@ -271,8 +268,8 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalCo
 	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), join_cardinality);
 	window.children.emplace_back(probe);
 
-	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions), join_op.join_type,
-	                                          join_cardinality);
+	auto &join = Make<PhysicalNestedLoopJoin>(context, join_op, build, window, std::move(join_op.conditions),
+	                                          join_op.join_type, join_cardinality);
 
 	// Plan a projection of the compare column
 	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), join_cardinality);
@@ -333,16 +330,8 @@ static idx_t ValidateAsOfConditions(LogicalComparisonJoin &op, vector<idx_t> &eq
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
-#ifdef D_ASSERT_IS_ENABLED
-	// The sorted ASOF operator emits the full left payload in child order (see column_lifetime_analyzer.cpp),
-	// so the only supported left projection maps are empty or full-width identity.
-	if (op.join_type != JoinType::MARK && !op.left_projection_map.empty()) {
-		D_ASSERT(op.left_projection_map.size() == op.children[0]->GetColumnBindings().size());
-		for (idx_t i = 0; i < op.left_projection_map.size(); i++) {
-			D_ASSERT(op.left_projection_map[i].GetIndex() == i);
-		}
-	}
-#endif
+	// The sorted ASOF operator emits the full left payload in child order. Pruning left projection maps are
+	// honored by ExtractPrunedJoinProjection, which wraps the operator in an explicit projection.
 	// If we have a predicate and its a "simple" join, then we can just plan a regular join
 	switch (op.join_type) {
 	case JoinType::SEMI:
@@ -364,8 +353,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	// Estimate the join cardinality before planning the children - planning consumes the bind data of their scans
 	const idx_t join_cardinality = op.EstimateCardinality(context);
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 
 	//	Validate
 	vector<idx_t> equi_indexes;
@@ -406,7 +395,11 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 			rhs_partition_cols.clear();
 		}
 
-		return Make<PhysicalAsOfJoin>(op, left, right, lhs_partition_cols, rhs_partition_cols);
+		// The sorted operator always emits the full left input width. A pruning left
+		// projection map is applied through a projection above the join instead.
+		auto pruned = ExtractPrunedJoinProjection(op, left, right, true, false);
+		auto &asof_join = Make<PhysicalAsOfJoin>(op, left, right, lhs_partition_cols, rhs_partition_cols);
+		return RestorePrunedJoinProjection(op, asof_join, std::move(pruned));
 	}
 
 	return *PlanAsOfInequalityJoin(op, left, right, lhs_cardinality, rhs_cardinality);
@@ -479,7 +472,7 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfInequalityJoin(Log
 	auto window_types = right.GetTypes();
 	window_types.emplace_back(asof_type);
 
-	auto &window = Make<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
+	auto &window = Make<PhysicalWindow>(context, window_types, std::move(window_select), rhs_cardinality);
 	window.children.emplace_back(right);
 
 	// IEJoin(left, window, conditions || asof_comp ~op asof_end)
@@ -505,7 +498,7 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfInequalityJoin(Log
 	JoinCondition asof_upper(std::move(left_expr), std::move(right_expr), comparison);
 
 	op.conditions.emplace_back(std::move(asof_upper));
-	return Make<PhysicalIEJoin>(op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
+	return Make<PhysicalIEJoin>(context, op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
 }
 
 } // namespace duckdb

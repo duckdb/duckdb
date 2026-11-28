@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -257,7 +258,9 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 	auto subject_entry = LookupEntry(transaction, info.subject.entry);
 	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
 	if (!subject_entry) {
-		throw InternalException("Couldn't locate entry: '%s'", CatalogEntryInfoToString(info.subject.entry));
+		// a connection that shares the transaction dropped or renamed the entry in the meantime
+		throw TransactionException("Catalog write-write conflict: could not locate entry '%s'",
+		                           CatalogEntryInfoToString(info.subject.entry));
 	}
 
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
@@ -537,7 +540,8 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 	return result;
 }
 
-void DependencyManager::VerifyExistence(CatalogTransaction transaction, DependencyEntry &object) {
+void DependencyManager::VerifyExistence(CatalogTransaction transaction, CatalogTransaction snapshot_transaction,
+                                        DependencyEntry &object) {
 	auto &subject = object.Subject();
 
 	CatalogEntryInfo info;
@@ -573,6 +577,17 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 		throw DependencyException(
 		    "Could not commit creation of dependency, subject %s was dropped and re-created by another transaction",
 		    object.EntryInfo().name);
+	}
+	// An alter preserves the oid. If the subject changed after this transaction's snapshot, the entry decides
+	// whether the change breaks what the dependent was bound against.
+	if (!subject.flags.IsOwnership() && lookup_result.result &&
+	    lookup_result.result->timestamp >= snapshot_transaction.view.visibility_bound) {
+		auto bound_entry = LookupEntry(snapshot_transaction, info);
+		if (bound_entry && lookup_result.result->InvalidatesDependents(*bound_entry)) {
+			throw DependencyException("Could not commit creation of dependency, subject %s was altered incompatibly "
+			                          "by another transaction",
+			                          object.EntryInfo().name);
+		}
 	}
 }
 

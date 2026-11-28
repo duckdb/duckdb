@@ -196,12 +196,19 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				// set the match flags in the LHS
 				state.left_outer.SetMatches(state.match_sel, result_count);
 				// set the match flag in the RHS
-				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() + state.cross_product.PositionInChunk());
+				if (gstate.right_outer.Enabled()) {
+					lock_guard<mutex> guard(gstate.lock);
+					gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
+					                            state.cross_product.PositionInChunk());
+				}
 			} else {
 				// set the match flag in the LHS
 				state.left_outer.SetMatch(state.cross_product.PositionInChunk());
 				// set the match flags in the RHS
-				gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				if (gstate.right_outer.Enabled()) {
+					lock_guard<mutex> guard(gstate.lock);
+					gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				}
 			}
 			intermediate_chunk->Slice(state.match_sel, result_count);
 		}

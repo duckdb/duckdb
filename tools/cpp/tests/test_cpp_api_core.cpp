@@ -134,9 +134,10 @@ TEST_CASE("Stable C++API: LibraryVersion reports the engine version", "[cpp_api]
 	REQUIRE_FALSE(version.empty());
 
 	// The engine agrees; the C entry point reports the same text as a borrowed view.
-	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_library_version(&raw, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(version == std::string(raw.ptr, raw.len));
+	const char *raw = nullptr;
+	idx_t raw_length = 0;
+	REQUIRE(duckdb_v2_library_version(&raw, &raw_length, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(version == std::string(raw, raw_length));
 }
 
 TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_api]") {
@@ -396,4 +397,112 @@ TEST_CASE("Stable C++API: StartupOptions reach the instance's settings", "[cpp_a
 	auto defaults = Instance(":memory:");
 	REQUIRE(defaults.GetConfig().GetOption("allow_unsigned_extensions").value.ToText() == "false");
 	REQUIRE(defaults.GetConfig().GetOption("disable_database_invalidation").value.ToText() == "false");
+}
+
+TEST_CASE("Stable C++API: StartupOptions::Set passes options by name", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	// Startup-only options without a dedicated setter.
+	auto instance = Instance(":memory:", StartupOptions()
+	                                         .Set("duckdb_api", "cpp_api_test")
+	                                         .Set("extension_repository_directory", "cpp_api_test_extensions")
+	                                         .Set("threads", "1"));
+	auto &config = instance.GetConfig();
+	REQUIRE(config.GetOption("duckdb_api").value.ToText() == "cpp_api_test");
+	REQUIRE(config.GetOption("extension_repository_directory").value.ToText() == "cpp_api_test_extensions");
+	REQUIRE(config.GetOption("threads").value.ToText() == "1");
+
+	// Aliases resolve, and a later value wins, also over a dedicated setter.
+	auto overridden = Instance(StartupOptions()
+	                               .EnableUnsignedExtensions(false)
+	                               .Set("allow_unsigned_extensions", "true")
+	                               .Set("worker_threads", "2")
+	                               .Set("threads", "3"));
+	REQUIRE(overridden.GetConfig().GetOption("allow_unsigned_extensions").value.ToText() == "true");
+	REQUIRE(overridden.GetConfig().GetOption("threads").value.ToText() == "3");
+
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("threads", "not a number")), Exception);
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("no_such_option_xyz", "1")), Exception);
+	// Options that need a running instance go through the instance's config instead.
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("allowed_directories", "['/tmp']")), Exception);
+}
+
+TEST_CASE("Stable C++API: Instance::OpenShared shares one instance per file", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_open_shared.db");
+	duckdb::DeleteDatabase(path);
+	{
+		Environment env;
+		{
+			auto a = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"));
+			auto b = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"));
+			REQUIRE(env.GetInstanceCount() == 2);
+			auto conn_a = a.Connect();
+			conn_a.Execute("CREATE TABLE t AS SELECT 42 AS i").Drain();
+			auto conn_b = b.Connect();
+			REQUIRE(conn_b.Execute("SELECT i FROM t").FetchChunk().GetVector(0).GetValue(0).Get<int32_t>() == 42);
+
+			// open with other startup options
+			REQUIRE_THROWS_AS(Instance::OpenShared(env, path, StartupOptions().Set("threads", "3")), Exception);
+			// attached to an instance that is not shared
+			auto unshared = Instance(env);
+			REQUIRE_THROWS_AS(unshared.Attach(path), Exception);
+
+			// an unnamed in-memory database is never shared
+			auto memory_a = Instance::OpenShared(env, ":memory:");
+			auto memory_b = Instance::OpenShared(env, ":memory:");
+			memory_a.Connect().Execute("CREATE TABLE t AS SELECT 1 AS i").Drain();
+			REQUIRE_THROWS_AS(memory_b.Connect().Execute("SELECT * FROM t").Drain(), Exception);
+		}
+		REQUIRE(env.GetInstanceCount() == 0);
+	}
+
+	// in the default environment, once the file was closed: with other startup options too
+	{
+		auto instance = Instance::OpenShared(path, StartupOptions().Set("threads", "1"));
+		auto conn = instance.Connect();
+		REQUIRE(conn.Execute("SELECT count(*) FROM t").FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 1);
+	}
+	duckdb::DeleteDatabase(path);
+}
+
+TEST_CASE("Stable C++API: Instance::OpenShared initializes the instance it creates", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_open_shared_init.db");
+	duckdb::DeleteDatabase(path);
+	Environment env;
+	idx_t calls = 0;
+	Instance::InitCallback init = [&](Instance &instance) {
+		calls++;
+		instance.Connect().Execute("CREATE TABLE IF NOT EXISTS init_t AS SELECT 42 AS i").Drain();
+		instance.GetConfig().SetOption("enable_external_access", "false", SettingScope::GLOBAL);
+	};
+	{
+		auto a = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"), init);
+		REQUIRE(calls == 1);
+		// the same settings, written differently: shared, and not initialized again
+		auto b = Instance::OpenShared(env, path, StartupOptions().Set("worker_threads", "02"), init);
+		REQUIRE(calls == 1);
+		REQUIRE(env.GetInstanceCount() == 2);
+		auto conn = b.Connect();
+		REQUIRE(conn.Execute("SELECT i FROM init_t").FetchChunk().GetVector(0).GetValue(0).Get<int32_t>() == 42);
+		REQUIRE(!conn.Execute("SELECT current_setting('enable_external_access')")
+		             .FetchChunk()
+		             .GetVector(0)
+		             .GetValue(0)
+		             .Get<bool>());
+	}
+	REQUIRE(env.GetInstanceCount() == 0);
+
+	// an init that throws: the call throws, and the next call creates the instance again
+	REQUIRE_THROWS_AS(Instance::OpenShared(env, path, {}, [](Instance &) { throw std::runtime_error("init refused"); }),
+	                  Exception);
+	REQUIRE(env.GetInstanceCount() == 0);
+	{
+		auto instance = Instance::OpenShared(env, path, {}, init);
+		REQUIRE(calls == 2);
+	}
+	duckdb::DeleteDatabase(path);
 }

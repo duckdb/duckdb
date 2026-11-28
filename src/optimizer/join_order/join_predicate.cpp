@@ -10,8 +10,7 @@ namespace duckdb {
 ColumnBinding JoinOrderUtil::GetEquivalenceBinding(const Expression &expression) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.Depth() == 0);
-		return colref.Binding();
+		return colref.Depth() == 0 ? colref.Binding() : ColumnBinding();
 	}
 	if (BoundCastExpression::IsCast(expression)) {
 		auto &cast = expression.Cast<BoundFunctionExpression>();
@@ -88,7 +87,8 @@ JoinPredicate::JoinPredicate(idx_t index, FilterInfo &filter, JoinPredicateClass
                              ColumnBinding left_equality_binding, ColumnBinding right_equality_binding)
     : index(index), filter(filter), predicate_class(predicate_class),
       comparison_type(JoinOrderUtil::GetJoinPredicateComparisonType(filter)),
-      left_equality_binding(left_equality_binding), right_equality_binding(right_equality_binding) {
+      is_volatile(filter.filter && filter.filter->IsVolatile()), left_equality_binding(left_equality_binding),
+      right_equality_binding(right_equality_binding) {
 }
 
 idx_t JoinPredicate::GetIndex() const {
@@ -109,6 +109,10 @@ JoinType JoinPredicate::GetJoinType() const {
 
 ExpressionType JoinPredicate::GetComparisonType() const {
 	return comparison_type;
+}
+
+bool JoinPredicate::IsVolatile() const {
+	return is_volatile;
 }
 
 JoinRelationSet &JoinPredicate::GetSet() const {
@@ -179,6 +183,23 @@ bool JoinPredicate::CanBuildSelectivityDomain() const {
 
 bool JoinPredicate::IsEquivalencePredicate() const {
 	return CanBuildEqualityClosure();
+}
+
+bool JoinPredicate::IsResidualFilter() const {
+	auto &info = filter.get();
+	if (info.join_type != JoinType::INNER) {
+		return false;
+	}
+	// FILTERs collected from inside this join region are not included in leaf statistics.
+	// An unsupported expression still has one fallback estimate and one runtime owner.
+	if (info.from_logical_filter && !CanBuildEqualityClosure() && !CanBuildSelectivityDomain()) {
+		return true;
+	}
+	if (info.set.get().count < 2 && !info.source_operator_index.IsValid()) {
+		return false;
+	}
+	return info.must_remain_filter || info.from_residual_predicate ||
+	       (info.filter && info.filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR);
 }
 
 void JoinPredicate::SetEqualityClassIndex(optional_idx equality_class_index) {
@@ -322,12 +343,17 @@ const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const 
 	return equality_classes;
 }
 
-bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
+optional_ptr<const RelationPairEqualitySummary> JoinPredicateModel::GetDirectEqualityPair(JoinRelationSet &pair) const {
 	auto entry = equality_pairs.find(pair);
 	if (entry == equality_pairs.end()) {
-		return false;
+		return nullptr;
 	}
-	return entry->second.HasDirectCompositeEquality();
+	return entry->second;
+}
+
+bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
+	auto summary = GetDirectEqualityPair(pair);
+	return summary && summary->HasDirectCompositeEquality();
 }
 
 } // namespace duckdb

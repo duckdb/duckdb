@@ -11,6 +11,11 @@
 
 namespace duckdb {
 
+static unique_ptr<Expression> RenameColumnRef(const BoundColumnRefExpression &ref, Identifier alias) {
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), ref.GetReturnType(), ref.Binding(), ref.Depth(),
+	                                           ref.GetQueryLocation());
+}
+
 /**
  * When a BoundColumnRefExpression that's part of expr (a filter) arrives here, its
  * name will be set to the projection name i.e. "other" for SELECT col as other.
@@ -21,23 +26,23 @@ namespace duckdb {
  */
 static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const LogicalGet &get) {
 	const vector<ColumnIndex> &column_ids = get.GetColumnIds();
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &slot) {
 		const ColumnBinding &binding = ref.Binding();
 		if (binding.table_index != get.table_index || binding.column_index >= column_ids.size()) {
 			return;
 		}
 		const ColumnIndex &col_idx = column_ids[binding.column_index];
 		if (!col_idx.HasPrimaryIndex()) {
-			ref.SetAlias(Identifier(col_idx.GetFieldName()));
+			slot = RenameColumnRef(ref, Identifier(col_idx.GetFieldName()));
 			return;
 		}
 		const idx_t primary = col_idx.GetPrimaryIndex();
 		if (col_idx.IsVirtualColumn()) {
 			if (const auto it = get.virtual_columns.find(primary); it != get.virtual_columns.end()) {
-				ref.SetAlias(Identifier(it->second.name.GetIdentifierName()));
+				slot = RenameColumnRef(ref, Identifier(it->second.name.GetIdentifierName()));
 			}
 		} else if (primary < get.names.size()) {
-			ref.SetAlias(Identifier(col_idx.GetName(get.names[primary].GetIdentifierName())));
+			slot = RenameColumnRef(ref, Identifier(col_idx.GetName(get.names[primary].GetIdentifierName())));
 		}
 	});
 }
@@ -149,20 +154,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	const bool requires_partial_pushdown = !get.children.empty() && get.function.supports_pushdown_type;
 	// WITH ORDINALITY numbers the rows the function emits, so pushing a filter into the function would renumber the
 	// surviving rows rather than report their original positions
-	if (get.table_filters.HasFilters() || !get.function.filter_pushdown || requires_partial_pushdown ||
-	    assigns_ordinality) {
+	if (!get.function.filter_pushdown || requires_partial_pushdown || assigns_ordinality) {
 		// these filters cannot be pushed into the scan: push a LogicalFilter on top
 		restore_barrier_filters();
 		return FinishPushdown(std::move(op));
 	}
+	const bool has_incoming_filters = !filters.empty();
 	if (PushFilters() == FilterResult::UNSATISFIABLE) {
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 
 	auto &column_ids = get.GetColumnIds();
+	const bool has_existing_filters = get.table_filters.HasFilters();
 	//! We generate the table filters that will be executed during the table scan
 	vector<FilterPushdownResult> pushdown_results;
-	get.table_filters = combiner.GenerateTableScanFilters(column_ids, pushdown_results);
+	combiner.GenerateTableScanFilters(get.table_filters, column_ids, pushdown_results);
 
 	GenerateFilters();
 
@@ -189,8 +195,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
 			continue;
 		}
-		// Allow pushing down filters that can throw only if there is a single expression
-		if (expr.CanThrow() && filters.size() > 1) {
+		// An existing scan filter may guard a throwing expression that arrived in this later pass.
+		if (expr.CanThrow() && (filters.size() > 1 || has_existing_filters)) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);
@@ -203,6 +209,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	PushdownBarrierFilters(get, barrier_filters);
 	restore_barrier_filters();
+
+	if (has_existing_filters && has_incoming_filters && get.table_filters.Finalize() == FilterResult::UNSATISFIABLE) {
+		return make_uniq<LogicalEmptyResult>(std::move(op));
+	}
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

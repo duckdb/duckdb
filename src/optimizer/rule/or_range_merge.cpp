@@ -265,7 +265,8 @@ unique_ptr<Expression> MakeComparison(ExpressionType type, const Expression &inp
 }
 
 //! The merged range: a BETWEEN when both bounds are present, otherwise a single comparison
-unique_ptr<Expression> MakeRange(const Expression &input, const RangeBound &lower, const RangeBound &upper) {
+unique_ptr<Expression> MakeRange(ClientContext &context, const Expression &input, const RangeBound &lower,
+                                 const RangeBound &upper) {
 	auto lower_type =
 	    lower.inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
 	auto upper_type = upper.inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
@@ -281,7 +282,7 @@ unique_ptr<Expression> MakeRange(const Expression &input, const RangeBound &lowe
 		                                             MakeComparison(lower_type, input, lower),
 		                                             MakeComparison(upper_type, input, upper));
 	}
-	return BoundBetweenExpression::Create(input.Copy(), make_uniq<BoundConstantExpression>(lower.value),
+	return BoundBetweenExpression::Create(context, input.Copy(), make_uniq<BoundConstantExpression>(lower.value),
 	                                      make_uniq<BoundConstantExpression>(upper.value), lower.inclusive,
 	                                      upper.inclusive);
 }
@@ -349,7 +350,7 @@ unique_ptr<Expression> OrRangeMergeRule::Apply(LogicalOperator &op, vector<refer
 			}
 			merged_any = true;
 			idx_t first = *std::min_element(members.begin(), members.end());
-			replacements[first] = MakeRange(ranges[group[0]].input.get(), lower, upper);
+			replacements[first] = MakeRange(GetContext(), ranges[group[0]].input.get(), lower, upper);
 			for (auto member : members) {
 				dropped[member] = member != first;
 			}

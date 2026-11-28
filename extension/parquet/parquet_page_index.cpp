@@ -116,7 +116,7 @@ idx_t ParquetPageIndexUtils::PageRowCount(const duckdb_parquet::OffsetIndex &off
 	return end - begin;
 }
 
-void ParquetPageIndexUtils::FilterPages(const ParquetColumnSchema &schema,
+void ParquetPageIndexUtils::FilterPages(ClientContext &context, const ParquetColumnSchema &schema,
                                         const duckdb_parquet::ColumnIndex &column_index, const TableFilter &filter,
                                         const ParquetOptions &parquet_options, bool can_have_nan,
                                         vector<bool> &result) {
@@ -151,7 +151,7 @@ void ParquetPageIndexUtils::FilterPages(const ParquetColumnSchema &schema,
 				stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 			}
 		}
-		auto prune_result = expr_filter.CheckStatistics(*stats);
+		auto prune_result = expr_filter.CheckStatistics(context, *stats);
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			result[page_idx] = false;

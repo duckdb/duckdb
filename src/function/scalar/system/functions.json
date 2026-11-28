@@ -43,11 +43,26 @@
         "struct": "CurrentTransactionId"
     },
     {
+        "name": "share_transaction",
+        "description": "Share the current transaction so that other connections can join it using JOIN TRANSACTION",
+        "example": "share_transaction()",
+        "type": "scalar_function",
+        "struct": "ShareTransaction"
+    },
+    {
         "name": "current_query_id",
         "description": "Get the current query_id",
         "example": "current_query_id()",
         "type": "scalar_function",
         "struct": "CurrentQueryId"
+    },
+    {
+        "name": "extension_repository_url",
+        "parameters": "host",
+        "description": "Returns the extension repository url that the given host publishes in its well-known metadata file, i.e., where CREATE EXTENSION REPOSITORY <host> would install and load extensions from. Reads the host's metadata file over https and nothing else: no repository is created and no key is trusted",
+        "example": "extension_repository_url('duckdb.org')",
+        "type": "scalar_function",
+        "struct": "ExtensionRepositoryUrl"
     },
     {
         "name": "parse_duckdb_log_message",

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/condition_variable.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -16,6 +17,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
+
+#include <functional>
 
 namespace duckdb {
 class ClientContext;
@@ -85,7 +88,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
 		const lock_guard<mutex> lock(lock_mutex);
 
 		// Check non-evictable entries first
@@ -128,17 +131,29 @@ public:
 		}
 
 		const lock_guard<mutex> lock(lock_mutex);
-		const auto estimated_memory = value->GetEstimatedCacheMemory();
-		const bool is_evictable = estimated_memory.IsValid();
-		if (!is_evictable) {
-			non_evictable_entries[std::move(key)] = std::move(value);
-			return;
-		}
-
-		auto reservation =
-		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+		PutInternal(std::move(key), std::move(value));
 	}
+
+	//! Puts `value` under `key` unless an entry is there already, and returns the entry under `key` afterwards.
+	shared_ptr<ObjectCacheEntry> GetOrPut(const string &key, shared_ptr<ObjectCacheEntry> value) {
+		const lock_guard<mutex> lock(lock_mutex);
+		auto non_evictable_it = non_evictable_entries.find(key);
+		if (non_evictable_it != non_evictable_entries.end()) {
+			return non_evictable_it->second;
+		}
+		auto existing = lru_cache.Get(key);
+		if (existing) {
+			return existing;
+		}
+		PutInternal(key, value);
+		return value;
+	}
+
+	//! Returns the entry under `key`, creating it with `create` first if there is none. `create` runs without the
+	//! cache lock; concurrent calls for the same key wait for it, calls for other keys do not. If `create` throws or
+	//! returns null, nothing is cached, and the waiting calls retry with their own `create`.
+	DUCKDB_API shared_ptr<ObjectCacheEntry>
+	GetOrCreateObject(const string &key, const std::function<shared_ptr<ObjectCacheEntry>()> &create);
 
 	void Delete(const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
@@ -159,7 +174,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
 		return GetOrCreate<T>(MakeCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
@@ -203,12 +218,37 @@ public:
 	bool EvictToMemoryLimit(idx_t memory_limit);
 
 private:
+	//! Replaces the entry under `key`, whether pinned or evictable. Requires the lock.
+	void PutInternal(string key, shared_ptr<ObjectCacheEntry> value) {
+		const auto estimated_memory = value->GetEstimatedCacheMemory();
+		const bool is_evictable = estimated_memory.IsValid();
+		if (!is_evictable) {
+			lru_cache.Delete(key);
+			non_evictable_entries[std::move(key)] = std::move(value);
+			return;
+		}
+		non_evictable_entries.erase(key);
+		auto reservation =
+		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
+		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+	}
+
 	//! Build the internal cache key for a typed entry by namespacing the caller-provided key with the entry's
 	//! ObjectType.
 	template <class T>
 	static string MakeCacheKey(const string &key) {
 		return StringUtil::Format("%s-%s", T::ObjectType(), key);
 	}
+
+private:
+	//! A creation by `GetOrCreateObject` in progress, which other calls for the same key wait for.
+	struct InFlightCreation {
+		mutex lock;
+		condition_variable finished_cv;
+		bool finished = false;
+	};
+	//! Unregisters a creation and wakes its waiters, however the creation ended.
+	void FinishCreation(const string &key, InFlightCreation &creation);
 
 private:
 	mutable mutex lock_mutex;
@@ -219,6 +259,10 @@ private:
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
 	BufferPool &buffer_pool;
+	//! Guards `in_flight_creations`, separately from the cache itself.
+	mutex in_flight_lock;
+	//! Creations by `GetOrCreateObject` in progress, by key.
+	unordered_map<string, shared_ptr<InFlightCreation>> in_flight_creations;
 };
 
 } // namespace duckdb

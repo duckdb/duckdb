@@ -15,7 +15,10 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+class BoundAggregateFunction;
 class BoundFunctionExpression;
+struct AggregateStateLayout;
+struct AggregateStateSerializer;
 struct SortedAggregateStateOrder;
 
 struct ConstantOrNull {
@@ -35,6 +38,10 @@ struct ExportAggregateFunction {
 	static unique_ptr<ParsedExpression> StateToSQL(const LogicalType &type, unique_ptr<ParsedExpression> value);
 	//! The per-key (column, modifiers) of the AGGREGATE_STATE type of an ordered aggregate
 	static void GetSortedStateOrders(const LogicalType &state_type, vector<SortedAggregateStateOrder> &orders);
+	//! The serializer of the aggregate whose states a bound combine_aggr accumulates. Returns nullptr for any other
+	//! function
+	static unique_ptr<AggregateStateSerializer>
+	TryGetCombinedStateSerializer(const BoundAggregateFunction &function, optional_ptr<const FunctionData> bind_data);
 };
 
 } // namespace duckdb

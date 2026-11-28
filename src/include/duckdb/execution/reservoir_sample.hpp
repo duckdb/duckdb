@@ -16,6 +16,8 @@
 
 #include "duckdb/common/queue.hpp"
 
+#include <cmath>
+
 // Originally intended to be the vector size, but in order to run on
 // vector size = 2, we had to change it.
 #define FIXED_SAMPLE_SIZE 2048
@@ -46,17 +48,89 @@ public:
 };
 
 //! Reservoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
-class BaseReservoirSampling {
+template <class SAMPLER>
+class ReservoirSampler {
+public:
+	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
+		//! 1: The first m items of V are inserted into R
+		//! first we need to check if the reservoir already has "m" elements
+		//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
+		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
+		//! we use a priority queue to extract the minimum key in O(1) time
+		if (cur_size == sample_size) {
+			//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
+			//! we then define the threshold to enter the reservoir T_w as the minimum key of R
+			//! we use a priority queue to extract the minimum key in O(1) time
+			for (idx_t i = 0; i < sample_size; i++) {
+				double k_i = RandomEngine::NextRandom(Sampler().random);
+				Sampler().PushWeight(-k_i, i);
+			}
+			SetNextEntry();
+		}
+	}
+
+	void SetNextEntry() {
+		auto &sampler = Sampler();
+		//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
+		auto &min_key = sampler.TopWeight();
+		double t_w = -min_key.first;
+		double r = RandomEngine::NextRandom32(sampler.random);
+		double x_w = log(r) / log(t_w);
+		//! 5. From the current item vc skip items until item vi , such that:
+		//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
+		//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
+		sampler.min_weight_threshold = t_w;
+		sampler.min_weighted_entry_index = min_key.second;
+		if (x_w >= 1.0 && std::isfinite(x_w)) {
+			sampler.next_index_to_sample = idx_t(ceil(x_w));
+		} else {
+			sampler.next_index_to_sample = 1;
+		}
+		sampler.num_entries_to_skip_b4_next_sample = 0;
+	}
+
+	void ReplaceElementWithIndex(idx_t entry_index, double with_weight, bool pop = true) {
+		if (pop) {
+			Sampler().PopWeight();
+		}
+		double r2 = with_weight;
+		//! now we insert the new weight into the reservoir
+		Sampler().PushWeight(-r2, entry_index);
+		//! we update the min entry with the new min entry in the reservoir
+		SetNextEntry();
+	}
+
+	void ReplaceElement(double with_weight = -1) {
+		//! replace the entry in the reservoir
+		//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
+		//! 9. The new threshold Tw is the new minimum key of R
+		//! we generate a random number between (min_weight_threshold, 1)
+		auto &sampler = Sampler();
+		double r2 = RandomEngine::NextRandom(sampler.random, sampler.min_weight_threshold, 1);
+
+		//! if we are merging two reservoir samples use the weight passed
+		if (with_weight >= 0) {
+			r2 = with_weight;
+		}
+		//! pop the minimum entry and insert the new weight
+		ReplaceElementWithIndex(sampler.min_weighted_entry_index, r2);
+	}
+
+private:
+	ReservoirSampler() = default;
+	friend SAMPLER;
+
+	SAMPLER &Sampler() {
+		return static_cast<SAMPLER &>(*this);
+	}
+};
+
+class BaseReservoirSampling : public ReservoirSampler<BaseReservoirSampling> {
+	friend class ReservoirSampler<BaseReservoirSampling>;
+
 public:
 	explicit BaseReservoirSampling(int64_t seed);
 	BaseReservoirSampling();
-
-	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size);
-
-	void SetNextEntry();
-
-	void ReplaceElementWithIndex(idx_t entry_index, double with_weight, bool pop = true);
-	void ReplaceElement(double with_weight = -1);
 
 	void UpdateMinWeightThreshold();
 
@@ -93,6 +167,18 @@ public:
 	// of tuples in the sample. The blocking sample can then easily maintain statistical properties
 	// from the sample point of view.
 	friend class BlockingSample;
+
+private:
+	const std::pair<double, idx_t> &TopWeight() const {
+		D_ASSERT(!reservoir_weights.empty());
+		return reservoir_weights.top();
+	}
+	void PopWeight() {
+		reservoir_weights.pop();
+	}
+	void PushWeight(double weight, idx_t index) {
+		reservoir_weights.emplace(weight, index);
+	}
 };
 
 class BlockingSample {

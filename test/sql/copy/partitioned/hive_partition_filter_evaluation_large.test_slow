@@ -1,0 +1,38 @@
+# name: test/sql/copy/partitioned/hive_partition_filter_evaluation_large.test_slow
+# description: A hive partition filter that throws for one partition still prunes the other files of its batch
+# group: [partitioned]
+
+require parquet
+
+# 2100 partitions - '00x' sorts into the first batch of 2048 files and can not be cast to INTEGER
+statement ok
+COPY (SELECT i AS a, CASE WHEN i = 1 THEN '00x' ELSE i::VARCHAR END AS p FROM range(2100) t(i))
+TO '{TEST_DIR}/hive_filter_eval_large' (FORMAT parquet, PARTITION_BY (p));
+
+query II
+EXPLAIN SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_large/*/*.parquet', hive_partitioning=true)
+WHERE p <> '00x' AND p::INTEGER BETWEEN 5 AND 10;
+----
+physical_plan	<REGEX>:.*Scanning Files:.*6\/2100.*
+
+query I
+SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_large/*/*.parquet', hive_partitioning=true)
+WHERE p <> '00x' AND p::INTEGER BETWEEN 5 AND 10 ORDER BY a;
+----
+5
+6
+7
+8
+9
+10
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_large/*/*.parquet', hive_partitioning=true)
+WHERE p <> '00x' AND p::INTEGER > 2000;
+----
+99
+
+statement error
+SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_large/*/*.parquet', hive_partitioning=true) WHERE p::INTEGER BETWEEN 5 AND 10;
+----
+Conversion Error

@@ -2,7 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/config.hpp"
@@ -68,7 +68,7 @@ struct Access {
 };
 
 struct MemoryFileHandle : public FileHandle {
-	MemoryFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, string key_id_p)
+	MemoryFileHandle(BaseFileSystem &fs, const string &path, FileOpenFlags flags, string key_id_p)
 	    : FileHandle(fs, path, flags), key_id(std::move(key_id_p)) {
 	}
 	void Close() override {
@@ -80,7 +80,7 @@ struct MemoryFileHandle : public FileHandle {
 //! Serves files from memory under mem://, and records every open, read and glob with the key id of the secret the
 //! secret reader chose for it. A glob lists the files under the pattern's prefix, each naming the secret that
 //! `listing_secrets` gives its pattern, as a catalog lists the files of a table
-class MemoryFileSystem : public FileSystem {
+class MemoryFileSystem : public BaseFileSystem {
 public:
 	duckdb::map<string, string> files;
 	//! By glob pattern; "" for every pattern
@@ -112,7 +112,7 @@ public:
 	string GetName() const override {
 		return "MemoryFileSystem";
 	}
-	using FileSystem::OpenFile;
+	using BaseFileSystem::OpenFile;
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		return OpenFileExtended(OpenFileInfo(path), flags, opener);
@@ -258,7 +258,7 @@ struct CredentialsFixture {
 		RegisterTestSecretTypes(*db.instance);
 		auto fs_p = make_uniq<MemoryFileSystem>();
 		fs = fs_p.get();
-		db.instance->GetFileSystem().RegisterSubSystem(std::move(fs_p));
+		VirtualFileSystem::Get(*db.instance).RegisterSubSystem(std::move(fs_p));
 		fs->files["mem://bucket/table/a.bin"] = "abc";
 		fs->files["mem://bucket/table/b.bin"] = "def";
 		REQUIRE_NO_FAIL(con.Query("CREATE SECRET by_path (TYPE file_credentials_test, SCOPE 'mem://bucket/table/', "
@@ -406,7 +406,7 @@ TEST_CASE("A named secret of another type fails the read, and a reader of severa
 	f.con.BeginTransaction();
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", other)); },
 	                  "is of type \"file_credentials_test_other\", which this read does not take");
-	ClientContextFileOpener opener(f.Context());
+	ClientContextFileOpener opener(f.Context().GetContext());
 	FileOpenerInfo info(CredentialsFixture::File("mem://bucket/table/a.bin", other));
 	const char *with_other[] = {TEST_TYPE, "FILE_CREDENTIALS_TEST_OTHER"};
 	KeyValueSecretReader reader(opener, &info, with_other, 2);

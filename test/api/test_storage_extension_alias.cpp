@@ -73,14 +73,14 @@ struct DummyNonDuckTransactionManager : TransactionManager {
 	explicit DummyNonDuckTransactionManager(AttachedDatabase &db) : TransactionManager(db) {
 	}
 
-	Transaction &StartTransaction(ClientContext &context) override {
+	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override {
 		transaction = make_uniq<Transaction>(*this, context);
 		return *transaction;
 	}
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override {
 		return ErrorData();
 	}
-	void RollbackTransaction(Transaction &transaction) override {
+	void RollbackTransaction(ClientContext &context, Transaction &transaction) override {
 	}
 	void Checkpoint(ClientContext &context, bool force = false) override {
 	}

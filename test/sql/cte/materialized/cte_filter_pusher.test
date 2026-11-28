@@ -23,7 +23,7 @@ ORDER BY x;
 7
 
 statement ok
-PRAGMA explain_output='optimized_only'
+SET explain_output='optimized_only'
 
 # Computed materialized outputs must not be copied into the combined consumer filter
 query II
@@ -94,7 +94,7 @@ WHERE x < 10;
 ----
 288
 
-# Ordinary filter pushdown still moves computed predicates below unrelated projection expressions
+# Ordinary filter pushdown also splits throwing inputs from unrelated projection expressions
 query II
 EXPLAIN SELECT sum(length(payload))
 FROM (
@@ -103,7 +103,7 @@ FROM (
 ) sq
 WHERE x < 10;
 ----
-logical_opt	<REGEX>:(?s).*Expressions: payload.*Expressions: \(i \+ 1\) < 10.*Range.*
+logical_opt	<REGEX>:(?s).*Expressions: payload.*Expressions: x < 10.*Expressions: x, i.*Range.*
 
 # Preserve NULLs and duplicates while splitting a computed projection
 statement ok
@@ -143,7 +143,7 @@ SELECT count(*)
 FROM cte c, cte_filter_context s
 WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100;
 ----
-logical_opt	<REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "MARK".*"Expressions": "IN \(\.\.\.\)".*"name": "CTE_SCAN".*
+logical_opt	<REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "(RIGHT_)?SEMI".*"name": "CTE_SCAN".*
 
 query I
 WITH cte AS MATERIALIZED (
@@ -166,7 +166,7 @@ WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100
 UNION ALL
 SELECT count(*) FROM cte;
 ----
-logical_opt	<!REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "MARK".*"Expressions": "IN \(\.\.\.\)".*"name": "CTE_SCAN".*
+logical_opt	<!REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "(RIGHT_)?SEMI".*"name": "CTE_SCAN".*
 
 statement ok
 PRAGMA disable_optimizer;

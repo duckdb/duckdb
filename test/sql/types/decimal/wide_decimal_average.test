@@ -1,0 +1,181 @@
+# name: test/sql/types/decimal/wide_decimal_average.test
+# description: decimal_average of decimals wider than 38 digits: an exact sum, rounded half to even like the fixed-size tiers
+# group: [decimal]
+
+# the result has the type of the input
+query II
+SELECT decimal_average(x), typeof(decimal_average(x)) FROM (VALUES ('10.00'::DECIMAL(40,2)), ('20.00'::DECIMAL(40,2))) t(x);
+----
+15.00	DECIMAL(40,2)
+
+# round half to even
+query IIII
+SELECT (SELECT decimal_average(x) FROM (VALUES ('3'::DECIMAL(40,0)), ('4')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('2'::DECIMAL(40,0)), ('3')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('-3'::DECIMAL(40,0)), ('-4')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('-2'::DECIMAL(40,0)), ('-3')) t(x));
+----
+4	2	-4	-2
+
+# a remainder below or above the half rounds to the nearest value, a negative average that rounds to zero is zero
+query IIIII
+SELECT (SELECT decimal_average(x) FROM (VALUES ('1'::DECIMAL(40,0)), ('0'), ('0')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('2'::DECIMAL(40,0)), ('0'), ('0')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('-1'::DECIMAL(40,0)), ('0'), ('0')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('-2'::DECIMAL(40,0)), ('0'), ('0')) t(x)),
+       (SELECT decimal_average(x) = 0 FROM (VALUES ('-1'::DECIMAL(40,0)), ('0'), ('0')) t(x));
+----
+0	1	0	-1	true
+
+query I
+SELECT decimal_average(x) FROM (VALUES ('0.10'::DECIMAL(40,2)), ('0.20'), ('0.30'), ('0.45')) t(x);
+----
+0.26
+
+# NULLs are ignored, an empty or all-NULL group is NULL
+query III
+SELECT (SELECT decimal_average(x) FROM (VALUES ('10.00'::DECIMAL(40,2)), (NULL), ('20.00')) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES (NULL::DECIMAL(40,2)), (NULL)) t(x)),
+       (SELECT decimal_average(x) FROM (VALUES ('10.00'::DECIMAL(40,2))) t(x) WHERE x > 100);
+----
+15.00	NULL	NULL
+
+# the sum has no bound: values at the top of the width, and sums beyond a HUGEINT
+query II
+SELECT decimal_average(x) = repeat('9', 50)::DECIMAL(50,0), typeof(decimal_average(x))
+FROM (VALUES (repeat('9', 50)::DECIMAL(50,0)), (repeat('9', 50)::DECIMAL(50,0)), (repeat('9', 50)::DECIMAL(50,0))) t(x);
+----
+true	DECIMAL(50,0)
+
+query I
+SELECT decimal_average(x)
+FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(39,0)), ('99999999999999999999999999999999999999'::DECIMAL(39,0))) t(x);
+----
+99999999999999999999999999999999999999
+
+query I
+SELECT decimal_average(x)
+FROM (VALUES ('123456789012345678901234567890123456789012345.67'::DECIMAL(50,2)), ('-123456789012345678901234567890123456789012345.66'), ('0.02')) t(x);
+----
+0.01
+
+# the average of the same values in a fixed-size and a wide decimal
+statement ok
+CREATE TABLE vals AS
+SELECT i % 37 AS g, CASE WHEN i % 11 = 0 THEN NULL ELSE (i * 7919) % 100003 - 50000 END AS v
+FROM range(20000) t(i);
+
+query I
+SELECT count(*) FROM (
+	SELECT g, decimal_average(v::DECIMAL(18,3))::VARCHAR AS fixed, decimal_average(v::DECIMAL(40,3))::VARCHAR AS wide,
+	       decimal_average(v::DECIMAL(38,0))::VARCHAR AS fixed0, decimal_average(v::DECIMAL(60,0))::VARCHAR AS wide0
+	FROM vals GROUP BY g)
+WHERE fixed IS DISTINCT FROM wide OR fixed0 IS DISTINCT FROM wide0;
+----
+0
+
+query III
+SELECT decimal_average(v::DECIMAL(18,3)), decimal_average(v::DECIMAL(40,3)), typeof(decimal_average(v::DECIMAL(40,3))) FROM vals;
+----
+-0.409	-0.409	DECIMAL(40,3)
+
+query III
+SELECT g, decimal_average(v::DECIMAL(18,3)), decimal_average(v::DECIMAL(40,3)) FROM vals WHERE g < 3 GROUP BY g ORDER BY g;
+----
+0	36.731	36.731
+1	272.805	272.805
+2	0.805	0.805
+
+# DISTINCT and FILTER
+query II
+SELECT decimal_average(DISTINCT x), decimal_average(x) FILTER (WHERE x > 1)
+FROM (VALUES ('1.00'::DECIMAL(40,2)), ('1.00'), ('2.00'), ('4.00')) t(x);
+----
+2.33	3.00
+
+# as a window function
+query II
+SELECT i, decimal_average(x) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
+FROM (VALUES (1, '1.00'::DECIMAL(40,2)), (2, '2.01'), (3, NULL), (4, '-4.00')) t(i, x) ORDER BY i;
+----
+1	1.00
+2	1.50
+3	2.01
+4	-4.00
+
+# the states are exported as the BIGNUM blob of the unscaled sum and the count
+query II
+SELECT finalize(decimal_average(x) EXPORT_STATE), (decimal_average(x) EXPORT_STATE)::STRUCT(sum VARCHAR, count UBIGINT)
+FROM (VALUES ('1.50'::DECIMAL(40,2)), ('2.25'::DECIMAL(40,2))) t(x);
+----
+1.88	{'sum': 375, 'count': 2}
+
+query II
+SELECT finalize(decimal_average(x) EXPORT_STATE), (decimal_average(x) EXPORT_STATE)::STRUCT(sum VARCHAR, count UBIGINT)
+FROM (VALUES (NULL::DECIMAL(40,2))) t(x);
+----
+NULL	{'sum': NULL, 'count': 0}
+
+query II
+SELECT g, finalize(decimal_average(v::DECIMAL(40,3)) EXPORT_STATE) FROM vals WHERE g < 3 GROUP BY g ORDER BY g;
+----
+0	36.731
+1	272.805
+2	0.805
+
+# imported states
+query I
+SELECT finalize(to_aggregate_state({'sum': 375::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)']));
+----
+1.88
+
+query I
+SELECT finalize(combine(to_aggregate_state({'sum': 375::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)']),
+                        to_aggregate_state({'sum': ('-1' || repeat('0', 39))::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)'])))
+       = ('-24' || repeat('9', 35) || '.06')::DECIMAL(40,2);
+----
+true
+
+# an imported state can carry any sum, the average must still fit the width
+statement error
+SELECT finalize(to_aggregate_state({'sum': ('1' || repeat('0', 45))::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)']));
+----
+decimal_average: the result does not fit in DECIMAL(40,2)
+
+query I
+SELECT finalize(to_aggregate_state(NULL::STRUCT(sum BIGNUM, count UBIGINT), 'decimal_average', ['DECIMAL(40,2)']));
+----
+NULL
+
+statement error
+SELECT finalize(to_aggregate_state({'sum': NULL::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)']));
+----
+Invalid decimal_average state - the sum cannot be NULL when the count is not 0
+
+# the counts of imported states do not wrap when the states are combined, in the wide and in the fixed-size tiers
+statement error
+SELECT finalize(combine(to_aggregate_state({'sum': 1::BIGNUM, 'count': 18446744073709551615}, 'decimal_average', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'sum': 1::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,0)'])));
+----
+Overflow in aggregate state combine
+
+statement error
+SELECT finalize(combine(to_aggregate_state({'sum': 1::HUGEINT, 'count': 18446744073709551615}, 'decimal_average', ['DECIMAL(18,0)']),
+                        to_aggregate_state({'sum': 1::HUGEINT, 'count': 2}, 'decimal_average', ['DECIMAL(18,0)'])));
+----
+Overflow in aggregate state combine
+
+query II
+SELECT finalize(combine(to_aggregate_state({'sum': 10::BIGNUM, 'count': 18446744073709551613}, 'decimal_average', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'sum': 18446744073709551605::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,0)']))),
+       finalize(combine(to_aggregate_state({'sum': 10::HUGEINT, 'count': 18446744073709551613}, 'decimal_average', ['DECIMAL(18,0)']),
+                        to_aggregate_state({'sum': 18446744073709551605::HUGEINT, 'count': 2}, 'decimal_average', ['DECIMAL(18,0)'])));
+----
+1	1
+
+# the fixed-size tiers keep their HUGEINT sum
+statement error
+SELECT decimal_average(d) FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(38,0)),
+                                       ('99999999999999999999999999999999999999'::DECIMAL(38,0))) t(d);
+----
+decimal_average: intermediate sum overflowed HUGEINT range

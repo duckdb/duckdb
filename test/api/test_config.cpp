@@ -3,11 +3,364 @@
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/main/user_settings.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 #include <set>
 #include <map>
+#include <limits>
+#include <cmath>
 
 using namespace duckdb;
+
+TEST_CASE("User settings report changes without treating unset values as NULL", "[api][settings]") {
+	UserSettingsMap settings;
+	Value value;
+	REQUIRE_FALSE(settings.TryGetSetting(2, value));
+	REQUIRE(settings.SetUserSetting(2, Value(LogicalType::INTEGER)));
+	REQUIRE(settings.IsSet(2));
+	REQUIRE(settings.TryGetSetting(2, value));
+	REQUIRE(value.type() == LogicalType::INTEGER);
+	REQUIRE(value.IsNull());
+	REQUIRE_FALSE(settings.SetUserSetting(2, Value(LogicalType::INTEGER)));
+	REQUIRE(settings.SetUserSetting(2, Value(LogicalType::BIGINT)));
+	REQUIRE(settings.SetUserSetting(2, Value::BIGINT(1)));
+	REQUIRE_FALSE(settings.SetUserSetting(2, Value::BIGINT(1)));
+	REQUIRE(settings.SetUserSetting(2, Value::BIGINT(2)));
+	settings.ClearSetting(2);
+	REQUIRE_FALSE(settings.IsSet(2));
+	REQUIRE(settings.SetUserSetting(2, Value::BIGINT(2)));
+}
+
+TEST_CASE("User settings compare NULL before reading scalar or nested values", "[api][settings]") {
+	const vector<Value> values {Value::FLOAT(1.0F),
+	                            Value::DOUBLE(1.0),
+	                            Value::INTERVAL(1, 0, 0),
+	                            Value::STRUCT({{"i", Value::INTEGER(1)}}),
+	                            Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)}),
+	                            Value::ARRAY(LogicalType::INTEGER, {Value::INTEGER(1)})};
+	for (const auto &value : values) {
+		UserSettingsMap settings;
+		const Value null_value(value.type());
+		REQUIRE(settings.SetUserSetting(0, null_value));
+		REQUIRE_FALSE(settings.SetUserSetting(0, null_value));
+		REQUIRE(settings.SetUserSetting(0, value));
+		REQUIRE_FALSE(settings.SetUserSetting(0, value));
+		REQUIRE(settings.SetUserSetting(0, null_value));
+		REQUIRE_FALSE(settings.SetUserSetting(0, null_value));
+	}
+}
+
+TEST_CASE("User settings preserve interval fields and signed zero", "[api][settings]") {
+	UserSettingsMap settings;
+	SECTION("Interval fields") {
+		REQUIRE(settings.SetUserSetting(0, Value::INTERVAL(1, 0, 0)));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::INTERVAL(1, 0, 0)));
+		REQUIRE(settings.SetUserSetting(0, Value::INTERVAL(0, 30, 0)));
+		Value value;
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE(value.GetValueUnsafe<interval_t>().SameFields({0, 30, 0}));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::INTERVAL(0, 30, 0)));
+		REQUIRE(settings.SetUserSetting(0, Value::INTERVAL(0, 29, Interval::MICROS_PER_DAY)));
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE(value.GetValueUnsafe<interval_t>().SameFields({0, 29, Interval::MICROS_PER_DAY}));
+	}
+	SECTION("Strict floating-point equality") {
+		REQUIRE(settings.SetUserSetting(0, Value::FLOAT(1.0F)));
+		REQUIRE(settings.SetUserSetting(0, Value::FLOAT(std::nextafter(1.0F, 2.0F))));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::FLOAT(std::nextafter(1.0F, 2.0F))));
+		REQUIRE(settings.SetUserSetting(0, Value::DOUBLE(1.0)));
+		REQUIRE(settings.SetUserSetting(0, Value::DOUBLE(std::nextafter(1.0, 2.0))));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::DOUBLE(std::nextafter(1.0, 2.0))));
+	}
+	SECTION("Float signed zero") {
+		REQUIRE(settings.SetUserSetting(0, Value::FLOAT(0.0F)));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::FLOAT(0.0F)));
+		REQUIRE(settings.SetUserSetting(0, Value::FLOAT(-0.0F)));
+		Value value;
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE(std::signbit(value.GetValueUnsafe<float>()));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::FLOAT(-0.0F)));
+		REQUIRE(settings.SetUserSetting(0, Value::FLOAT(0.0F)));
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE_FALSE(std::signbit(value.GetValueUnsafe<float>()));
+	}
+	SECTION("Double signed zero") {
+		REQUIRE(settings.SetUserSetting(0, Value::DOUBLE(0.0)));
+		REQUIRE(settings.SetUserSetting(0, Value::DOUBLE(-0.0)));
+		Value value;
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE(std::signbit(value.GetValueUnsafe<double>()));
+		REQUIRE_FALSE(settings.SetUserSetting(0, Value::DOUBLE(-0.0)));
+		REQUIRE(settings.SetUserSetting(0, Value::DOUBLE(0.0)));
+		REQUIRE(settings.TryGetSetting(0, value));
+		REQUIRE_FALSE(std::signbit(value.GetValueUnsafe<double>()));
+	}
+}
+
+TEST_CASE("User settings compare nested values without SQL normalization", "[api][settings]") {
+	UserSettingsMap settings;
+	Value before, after;
+	SECTION("List with NULL") {
+		before = Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1), Value(LogicalType::INTEGER)});
+		after = Value::LIST(LogicalType::INTEGER, {Value::INTEGER(2), Value(LogicalType::INTEGER)});
+	}
+	SECTION("Empty list") {
+		before = Value::LIST(LogicalType::INTEGER, {});
+		after = Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)});
+	}
+	SECTION("Struct with nested interval") {
+		before = Value::STRUCT({{"values", Value::LIST(LogicalType::INTERVAL, {Value::INTERVAL(1, 0, 0)})}});
+		after = Value::STRUCT({{"values", Value::LIST(LogicalType::INTERVAL, {Value::INTERVAL(0, 30, 0)})}});
+	}
+	SECTION("Array with signed zero") {
+		before = Value::ARRAY(LogicalType::DOUBLE, {Value::DOUBLE(0.0), Value(LogicalType::DOUBLE)});
+		after = Value::ARRAY(LogicalType::DOUBLE, {Value::DOUBLE(-0.0), Value(LogicalType::DOUBLE)});
+	}
+	SECTION("Map with signed zero") {
+		before = Value::MAP(LogicalType::INTEGER, LogicalType::FLOAT, {Value::INTEGER(1)}, {Value::FLOAT(0.0F)});
+		after = Value::MAP(LogicalType::INTEGER, LogicalType::FLOAT, {Value::INTEGER(1)}, {Value::FLOAT(-0.0F)});
+	}
+	SECTION("Union with interval") {
+		child_list_t<LogicalType> members {{"i", LogicalType::INTERVAL}, {"d", LogicalType::DOUBLE}};
+		before = Value::UNION(members, 0, Value::INTERVAL(1, 0, 0));
+		after = Value::UNION(members, 0, Value::INTERVAL(0, 30, 0));
+	}
+	SECTION("Tuple with signed zero") {
+		before = Value::TUPLE({Value::DOUBLE(0.0)});
+		after = Value::TUPLE({Value::DOUBLE(-0.0)});
+	}
+	SECTION("Nested NULL type changes") {
+		before = Value(LogicalType::LIST(LogicalType::INTEGER));
+		after = Value(LogicalType::LIST(LogicalType::BIGINT));
+	}
+	SECTION("Nested NULL collation changes") {
+		before = Value(LogicalType::LIST(LogicalType::VARCHAR_COLLATION("nocase")));
+		after = Value(LogicalType::LIST(LogicalType::VARCHAR));
+	}
+	REQUIRE(settings.SetUserSetting(0, before));
+	REQUIRE_FALSE(settings.SetUserSetting(0, before));
+	REQUIRE(settings.SetUserSetting(0, after));
+	REQUIRE_FALSE(settings.SetUserSetting(0, after));
+	Value stored;
+	REQUIRE(settings.TryGetSetting(0, stored));
+	REQUIRE(stored.type().EqualsIncludingCollation(after.type()));
+	if (!after.IsNull()) {
+		// Verify the stored representation, which SQL equality can normalize.
+		REQUIRE(stored.ToString() == after.ToString());
+	}
+}
+
+TEST_CASE("User settings compare additional scalar representations", "[api][settings]") {
+	UserSettingsMap settings;
+	const vector<Value> values {Value::BIT("0101"), Value("12345678901234567890").DefaultCastAs(LogicalType::BIGNUM),
+	                            Value::TYPE(LogicalType::INTEGER),
+	                            Value::INTEGER(1).DefaultCastAs(LogicalType::VARIANT())};
+	for (const auto &value : values) {
+		REQUIRE(settings.SetUserSetting(0, value));
+		REQUIRE_FALSE(settings.SetUserSetting(0, value));
+	}
+	const auto nan = Value::DOUBLE(std::numeric_limits<double>::quiet_NaN());
+	REQUIRE(settings.SetUserSetting(0, nan));
+	REQUIRE(settings.SetUserSetting(0, nan));
+	const auto nested_nan = Value::LIST(LogicalType::DOUBLE, {nan});
+	REQUIRE(settings.SetUserSetting(0, nested_nan));
+	REQUIRE(settings.SetUserSetting(0, nested_nan));
+}
+
+TEST_CASE("User settings retain type metadata changes", "[api][settings]") {
+	UserSettingsMap settings;
+	REQUIRE(settings.SetUserSetting(0, Value("value").WithType(LogicalType::JSON())));
+	REQUIRE_FALSE(settings.SetUserSetting(0, Value("value").WithType(LogicalType::JSON())));
+	REQUIRE(settings.SetUserSetting(0, Value("value")));
+	REQUIRE(settings.SetUserSetting(0, Value("value").WithType(LogicalType::VARCHAR_COLLATION("nocase"))));
+	REQUIRE_FALSE(settings.SetUserSetting(0, Value("value").WithType(LogicalType::VARCHAR_COLLATION("nocase"))));
+	REQUIRE(settings.SetUserSetting(0, Value("VALUE").WithType(LogicalType::VARCHAR_COLLATION("nocase"))));
+	REQUIRE(settings.SetUserSetting(0, Value("VALUE")));
+
+	auto extension_info = make_uniq<ExtensionTypeInfo>();
+	extension_info->properties.emplace("property", Value::INTEGER(1));
+	auto extended_type = LogicalType(LogicalType::INTEGER).WithExtensionInfo(std::move(extension_info));
+	REQUIRE(settings.SetUserSetting(1, Value::INTEGER(1).WithType(extended_type)));
+	REQUIRE(settings.SetUserSetting(1, Value::INTEGER(1).WithType(extended_type)));
+	REQUIRE(settings.SetUserSetting(1, Value::INTEGER(1)));
+	REQUIRE(settings.SetUserSetting(1, Value(LogicalType::LIST(extended_type))));
+	REQUIRE(settings.SetUserSetting(1, Value(LogicalType::LIST(extended_type))));
+	REQUIRE(settings.SetUserSetting(1, Value(LogicalType::LIST(LogicalType::INTEGER))));
+}
+
+#ifndef __MINGW32__
+TEST_CASE("Repeated global settings keep the read cache valid", "[api][settings]") {
+	GlobalUserSettings settings;
+	auto expect_same_value = [&](Value value) {
+		settings.SetUserSetting(0, value);
+		const auto version = settings.GetSettings().version;
+		settings.SetUserSetting(0, std::move(value));
+		REQUIRE(settings.GetSettings().version == version);
+	};
+	auto expect_repeated_update = [&](Value value) {
+		settings.SetUserSetting(0, value);
+		const auto version = settings.GetSettings().version;
+		settings.SetUserSetting(0, std::move(value));
+		REQUIRE(settings.GetSettings().version == version + 1);
+	};
+
+	expect_same_value(Value::BOOLEAN(false));
+	expect_same_value(Value::TINYINT(1));
+	expect_same_value(Value::SMALLINT(1));
+	expect_same_value(Value::INTEGER(1));
+	expect_same_value(Value::BIGINT(1));
+	expect_same_value(Value::HUGEINT(hugeint_t(1)));
+	expect_same_value(Value::UTINYINT(1));
+	expect_same_value(Value::USMALLINT(1));
+	expect_same_value(Value::UINTEGER(1));
+	expect_same_value(Value::UBIGINT(1));
+	expect_same_value(Value::UHUGEINT(uhugeint_t(1)));
+	expect_same_value(Value::FLOAT(1.5F));
+	expect_same_value(Value::DOUBLE(1.5));
+	expect_same_value(Value::DECIMAL(125, 9, 2));
+	expect_same_value(Value("value"));
+	expect_same_value(Value::BLOB(string("blob")));
+	expect_same_value(Value::DATE(date_t(1)));
+	expect_same_value(Value::TIME(dtime_t(1)));
+	expect_same_value(Value::TIME_NS(dtime_ns_t(1)));
+	expect_same_value(Value::TIMETZ(dtime_tz_t(dtime_t(1), 0)));
+	expect_same_value(Value::TIMESTAMP(timestamp_t(1)));
+	expect_same_value(Value::TIMESTAMPSEC(timestamp_sec_t(1)));
+	expect_same_value(Value::TIMESTAMPMS(timestamp_ms_t(1)));
+	expect_same_value(Value::TIMESTAMPNS(timestamp_ns_t(1)));
+	expect_same_value(Value::TIMESTAMPTZ(timestamp_tz_t(1)));
+	expect_same_value(Value::TIMESTAMPTZNS(timestamp_tz_ns_t(1)));
+	expect_same_value(Value::UUID(hugeint_t(1)));
+	expect_same_value(Value::INTERVAL(1, 1, 1));
+	expect_same_value(Value(LogicalType::BOOLEAN));
+	expect_same_value(Value(LogicalType::TINYINT));
+	expect_same_value(Value(LogicalType::SMALLINT));
+	expect_same_value(Value(LogicalType::INTEGER));
+	expect_same_value(Value(LogicalType::BIGINT));
+	expect_same_value(Value(LogicalType::HUGEINT));
+	expect_same_value(Value(LogicalType::UTINYINT));
+	expect_same_value(Value(LogicalType::USMALLINT));
+	expect_same_value(Value(LogicalType::UINTEGER));
+	expect_same_value(Value(LogicalType::UBIGINT));
+	expect_same_value(Value(LogicalType::UHUGEINT));
+	expect_same_value(Value(LogicalType::FLOAT));
+	expect_same_value(Value(LogicalType::DOUBLE));
+	expect_same_value(Value(LogicalType::DECIMAL(9, 2)));
+	expect_same_value(Value(LogicalType::VARCHAR));
+	expect_same_value(Value(LogicalType::BLOB));
+	expect_same_value(Value(LogicalType::DATE));
+	expect_same_value(Value(LogicalType::TIME));
+	expect_same_value(Value(LogicalType::TIME_NS));
+	expect_same_value(Value(LogicalType::TIME_TZ));
+	expect_same_value(Value(LogicalType::TIMESTAMP));
+	expect_same_value(Value(LogicalType::TIMESTAMP_S));
+	expect_same_value(Value(LogicalType::TIMESTAMP_MS));
+	expect_same_value(Value(LogicalType::TIMESTAMP_NS));
+	expect_same_value(Value(LogicalType::TIMESTAMP_TZ));
+	expect_same_value(Value(LogicalType::TIMESTAMP_TZ_NS));
+	expect_same_value(Value(LogicalType::UUID));
+	expect_same_value(Value(LogicalType::INTERVAL));
+
+	expect_repeated_update(Value::FLOAT(std::numeric_limits<float>::quiet_NaN()));
+	expect_repeated_update(Value::DOUBLE(std::numeric_limits<double>::quiet_NaN()));
+
+	settings.SetUserSetting(0, Value(LogicalType::VARCHAR));
+	Value value;
+	REQUIRE(static_cast<bool>(settings.TryGetSetting(0, value)));
+	REQUIRE(value.type() == LogicalType::VARCHAR);
+	REQUIRE(value.IsNull());
+
+	settings.SetUserSetting(2, Value::INTEGER(1));
+	const auto before_type_change = settings.GetSettings().version;
+	settings.SetUserSetting(2, Value::BIGINT(1));
+	REQUIRE(settings.GetSettings().version == before_type_change + 1);
+	settings.SetUserSetting(3, Value::DECIMAL(125, 9, 2));
+	const auto before_decimal_type_change = settings.GetSettings().version;
+	settings.SetUserSetting(3, Value::DECIMAL(125, 10, 2));
+	REQUIRE(settings.GetSettings().version == before_decimal_type_change + 1);
+	const auto before_unset = settings.GetSettings().version;
+	settings.SetUserSetting(1, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_unset + 1);
+	settings.SetUserSetting(1, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_unset + 1);
+
+	expect_same_value(Value(LogicalType(LogicalTypeId::CHAR)));
+	expect_same_value(Value("{\"key\": 1}").WithType(LogicalType::JSON()));
+	expect_same_value(Value("value").WithType(LogicalType::VARCHAR_COLLATION("nocase")));
+	auto extension_info = make_uniq<ExtensionTypeInfo>();
+	extension_info->modifiers.emplace_back(Value::INTEGER(1));
+	auto extended_integer = LogicalType(LogicalType::INTEGER).WithExtensionInfo(std::move(extension_info));
+	expect_repeated_update(Value::INTEGER(1).WithType(extended_integer));
+	settings.SetUserSetting(4, Value::INTEGER(1).WithType(extended_integer));
+	const auto before_plain_integer = settings.GetSettings().version;
+	settings.SetUserSetting(4, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_plain_integer + 1);
+	expect_same_value(Value(LogicalType::LIST(LogicalType::INTEGER)));
+	expect_same_value(Value(LogicalType::STRUCT({{"a", LogicalType::INTEGER}})));
+	expect_same_value(Value(LogicalType::MAP(LogicalType::INTEGER, LogicalType::VARCHAR)));
+	expect_same_value(Value(LogicalType::UNION({{"a", LogicalType::INTEGER}})));
+	expect_same_value(Value(LogicalType::ARRAY(LogicalType::INTEGER, 1)));
+	expect_same_value(Value(LogicalType::VARIANT()));
+
+	const auto before_clear = settings.GetSettings().version;
+	settings.ClearSetting(0);
+	REQUIRE(settings.GetSettings().version == before_clear + 1);
+	REQUIRE_FALSE(static_cast<bool>(settings.TryGetSetting(0, value)));
+	settings.ClearSetting(0);
+	REQUIRE(settings.GetSettings().version == before_clear + 2);
+}
+
+TEST_CASE("Global settings invalidate the cache when representations change", "[api][settings]") {
+	GlobalUserSettings settings;
+	const vector<pair<Value, Value>> changes {
+	    {Value::INTERVAL(1, 0, 0), Value::INTERVAL(0, 30, 0)},
+	    {Value::FLOAT(0.0F), Value::FLOAT(-0.0F)},
+	    {Value::DOUBLE(0.0), Value::DOUBLE(-0.0)},
+	    {Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)}),
+	     Value::LIST(LogicalType::INTEGER, {Value::INTEGER(2)})},
+	    {Value::STRUCT({{"i", Value::INTERVAL(1, 0, 0)}}), Value::STRUCT({{"i", Value::INTERVAL(0, 30, 0)}})}};
+	for (const auto &change : changes) {
+		settings.SetUserSetting(0, change.first);
+		const auto version = settings.GetSettings().version;
+		settings.SetUserSetting(0, change.second);
+		REQUIRE(settings.GetSettings().version == version + 1);
+		Value stored;
+		auto lookup = settings.TryGetSetting(0, stored);
+		REQUIRE(lookup.GetScope() == SettingScope::GLOBAL);
+		REQUIRE(stored.ToString() == change.second.ToString());
+		settings.SetUserSetting(0, change.second);
+		REQUIRE(settings.GetSettings().version == version + 1);
+	}
+}
+
+namespace {
+struct CountingSettingInfo : public ExtensionOptionInfo {
+	mutable idx_t calls = 0;
+	void OnSet(ClientContext &, SetScope, Value &, bool) const override {
+		calls++;
+	}
+};
+} // namespace
+
+TEST_CASE("Repeated settings still invoke setting callbacks", "[api][settings]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	auto info = make_shared_ptr<CountingSettingInfo>();
+	ExtensionOption option("An option", LogicalType::INTEGER, nullptr, Value::INTEGER(0), SetScope::GLOBAL, false,
+	                       false);
+	option.info = info;
+	config.AddExtensionOption("counting_setting", std::move(option));
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL counting_setting=1"));
+	const auto version = config.user_settings.GetSettings().version;
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL counting_setting=1"));
+	REQUIRE(info->calls == 2);
+	REQUIRE(config.user_settings.GetSettings().version == version);
+}
+
+#endif
 
 class FileCleaner {
 public:
@@ -15,8 +368,8 @@ public:
 	}
 
 	~FileCleaner() {
-		if (fs.FileExists(file)) {
-			fs.RemoveFile(file);
+		if (fs.FileExists(file, nullptr)) {
+			fs.RemoveFile(file, nullptr);
 		}
 	}
 
@@ -84,6 +437,11 @@ TEST_CASE("Test allowed options", "[api]") {
 		option = "logging_mode";
 	}
 
+	SECTION("logging_sink") {
+		config_dict.emplace("logging_sink", Value::BOOLEAN(false));
+		option = "logging_sink";
+	}
+
 	SECTION("logging_storage") {
 		config_dict.emplace("logging_storage", Value::BOOLEAN(false));
 		option = "logging_storage";
@@ -144,14 +502,31 @@ TEST_CASE("Test user_agent", "[api]") {
 
 TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
 	HTTPHeaders headers;
-	headers.Insert("Cache-Control", "max-age=600");
+	headers.InsertIfAbsent("Cache-Control", "max-age=600");
 	headers.Append("cache-control", "no-store");
 
 	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
-	const auto values = headers.GetHeaderValues("Cache-Control");
-	REQUIRE(values.size() == 2);
-	REQUIRE(values[0] == "max-age=600");
-	REQUIRE(values[1] == "no-store");
+	headers.InsertIfAbsent("CACHE-CONTROL", "ignored");
+	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"max-age=600", "no-store"});
+
+	headers.Set("CACHE-CONTROL", "private");
+	REQUIRE(headers.GetHeaderValue("cache-control") == "private");
+	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"private"});
+
+	headers.Set("X-Empty", "");
+	headers.Append("Cache-Control", "no-cache");
+	case_insensitive_map_t<vector<string>> fields;
+	for (const auto &field : headers) {
+		fields[field.first].push_back(field.second);
+	}
+	REQUIRE(fields.size() == 2);
+	REQUIRE(fields.at("cache-control") == vector<string> {"private", "no-cache"});
+	REQUIRE(fields.at("x-empty") == vector<string> {""});
+
+	headers.RemoveAll("cAcHe-CoNtRoL");
+	REQUIRE_FALSE(headers.HasHeader("Cache-Control"));
+	headers.RemoveAll("Cache-Control");
+	REQUIRE(headers.GetHeaderValue("X-Empty").empty());
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {
@@ -196,7 +571,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration update", "[api]") {
@@ -230,7 +605,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_other_secret_file));
+	REQUIRE(fs.FileExists(my_other_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret_directory configuration update after secret creation", "[api]") {
@@ -256,7 +631,7 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");
@@ -311,6 +686,42 @@ TEST_CASE("Test deprecated extension options warn when set", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
+TEST_CASE("Test extension option defaults are not user settings", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("my_option", "An option", LogicalType::VARCHAR, Value("default"));
+	ExtensionOption option;
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_option"), option));
+	auto setting_index = option.setting_index.GetIndex();
+	Value value;
+
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	auto result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// setting the default explicitly is not the same as leaving it unset
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'default'"));
+	REQUIRE(bool(config.TryGetCurrentUserSetting(setting_index, value)));
+	REQUIRE_NO_FAIL(con.Query("RESET GLOBAL my_option"));
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// RESET clears the session value, so the connection sees the global value again
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'global'"));
+	REQUIRE_NO_FAIL(con.Query("SET my_option = 'session'"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option"));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"global"}));
+
+	// an option without a default is unset again after RESET, not NULL
+	config.AddExtensionOption("my_option_without_default", "An option", LogicalType::BOOLEAN);
+	REQUIRE_NO_FAIL(con.Query("SET my_option_without_default = true"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option_without_default"));
+	REQUIRE(!con.context->TryGetCurrentSetting(Identifier("my_option_without_default"), value));
+}
+
 TEST_CASE("Test every deprecated setting warns when set", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -340,4 +751,64 @@ TEST_CASE("Test every deprecated setting warns when set", "[api]") {
 		}
 	}
 	REQUIRE(checked > 0);
+}
+
+TEST_CASE("Test the per-connection progress bar options in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar", Value("true")),
+	                    Catch::Contains("enable_progress_bar") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar_print", Value("false")),
+	                    Catch::Contains("enable_progress_bar_print") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("progress_bar_time", Value("100")),
+	                    Catch::Contains("progress_bar_time") && Catch::Contains("as a global option"));
+	// the options remain settable per connection
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET progress_bar_time = 100"));
+	auto result = con.Query("SELECT current_setting('progress_bar_time'), current_setting('enable_progress_bar')");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true}));
+}
+
+TEST_CASE("Test profiling_renderer_settings is rejected in the startup config", "[api]") {
+	DBConfig config;
+	auto settings =
+	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, {Value("operator_casing")}, {Value("bogus")});
+	REQUIRE_THROWS_WITH(config.SetOptionByName("profiling_renderer_settings", settings),
+	                    Catch::Contains("profiling_renderer_settings") && Catch::Contains("as a global option"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN SELECT 42"));
+	REQUIRE_NO_FAIL(con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'title'}"));
+	REQUIRE_FAIL(con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'bogus'}"));
+}
+
+TEST_CASE("Test buffer_manager_track_eviction_timestamps is fixed once the database is running", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("buffer_manager_track_eviction_timestamps", Value::BOOLEAN(true)));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SET buffer_manager_track_eviction_timestamps = false");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Cannot change buffer_manager_track_eviction_timestamps setting "
+	                                                 "while database is running"));
+	result = con.Query("SELECT current_setting('buffer_manager_track_eviction_timestamps')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}
+
+TEST_CASE("Test tracked_metrics in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("tracked_metrics", Value("['query.*']")));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("tracked_metrics", Value("['query.*', NULL]")),
+	                    Catch::Contains("cannot contain NULL entries"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto expected = Value::LIST(LogicalType::VARCHAR, {Value("query.*")});
+	auto result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
+	// a session value resets to the configured global value
+	REQUIRE_NO_FAIL(con.Query("SET tracked_metrics = ['optimizer.*']"));
+	REQUIRE_NO_FAIL(con.Query("RESET tracked_metrics"));
+	result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
 }

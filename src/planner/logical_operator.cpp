@@ -93,7 +93,7 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 	return result;
 }
 
-bool LogicalOperator::HasSideEffects() const {
+bool LogicalOperator::HasLocalSideEffects() const {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
@@ -102,10 +102,49 @@ bool LogicalOperator::HasSideEffects() const {
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return true;
 	default:
-		break;
+		return false;
+	}
+}
+
+bool LogicalOperator::HasSideEffects() const {
+	if (HasLocalSideEffects()) {
+		return true;
 	}
 	for (auto &child : children) {
 		if (child && child->HasSideEffects()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ContainsDML(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// A top-level DML statement is not flagged. COPY TO does not invalidate table statistics.
+bool LogicalOperator::CTEContainsDML() const {
+	if (type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE || type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		if (!children.empty() && ContainsDML(*children[0])) {
+			return true;
+		}
+	}
+	for (auto &child : children) {
+		if (child->CTEContainsDML()) {
 			return true;
 		}
 	}
@@ -136,9 +175,36 @@ void LogicalOperator::ResolveOperatorTypes() {
 	for (auto &child : children) {
 		child->ResolveOperatorTypes();
 	}
+	ResolveOperatorTypesFromChildren();
+}
+
+void LogicalOperator::ResolveOperatorTypesFromChildren() {
+	types.clear();
 	// now resolve the types for this operator
 	ResolveTypes();
 	D_ASSERT(types.size() == GetColumnBindings().size());
+}
+
+void LogicalOperator::VerifyOperatorTypes() {
+	for (auto &child : children) {
+		child->VerifyOperatorTypes();
+	}
+	auto original_types = std::move(types);
+	types.clear();
+	try {
+		ResolveTypes();
+		bool types_match = types.size() == original_types.size();
+		for (idx_t i = 0; types_match && i < types.size(); i++) {
+			types_match = types[i].EqualsIncludingCollation(original_types[i]);
+		}
+		if (!types_match) {
+			throw InternalException("Stale output types in logical operator %s", GetName());
+		}
+	} catch (...) {
+		types = std::move(original_types);
+		throw;
+	}
+	types = std::move(original_types);
 }
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(TableIndex table_idx, idx_t column_count) {

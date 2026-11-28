@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregate_state_export/minmax_export_state.test
-# description: Test min/max EXPORT_STATE for string inputs
+# description: Test min/max EXPORT_STATE
 # group: [aggregate_state_export]
 
 # empty input returns NULL
@@ -106,3 +106,149 @@ query I
 SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(min(COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
 ----
 true
+
+# min/max(x, n) states store n and the heap entries in heap order, per value specialization: fixed, string and sort key
+query III
+SELECT (max(x, 2) EXPORT_STATE)::VARCHAR, (max(x::VARCHAR, 2) EXPORT_STATE)::VARCHAR, (max({'k': x}, 2) EXPORT_STATE)::VARCHAR
+FROM (VALUES (1), (3), (2)) t(x);
+----
+{'n': 2, 'entries': [2, 3]}	{'n': 2, 'entries': [2, 3]}	{'n': 2, 'entries': [{'k': 2}, {'k': 3}]}
+
+query II
+SELECT s, finalize(s) FROM (SELECT max(x, 2) EXPORT_STATE s FROM range(0) t(x));
+----
+NULL	NULL
+
+# importing more than a vector of sort keys
+query I
+SELECT finalize(combine_aggr(s))[3000].k FROM (SELECT max({'k': i}, 3000) EXPORT_STATE s FROM range(10000) r(i) GROUP BY i % 2);
+----
+7000
+
+# imported entries need not be in heap order
+query I
+SELECT finalize(to_aggregate_state({'n': 3, 'entries': [5, 1, 3]}, 'max', ['BIGINT', 'BIGINT']));
+----
+[5, 3, 1]
+
+statement error
+SELECT finalize(to_aggregate_state({'n': NULL, 'entries': [1]}, 'max', ['BIGINT', 'BIGINT']));
+----
+Invalid min/max/arg_min/arg_max state - n and entries cannot be NULL
+
+statement error
+SELECT finalize(to_aggregate_state({'n': 0, 'entries': [1]}, 'max', ['BIGINT', 'BIGINT']));
+----
+Invalid min/max/arg_min/arg_max state - n must be > 0 and < 1000000
+
+statement error
+SELECT finalize(to_aggregate_state({'n': 1, 'entries': [1, 2]}, 'max', ['BIGINT', 'BIGINT']));
+----
+Invalid min/max/arg_min/arg_max state - more entries than n
+
+statement error
+SELECT finalize(to_aggregate_state({'n': 2, 'entries': [1, NULL]}, 'max', ['BIGINT', 'BIGINT']));
+----
+Invalid min/max state - the entries cannot be NULL
+
+# states with different n values cannot be combined, so a per-row n cannot export its states
+statement error
+SELECT max(x, x) EXPORT_STATE FROM range(1, 3) t(x);
+----
+cannot export state
+
+# but a prepared parameter n is constant per execution
+statement ok
+PREPARE top_n AS SELECT finalize(max(i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
+
+query I
+EXECUTE top_n(2);
+----
+[2, 1]
+
+statement ok
+PREPARE arg_top_n AS SELECT finalize(arg_max(i, i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
+
+query I
+EXECUTE arg_top_n(2);
+----
+[2, 1]
+
+# but an empty state combines with any n
+query I
+SELECT finalize(combine(to_aggregate_state({'n': 1, 'entries': []}, 'max', ['BIGINT', 'BIGINT']), to_aggregate_state({'n': 2, 'entries': [7]}, 'max', ['BIGINT', 'BIGINT'])));
+----
+[7]
+
+statement error
+SELECT finalize(combine(to_aggregate_state({'n': 1, 'entries': [1]}, 'max', ['BIGINT', 'BIGINT']), to_aggregate_state({'n': 2, 'entries': [7]}, 'max', ['BIGINT', 'BIGINT'])));
+----
+Mismatched n values
+
+# importing a sparse state allocates its entries, not n slots
+statement ok
+SET memory_limit='1GB';
+
+query II
+SELECT count(*), sum(finalize(m)[1]) FROM (SELECT i, combine_aggr(s) m FROM (SELECT i, max(i, 100000) EXPORT_STATE s FROM range(20000) r(i) GROUP BY i) GROUP BY i);
+----
+20000	199990000
+
+# a repeated combine_aggr frees the imported entries of each input row
+statement ok
+SET memory_limit='64MB';
+
+query I
+SELECT finalize(combine_aggr(s, 2)) FROM (SELECT to_aggregate_state({'n': 2, 'entries': [md5(i::VARCHAR)]}, 'max', ['VARCHAR', 'BIGINT']) s FROM range(1000000) r(i));
+----
+[fffffe98d0963d27015c198262d97221, fffffe98d0963d27015c198262d97221]
+
+# also with a multiplicity far beyond n
+query II
+SELECT len(m), list_distinct(m) = [(SELECT max(repeat(md5(i::VARCHAR), 256)) FROM range(256) t(i))] FROM (SELECT finalize(combine_aggr(s, 1::BIGINT << 40)) m FROM (SELECT max(repeat(md5(i::VARCHAR), 256), 256) EXPORT_STATE s FROM range(256) t(i)));
+----
+256	true
+
+# states keep the collation they were exported with, not the default collation of the session
+statement ok
+CREATE TEMP TABLE saved AS SELECT max(s) EXPORT_STATE st, max(s COLLATE nocase) EXPORT_STATE st_nocase FROM (VALUES ('a'), ('B')) t(s) GROUP BY s;
+
+statement ok
+SET default_collation = 'nocase';
+
+query TT
+SELECT finalize(combine_aggr(st)), finalize(combine_aggr(st_nocase)) FROM saved;
+----
+a	B
+
+# top-N states also keep the collation they were exported with
+statement ok
+RESET default_collation;
+
+statement ok
+CREATE TEMP TABLE saved_n AS SELECT max(s, 2) EXPORT_STATE st FROM (VALUES ('a'), ('B'), ('c')) t(s) GROUP BY s;
+
+statement ok
+SET default_collation = 'nocase';
+
+query I
+SELECT finalize(combine_aggr(st)) FROM saved_n;
+----
+[c, a]
+
+require icu
+
+statement ok
+RESET default_collation;
+
+# a partly collated key keeps exactly its own collations: field b must not get the default ICU collation
+statement ok
+CREATE TEMP TABLE saved_icu AS SELECT max({'a': p COLLATE nocase, 'b': q}) EXPORT_STATE st, arg_max(q, {'a': p COLLATE nocase, 'b': q}) EXPORT_STATE st_arg FROM (VALUES ('x', 'a'), ('X', 'B')) t(p, q) GROUP BY q;
+
+statement ok
+SET default_collation = 'en';
+
+query TT
+SELECT finalize(combine_aggr(st)), finalize(combine_aggr(st_arg)) FROM saved_icu;
+----
+{'a': x, 'b': a}	a

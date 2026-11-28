@@ -89,7 +89,7 @@ public:
 		compression = std::move(new_compression);
 	}
 
-	CachingMode GetCachingMode() {
+	CachingMode GetCachingMode() const {
 		return caching_mode;
 	}
 	void SetCachingMode(CachingMode new_caching_mode) {

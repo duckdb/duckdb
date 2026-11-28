@@ -1,0 +1,149 @@
+# name: test/optimizer/pushdown/adaptive_redundant_scan_filters.test
+# description: Adapt redundant probe filters while retaining exact build-side enforcement
+# group: [pushdown]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+CREATE TABLE adaptive_probe AS
+SELECT (i%100)::TINYINT AS k, i FROM range(100000) t(i);
+
+statement ok
+INSERT INTO adaptive_probe VALUES (NULL,100000);
+
+statement ok
+CREATE TABLE adaptive_build AS
+SELECT i::TINYINT AS k, i::TINYINT AS v FROM range(100) t(i);
+
+statement ok
+INSERT INTO adaptive_build VALUES (8,99),(NULL,100);
+
+# The weak filter can pause after sampling; the join still removes key 7.
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+----
+100000	4999951000	5042000
+
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<5;
+----
+5000	249760000	10000
+
+# Keep unrelated probe requirements mandatory.
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k
+WHERE b.k<>7 AND p.i<>99908;
+----
+99998	4999751184	5041893
+
+# Keep the existing predicate batch when the scan evaluates a fallible cast.
+statement ok
+CREATE TABLE guarded_probe AS
+SELECT i::TINYINT AS k, CASE WHEN i=7 THEN 'bad' ELSE '1' END AS s FROM range(10) t(i);
+
+query II
+SELECT count(*),sum(b.v)
+FROM guarded_probe p JOIN adaptive_build b ON p.k=b.k
+WHERE p.k<>7 AND CASE WHEN p.s='bad' THEN NULL ELSE p.s::INTEGER END>0;
+----
+10	137
+
+# Binary string equality also preserves the constant predicate.
+statement ok
+CREATE TABLE string_probe AS
+SELECT repeat('x',20)||k::VARCHAR AS k,i FROM adaptive_probe;
+
+statement ok
+CREATE TABLE string_build AS
+SELECT repeat('x',20)||k::VARCHAR AS k,v FROM adaptive_build;
+
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM string_probe p JOIN string_build b ON p.k=b.k WHERE b.k<>repeat('x',20)||'7';
+----
+100000	4999951000	5042000
+
+# Re-execution must preserve duplicate and transaction-local build changes.
+statement ok
+PREPARE adaptive_join AS
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+
+query III
+EXECUTE adaptive_join;
+----
+100000	4999951000	5042000
+
+statement ok
+DELETE FROM adaptive_build WHERE k=8 AND v=99;
+
+query III
+EXECUTE adaptive_join;
+----
+99000	4949993000	4943000
+
+statement ok
+DELETE FROM adaptive_build;
+
+query III
+EXECUTE adaptive_join;
+----
+0	NULL	NULL
+
+# Disabling this optimizer retains both mandatory filters.
+statement ok
+INSERT INTO adaptive_build SELECT i::TINYINT,i::TINYINT FROM range(100) t(i);
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,join_filter_pushdown';
+
+query III
+EXECUTE adaptive_join;
+----
+99000	4949993000	4943000
+
+statement ok
+RESET disabled_optimizers;
+
+require parquet
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+COPY adaptive_probe TO '{TEST_DIR}/adaptive_probe.parquet';
+
+statement ok
+COPY adaptive_build TO '{TEST_DIR}/adaptive_build.parquet';
+
+# The same proof applies to file scans on either side of the join.
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM read_parquet('{TEST_DIR}/adaptive_probe.parquet') p
+JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+----
+99000	4949993000	4943000
+
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p
+JOIN read_parquet('{TEST_DIR}/adaptive_build.parquet') b ON p.k=b.k WHERE b.k<>7;
+----
+99000	4949993000	4943000
+
+query III
+SELECT count(*),sum(p.i),sum(b.v)
+FROM read_parquet('{TEST_DIR}/adaptive_probe.parquet') p
+JOIN read_parquet('{TEST_DIR}/adaptive_build.parquet') b ON p.k=b.k WHERE b.k<5;
+----
+5000	249760000	10000
+
+statement ok
+RESET disabled_optimizers;

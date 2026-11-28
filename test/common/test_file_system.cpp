@@ -1,11 +1,12 @@
 #include "catch.hpp"
+#include "bound_file_system.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -29,7 +30,7 @@ using namespace duckdb;
 
 namespace {
 
-class ExistingDirectoryFileSystem : public FileSystem {
+class ExistingDirectoryFileSystem : public BaseFileSystem {
 public:
 	string GetName() const override {
 		return "ExistingDirectoryFileSystem";
@@ -47,14 +48,14 @@ public:
 	bool create_called = false;
 };
 
-class TestOpenerFileSystem : public OpenerFileSystem {
+class TestContextFileSystem : public FileSystem {
 public:
-	TestOpenerFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
+	TestContextFileSystem(VirtualFileSystem &file_system_p, FileOpener &opener_p)
 	    : file_system(file_system_p), opener(opener_p) {
 	}
 
-public:
-	FileSystem &GetFileSystem() const override {
+private:
+	VirtualFileSystem &GetFileSystem() const override {
 		return file_system;
 	}
 
@@ -63,7 +64,7 @@ public:
 	}
 
 private:
-	FileSystem &file_system;
+	VirtualFileSystem &file_system;
 	FileOpener &opener;
 };
 
@@ -95,7 +96,7 @@ void CreateDummyFile(string fname) {
 // just the interface compatibility.
 class FakeCompressFileHandle : public FileHandle {
 public:
-	FakeCompressFileHandle(FileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
+	FakeCompressFileHandle(BaseFileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
 	    : FileHandle(internal_file_system, internal_file_handle_p->GetPath(), internal_file_handle_p->GetFlags()),
 	      internal_file_handle(std::move(internal_file_handle_p)) {
 	}
@@ -138,8 +139,8 @@ public:
 } // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), fs->GetWorkingDirectory());
+	auto &fs = TestLocalFileSystem();
+	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), FileSystem::GetWorkingDirectory());
 	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
 
 	// handle differences between windows and linux
@@ -156,98 +157,98 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
 
-	if (fs->DirectoryExists(dname_triple_slash)) {
-		fs->RemoveDirectory(dname_triple_slash);
+	if (fs.DirectoryExists(dname_triple_slash)) {
+		fs.RemoveDirectory(dname_triple_slash);
 	}
 
-	fs->CreateDirectory(dname_triple_slash);
-	REQUIRE(fs->DirectoryExists(dname_triple_slash));
-	REQUIRE(!fs->FileExists(dname_triple_slash));
+	fs.CreateDirectory(dname_triple_slash);
+	REQUIRE(fs.DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs.FileExists(dname_triple_slash));
 
 	// we can call this again and nothing happens
-	fs->CreateDirectory(dname_triple_slash);
+	fs.CreateDirectory(dname_triple_slash);
 
-	auto fname_in_dir = fs->JoinPath(dname_triple_slash, fname);
-	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
-	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
+	auto fname_in_dir = fs.JoinPath(dname_triple_slash, fname);
+	auto fname_in_dir2 = fs.JoinPath(dname_localhost, fname2);
+	auto fname_in_dir3 = fs.JoinPath(dname_no_host, fname2);
 
 	CreateDummyFile(fname_in_dir);
-	REQUIRE(fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->DirectoryExists(fname_in_dir));
+	REQUIRE(fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.DirectoryExists(fname_in_dir));
 
 	size_t n_files = 0;
-	REQUIRE(fs->ListFiles(dname_triple_slash, [&n_files](const string &path, bool) { n_files++; }));
+	REQUIRE(fs.ListFiles(dname_triple_slash, [&n_files](const string &path, bool) { n_files++; }));
 
 	REQUIRE(n_files == 1);
 
-	REQUIRE(fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->FileExists(fname_in_dir2));
+	REQUIRE(fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.FileExists(fname_in_dir2));
 
-	auto file_listing = fs->Glob(fs->JoinPath(dname_triple_slash, "*"));
+	auto file_listing = fs.Glob(fs.JoinPath(dname_triple_slash, "*"));
 
-	fs->MoveFile(fname_in_dir, fname_in_dir2);
+	fs.MoveFile(fname_in_dir, fname_in_dir2);
 
-	REQUIRE(!fs->FileExists(fname_in_dir));
-	REQUIRE(fs->FileExists(fname_in_dir2));
+	REQUIRE(!fs.FileExists(fname_in_dir));
+	REQUIRE(fs.FileExists(fname_in_dir2));
 
-	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
+	auto file_listing_after_move = fs.Glob(fs.JoinPath(dname_no_host, "*"));
 
-	fs->RemoveDirectory(dname_triple_slash);
+	fs.RemoveDirectory(dname_triple_slash);
 
-	REQUIRE(!fs->DirectoryExists(dname_triple_slash));
-	REQUIRE(!fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->FileExists(fname_in_dir2));
+	REQUIRE(!fs.DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.FileExists(fname_in_dir2));
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto dname = TestCreatePath("TEST_DIR");
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
 
-	if (fs->DirectoryExists(dname)) {
-		fs->RemoveDirectory(dname);
+	if (fs.DirectoryExists(dname)) {
+		fs.RemoveDirectory(dname);
 	}
 
-	fs->CreateDirectory(dname);
-	REQUIRE(fs->DirectoryExists(dname));
-	REQUIRE(!fs->FileExists(dname));
+	fs.CreateDirectory(dname);
+	REQUIRE(fs.DirectoryExists(dname));
+	REQUIRE(!fs.FileExists(dname));
 
 	// we can call this again and nothing happens
-	fs->CreateDirectory(dname);
+	fs.CreateDirectory(dname);
 
-	auto fname_in_dir = fs->JoinPath(dname, fname);
-	auto fname_in_dir2 = fs->JoinPath(dname, fname2);
+	auto fname_in_dir = fs.JoinPath(dname, fname);
+	auto fname_in_dir2 = fs.JoinPath(dname, fname2);
 
 	CreateDummyFile(fname_in_dir);
-	REQUIRE(fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->DirectoryExists(fname_in_dir));
+	REQUIRE(fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.DirectoryExists(fname_in_dir));
 
 	size_t n_files = 0;
-	REQUIRE(fs->ListFiles(dname, [&n_files](const string &path, bool) { n_files++; }));
+	REQUIRE(fs.ListFiles(dname, [&n_files](const string &path, bool) { n_files++; }));
 
 	REQUIRE(n_files == 1);
 
-	REQUIRE(fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->FileExists(fname_in_dir2));
+	REQUIRE(fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.FileExists(fname_in_dir2));
 
-	fs->MoveFile(fname_in_dir, fname_in_dir2);
+	fs.MoveFile(fname_in_dir, fname_in_dir2);
 
-	REQUIRE(!fs->FileExists(fname_in_dir));
-	REQUIRE(fs->FileExists(fname_in_dir2));
+	REQUIRE(!fs.FileExists(fname_in_dir));
+	REQUIRE(fs.FileExists(fname_in_dir2));
 
-	fs->RemoveDirectory(dname);
+	fs.RemoveDirectory(dname);
 
-	REQUIRE(!fs->DirectoryExists(dname));
-	REQUIRE(!fs->FileExists(fname_in_dir));
-	REQUIRE(!fs->FileExists(fname_in_dir2));
+	REQUIRE(!fs.DirectoryExists(dname));
+	REQUIRE(!fs.FileExists(fname_in_dir));
+	REQUIRE(!fs.FileExists(fname_in_dir2));
 }
 
 #ifndef _WIN32
 TEST_CASE("Character devices use streaming file semantics", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
-	REQUIRE(fs->IsPipe("/dev/null"));
-	auto handle = fs->OpenFile("/dev/null", FileFlags::FILE_FLAGS_WRITE);
+	auto &fs = TestLocalFileSystem();
+	REQUIRE(fs.IsPipe("/dev/null"));
+	auto handle = fs.OpenFile("/dev/null", FileFlags::FILE_FLAGS_WRITE);
 	REQUIRE(handle->GetWriteMode() == FileWriteMode::SEQUENTIAL);
 }
 #endif
@@ -286,7 +287,7 @@ TEST_CASE("Test directory cleanup preserves a concurrently created sibling", "[f
 			if (directory == root && !created_sibling) {
 				created_sibling = true;
 				auto sibling = JoinPath(root, "active_run");
-				CreateDirectory(sibling);
+				CreateDirectory(sibling, nullptr);
 				CreateDummyFile(JoinPath(sibling, "database.wal"));
 			}
 			return result;
@@ -299,24 +300,27 @@ TEST_CASE("Test directory cleanup preserves a concurrently created sibling", "[f
 	auto root = TestCreatePath("cleanup_ancestor");
 	ConcurrentDirectoryFileSystem fs(root);
 	auto leaf = fs.JoinPath(root, "finished_run");
-	fs.CreateDirectoriesRecursive(leaf);
-	ReclaimTestDirectoryLevels(fs, leaf, {root, leaf});
+	fs.CreateDirectoriesRecursive(leaf, nullptr);
+	BoundFileSystem bound_fs(fs, nullptr);
+	ReclaimTestDirectoryLevels(bound_fs, leaf, {root, leaf});
 	REQUIRE(fs.created_sibling);
-	REQUIRE(!fs.DirectoryExists(leaf));
-	REQUIRE(fs.FileExists(fs.JoinPath(root, "active_run/database.wal")));
-	fs.RemoveDirectory(root);
+	REQUIRE(!fs.DirectoryExists(leaf, nullptr));
+	REQUIRE(fs.FileExists(fs.JoinPath(root, "active_run/database.wal"), nullptr));
+	fs.RemoveDirectory(root, nullptr);
 }
 
 TEST_CASE("Extended directory operations report target ownership", "[file_system]") {
 	ExistingDirectoryFileSystem existing_directory_fs;
-	REQUIRE(!existing_directory_fs.CreateDirectoryExtended("virtual_directory", {CreateDirectoryMode::SINGLE}));
+	REQUIRE(
+	    !existing_directory_fs.CreateDirectoryExtended("virtual_directory", {CreateDirectoryMode::SINGLE}, nullptr));
 	REQUIRE(!existing_directory_fs.create_called);
-	REQUIRE(!existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}));
+	REQUIRE(
+	    !existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}, nullptr));
 
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto directory = TestCreatePath("try_create_directory");
-	if (fs->DirectoryExists(directory)) {
-		fs->RemoveDirectory(directory);
+	if (fs.DirectoryExists(directory)) {
+		fs.RemoveDirectory(directory);
 	}
 
 	atomic<bool> start {false};
@@ -329,7 +333,7 @@ TEST_CASE("Extended directory operations report target ownership", "[file_system
 				std::this_thread::yield();
 			}
 			try {
-				if (fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
+				if (fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
 					created++;
 				}
 			} catch (...) {
@@ -344,67 +348,68 @@ TEST_CASE("Extended directory operations report target ownership", "[file_system
 
 	REQUIRE(errors == 0);
 	REQUIRE(created == 1);
-	REQUIRE(!fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}));
-	REQUIRE(fs->RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
+	REQUIRE(!fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}));
+	REQUIRE(fs.RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
 
 	auto recursive_parent = TestCreatePath("try_create_directory_recursive");
-	if (fs->DirectoryExists(recursive_parent)) {
-		fs->RemoveDirectory(recursive_parent);
+	if (fs.DirectoryExists(recursive_parent)) {
+		fs.RemoveDirectory(recursive_parent);
 	}
-	auto recursive_leaf = fs->JoinPath(fs->JoinPath(recursive_parent, "nested"), "leaf");
-	REQUIRE(fs->CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
-	REQUIRE(fs->DirectoryExists(recursive_leaf));
-	REQUIRE(!fs->CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
-	REQUIRE(fs->RemoveDirectoryExtended(recursive_parent, {RemoveDirectoryMode::RECURSIVE}));
-	REQUIRE(!fs->DirectoryExists(recursive_parent));
+	auto recursive_leaf = fs.JoinPath(fs.JoinPath(recursive_parent, "nested"), "leaf");
+	REQUIRE(fs.CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
+	REQUIRE(fs.DirectoryExists(recursive_leaf));
+	REQUIRE(!fs.CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
+	REQUIRE(fs.RemoveDirectoryExtended(recursive_parent, {RemoveDirectoryMode::RECURSIVE}));
+	REQUIRE(!fs.DirectoryExists(recursive_parent));
 
 	auto file_path = TestCreatePath("try_create_directory_file");
-	fs->TryRemoveFile(file_path);
-	{ auto handle = fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW); }
-	REQUIRE_THROWS(fs->CreateDirectoryExtended(file_path, {CreateDirectoryMode::SINGLE}));
-	REQUIRE_THROWS(fs->RemoveDirectoryExtended(file_path, {RemoveDirectoryMode::SINGLE}));
-	fs->RemoveFile(file_path);
+	fs.TryRemoveFile(file_path);
+	{ auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW); }
+	REQUIRE_THROWS(fs.CreateDirectoryExtended(file_path, {CreateDirectoryMode::SINGLE}));
+	REQUIRE_THROWS(fs.RemoveDirectoryExtended(file_path, {RemoveDirectoryMode::SINGLE}));
+	fs.RemoveFile(file_path);
 }
 
 TEST_CASE("Extended directory operations forward the file opener", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ClientContextFileOpener opener(*con.context);
-	auto fs = FileSystem::CreateLocal();
+	ClientContextFileOpener opener(con.context->GetContext());
+	LocalFileSystem fs;
 	auto home_directory = TestCreatePath("extended_directory_opener");
-	if (fs->DirectoryExists(home_directory)) {
-		fs->RemoveDirectory(home_directory);
+	if (fs.DirectoryExists(home_directory, nullptr)) {
+		fs.RemoveDirectory(home_directory, nullptr);
 	}
-	fs->CreateDirectory(home_directory);
+	fs.CreateDirectory(home_directory, nullptr);
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET home_directory = '%s'", home_directory)));
 
 	auto directory = "~/parent/child";
-	REQUIRE(fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::RECURSIVE}, &opener));
-	auto absolute_parent = fs->JoinPath(home_directory, "parent");
-	auto file = fs->JoinPath(fs->JoinPath(absolute_parent, "child"), "file");
+	REQUIRE(fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::RECURSIVE}, &opener));
+	auto absolute_parent = fs.JoinPath(home_directory, "parent");
+	auto file = fs.JoinPath(fs.JoinPath(absolute_parent, "child"), "file");
 	CreateDummyFile(file);
-	REQUIRE(fs->RemoveDirectoryExtended("~/parent", {RemoveDirectoryMode::RECURSIVE}, &opener));
-	REQUIRE(!fs->DirectoryExists(absolute_parent));
-	fs->RemoveDirectory(home_directory);
+	REQUIRE(fs.RemoveDirectoryExtended("~/parent", {RemoveDirectoryMode::RECURSIVE}, &opener));
+	REQUIRE(!fs.DirectoryExists(absolute_parent, nullptr));
+	fs.RemoveDirectory(home_directory, nullptr);
 }
 
 TEST_CASE("Recursive directory creation checks access for every ancestor", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ClientContextFileOpener opener(*con.context);
-	auto fs = FileSystem::CreateLocal();
-	TestOpenerFileSystem opener_fs(*fs, opener);
+	ClientContextFileOpener opener(con.context->GetContext());
+	auto &fs = TestLocalFileSystem();
+	VirtualFileSystem vfs;
+	TestContextFileSystem opener_fs(vfs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
-	if (fs->DirectoryExists(base)) {
-		fs->RemoveDirectory(base);
+	if (fs.DirectoryExists(base)) {
+		fs.RemoveDirectory(base);
 	}
-	auto allowed_root = fs->JoinPath(fs->JoinPath(base, "parent"), "allowed");
+	auto allowed_root = fs.JoinPath(fs.JoinPath(base, "parent"), "allowed");
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET allowed_directories = ['%s']", allowed_root)));
 	REQUIRE_NO_FAIL(con.Query("SET enable_external_access = false"));
 
-	auto target = fs->JoinPath(allowed_root, "child");
+	auto target = fs.JoinPath(allowed_root, "child");
 	REQUIRE_THROWS(opener_fs.CreateDirectoryExtended(target, {CreateDirectoryMode::RECURSIVE}));
-	REQUIRE(!fs->DirectoryExists(base));
+	REQUIRE(!fs.DirectoryExists(base));
 }
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
@@ -413,7 +418,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 #define INTEGER_COUNT 512
 
 TEST_CASE("Test file operations", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	duckdb::unique_ptr<FileHandle> handle, handle2;
 	int64_t test_data[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
@@ -425,7 +430,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// standard reading/writing test
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
 	// write 10 integers
 	REQUIRE_NOTHROW(handle->Write(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
@@ -435,9 +440,9 @@ TEST_CASE("Test file operations", "[file_system]") {
 		test_data[i] = 0;
 	}
 	// now open the file for reading
-	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ));
 	// Check file stats.
-	const auto file_metadata = fs->Stats(*handle);
+	const auto file_metadata = fs.Stats(*handle);
 	REQUIRE(file_metadata.file_size == 4096);
 	REQUIRE(file_metadata.file_type == FileType::FILE_TYPE_REGULAR);
 	REQUIRE(file_metadata.last_modification_time > timestamp_t {-1});
@@ -449,41 +454,41 @@ TEST_CASE("Test file operations", "[file_system]") {
 		REQUIRE(test_data[i] == i);
 	}
 	handle.reset();
-	fs->RemoveFile(fname);
+	fs.RemoveFile(fname);
 }
 
 TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto fname = TestCreatePath("stats_if_exists");
-	fs->TryRemoveFile(fname);
+	fs.TryRemoveFile(fname);
 
 	vector<char> payload {'s', 't', 'a', 't', 's'};
 	{
-		auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		auto handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 		handle->Write(payload.data(), payload.size());
 		handle->Sync();
 	}
 
-	auto metadata = fs->GetStatsIfExists(fname);
+	auto metadata = fs.GetStatsIfExists(fname);
 	REQUIRE(metadata.has_value());
 	REQUIRE(metadata->file_size == NumericCast<int64_t>(payload.size()));
 	REQUIRE(metadata->file_type == FileType::FILE_TYPE_REGULAR);
 	REQUIRE(metadata->last_modification_time > timestamp_t {-1});
 	REQUIRE(!metadata->version_tag.empty());
-	auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ);
 	auto handle_metadata = handle->Stats();
 	REQUIRE(metadata->file_id == handle_metadata.file_id);
 	REQUIRE(metadata->version_tag == handle_metadata.version_tag);
-	REQUIRE(!fs->GetStatsIfExists(fname + ".missing").has_value());
+	REQUIRE(!fs.GetStatsIfExists(fname + ".missing").has_value());
 
-	fs->RemoveFile(fname);
+	fs.RemoveFile(fname);
 }
 
 #ifndef _WIN32
 TEST_CASE("Local modification times keep the fraction of a second", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	const auto fname = TestCreatePath("subsecond_modification_time");
-	fs->TryRemoveFile(fname);
+	fs.TryRemoveFile(fname);
 	CreateDummyFile(fname);
 
 	// two modification times within the same second
@@ -494,20 +499,20 @@ TEST_CASE("Local modification times keep the fraction of a second", "[file_syste
 	times[1].tv_sec = MODIFICATION_SECONDS;
 	times[1].tv_nsec = 250000000;
 	REQUIRE(utimensat(AT_FDCWD, fname.c_str(), times, 0) == 0);
-	const auto first = fs->GetStatsIfExists(fname);
+	const auto first = fs.GetStatsIfExists(fname);
 	REQUIRE(first.has_value());
 	REQUIRE(first->last_modification_time.value == MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 250000);
 
 	times[1].tv_nsec = 750000000;
 	REQUIRE(utimensat(AT_FDCWD, fname.c_str(), times, 0) == 0);
-	const auto second = fs->GetStatsIfExists(fname);
+	const auto second = fs.GetStatsIfExists(fname);
 	REQUIRE(second.has_value());
 	REQUIRE(second->last_modification_time.value == MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 750000);
 	REQUIRE(second->file_size == first->file_size);
 	REQUIRE(second->file_id == first->file_id);
 	REQUIRE(second->version_tag != first->version_tag);
 	{
-		auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ);
 		REQUIRE(handle->Stats().version_tag == second->version_tag);
 	}
 
@@ -516,7 +521,7 @@ TEST_CASE("Local modification times keep the fraction of a second", "[file_syste
 	auto result = con.Query("SELECT epoch_us(last_modified) FROM read_blob('" + fname + "')");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 750000)}));
 
-	fs->RemoveFile(fname);
+	fs.RemoveFile(fname);
 }
 #endif
 
@@ -538,39 +543,39 @@ TEST_CASE("absolute paths", "[file_system]") {
 }
 
 TEST_CASE("Test RemoveFiles", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto dname = TestCreatePath("test_remove_files");
 
-	if (fs->DirectoryExists(dname)) {
-		fs->RemoveDirectory(dname);
+	if (fs.DirectoryExists(dname)) {
+		fs.RemoveDirectory(dname);
 	}
-	fs->CreateDirectory(dname);
+	fs.CreateDirectory(dname);
 
-	auto file1 = fs->JoinPath(dname, "file1.txt");
-	auto file2 = fs->JoinPath(dname, "file2.txt");
-	auto file3 = fs->JoinPath(dname, "file3.txt");
-	auto file4 = fs->JoinPath(dname, "file4.txt");
+	auto file1 = fs.JoinPath(dname, "file1.txt");
+	auto file2 = fs.JoinPath(dname, "file2.txt");
+	auto file3 = fs.JoinPath(dname, "file3.txt");
+	auto file4 = fs.JoinPath(dname, "file4.txt");
 	CreateDummyFile(file1);
 	CreateDummyFile(file2);
 	CreateDummyFile(file3);
 
-	REQUIRE(fs->FileExists(file1));
-	REQUIRE(fs->FileExists(file2));
-	REQUIRE(fs->FileExists(file3));
-	REQUIRE(!fs->FileExists(file4));
+	REQUIRE(fs.FileExists(file1));
+	REQUIRE(fs.FileExists(file2));
+	REQUIRE(fs.FileExists(file3));
+	REQUIRE(!fs.FileExists(file4));
 
-	fs->RemoveFiles({file1, file2});
-	REQUIRE(!fs->FileExists(file1));
-	REQUIRE(!fs->FileExists(file2));
-	REQUIRE(fs->FileExists(file3));
-	REQUIRE(!fs->FileExists(file4));
+	fs.RemoveFiles({file1, file2});
+	REQUIRE(!fs.FileExists(file1));
+	REQUIRE(!fs.FileExists(file2));
+	REQUIRE(fs.FileExists(file3));
+	REQUIRE(!fs.FileExists(file4));
 
-	fs->RemoveDirectory(dname);
+	fs.RemoveDirectory(dname);
 }
 
 TEST_CASE("extract subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
-	auto local_filesystem = FileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> local_filesystem = make_uniq<LocalFileSystem>();
 	auto *local_filesystem_ptr = local_filesystem.get();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
@@ -596,11 +601,11 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
 
 	// First time registration should succeed.
-	auto local_filesystem = FileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> local_filesystem = make_uniq<LocalFileSystem>();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
 	// Re-register an already registered subfilesystem should throw.
-	auto second_local_filesystem = FileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> second_local_filesystem = make_uniq<LocalFileSystem>();
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
 }
 
@@ -617,23 +622,23 @@ struct CanonicalizationTest {
 };
 
 void CanonicalizationTest::Test(const std::vector<CanonicalizationTest> &test_cases) {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	std::vector<string> failures;
 	for (auto &test : test_cases) {
 		// test canonicalization
-		auto canonical_a = fs->CanonicalizePath(test.a);
-		auto canonical_b = fs->CanonicalizePath(test.b);
+		auto canonical_a = fs.CanonicalizePath(test.a);
+		auto canonical_b = fs.CanonicalizePath(test.b);
 
 		if (canonical_a != canonical_b) {
 			failures.emplace_back(StringUtil::Format("Canonical path mismatch %s <> %s (original: %s - %s)",
 			                                         canonical_a, canonical_b, test.a, test.b));
 		}
-		if (!fs->IsPathAbsolute(test.a)) {
+		if (!fs.IsPathAbsolute(test.a)) {
 			// verify absolute and relative paths resolve to the same path
-			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
-			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
-			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
-			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
+			auto abs_a = fs.JoinPath(FileSystem::GetWorkingDirectory(), test.a);
+			auto abs_b = fs.JoinPath(FileSystem::GetWorkingDirectory(), test.b);
+			auto canonical_abs_a = fs.CanonicalizePath(abs_a);
+			auto canonical_abs_b = fs.CanonicalizePath(abs_b);
 			if (canonical_abs_a != canonical_abs_b) {
 				failures.emplace_back(StringUtil::Format("Canonical abs path mismatch %s <> %s (original: %s - %s)",
 				                                         canonical_abs_a, canonical_abs_b, test.a, test.b));
@@ -682,8 +687,8 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("a/b/c/../../d/e/../f", "a/d/f", "interleaved parents");
 
 #ifdef _WIN32
-	auto fs = FileSystem::CreateLocal();
-	auto current_drive = fs->GetWorkingDirectory().substr(0, 1);
+	auto &fs = TestLocalFileSystem();
+	auto current_drive = FileSystem::GetWorkingDirectory().substr(0, 1);
 
 	// Backslash handling
 	test_cases.emplace_back("src\\common", "src/common", "backslash separator equivalant to forward slash");
@@ -736,13 +741,13 @@ void TestCreateSymlink(const string &source, const string &target, bool director
 }
 
 TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 
 	TestCreateDirectory("real_dir");
 	auto real_dir = TestCreatePath("real_dir");
 	auto test_dir = TestDirectoryPath();
 	auto fake_dir = TestCreatePath("fake_dir");
-	auto real_file = fs->JoinPath(real_dir, "real_file");
+	auto real_file = fs.JoinPath(real_dir, "real_file");
 
 	TestCreateDirectory(real_dir);
 	// create a real file
@@ -752,9 +757,10 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 42 i"));
 	}
 	// create symlink from fake_dir -> real_dir
-	TestCreateSymlink(fake_dir, fs->JoinPath(fs->GetWorkingDirectory(), real_dir), true);
+	TestCreateSymlink(fake_dir, fs.JoinPath(FileSystem::GetWorkingDirectory(), real_dir), true);
 	// create symlink from fake_file -> real_file
-	TestCreateSymlink(fs->JoinPath(fake_dir, "fake_file"), fs->JoinPath(fs->GetWorkingDirectory(), real_file), false);
+	TestCreateSymlink(fs.JoinPath(fake_dir, "fake_file"), fs.JoinPath(FileSystem::GetWorkingDirectory(), real_file),
+	                  false);
 
 	// all of these tests are in the test dir
 	std::vector<CanonicalizationTest> test_cases;
@@ -768,10 +774,10 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 
 #ifndef _WIN32
 	// dangling symlinks resolve to the (non-existent) file they point to
-	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_link"),
-	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "missing_file"), false);
-	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_chain"),
-	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "dangling_link"), false);
+	TestCreateSymlink(fs.JoinPath(real_dir, "dangling_link"),
+	                  fs.JoinPath(fs.JoinPath(FileSystem::GetWorkingDirectory(), real_dir), "missing_file"), false);
+	TestCreateSymlink(fs.JoinPath(real_dir, "dangling_chain"),
+	                  fs.JoinPath(fs.JoinPath(FileSystem::GetWorkingDirectory(), real_dir), "dangling_link"), false);
 	test_cases.emplace_back("real_dir/dangling_link", "real_dir/missing_file", "follow dangling symlink");
 	test_cases.emplace_back("fake_dir/dangling_link", "real_dir/missing_file",
 	                        "follow dangling symlink in symlink dir");
@@ -780,33 +786,33 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 
 	// prepend everything with the test dir
 	for (auto &test_case : test_cases) {
-		test_case.a = fs->JoinPath(test_dir, test_case.a);
-		test_case.b = fs->JoinPath(test_dir, test_case.b);
+		test_case.a = fs.JoinPath(test_dir, test_case.a);
+		test_case.b = fs.JoinPath(test_dir, test_case.b);
 	}
 
 	CanonicalizationTest::Test(test_cases);
 }
 
 TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 
 	auto fname = TestCreatePath("concurrent_delete_test_file");
 	const string payload = "DELETE_WHILE_OPEN_CONTENT";
 
 	// Open first handle to create/write, then close it.
-	auto write_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	auto write_handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
 	                    /*location=*/0);
 	write_handle->Sync();
 	write_handle.reset();
-	REQUIRE(fs->FileExists(fname));
+	REQUIRE(fs.FileExists(fname));
 
 	// Open second handle for reading.
-	auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+	auto read_handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ);
 
 	// Delete the file while the read handle is still open.
-	fs->RemoveFile(fname);
-	REQUIRE(!fs->FileExists(fname));
+	fs.RemoveFile(fname);
+	REQUIRE(!fs.FileExists(fname));
 
 	// Reading from the already-open read handle should still return the content.
 	string read_back(payload.size(), '\0');
@@ -816,18 +822,18 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 
 	// Close the remaining handle; the file should not exist.
 	read_handle.reset();
-	REQUIRE(!fs->FileExists(fname));
+	REQUIRE(!fs.FileExists(fname));
 }
 
 TEST_CASE("Moving over an open file preserves existing handles", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto source = TestCreatePath("move_over_open_file_source");
 	auto target = TestCreatePath("move_over_open_file_target");
 	const vector<char> source_data {'s', 'o', 'u', 'r', 'c', 'e'};
 	const vector<char> target_data {'t', 'a', 'r', 'g', 'e', 't'};
 
 	auto write = [&](const string &path, vector<char> data) {
-		auto handle = fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 		handle->Write(data.data(), data.size());
 	};
 	auto read = [](FileHandle &handle, idx_t size) {
@@ -836,30 +842,30 @@ TEST_CASE("Moving over an open file preserves existing handles", "[file_system]"
 		return data;
 	};
 
-	fs->TryRemoveFile(source);
-	fs->TryRemoveFile(target);
+	fs.TryRemoveFile(source);
+	fs.TryRemoveFile(target);
 	write(source, source_data);
 	write(target, target_data);
 
-	auto open_target = fs->OpenFile(target, FileFlags::FILE_FLAGS_READ);
-	fs->MoveFile(source, target);
+	auto open_target = fs.OpenFile(target, FileFlags::FILE_FLAGS_READ);
+	fs.MoveFile(source, target);
 
-	REQUIRE(!fs->FileExists(source));
-	REQUIRE(fs->FileExists(target));
+	REQUIRE(!fs.FileExists(source));
+	REQUIRE(fs.FileExists(target));
 	REQUIRE(read(*open_target, target_data.size()) == target_data);
-	REQUIRE(read(*fs->OpenFile(target, FileFlags::FILE_FLAGS_READ), source_data.size()) == source_data);
+	REQUIRE(read(*fs.OpenFile(target, FileFlags::FILE_FLAGS_READ), source_data.size()) == source_data);
 
 	open_target.reset();
-	fs->RemoveFile(target);
+	fs.RemoveFile(target);
 }
 
 TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto fname = TestCreatePath("exclusive_create_test_file");
 	for (auto create_flag : {FileFlags::FILE_FLAGS_FILE_CREATE, FileFlags::FILE_FLAGS_FILE_CREATE_NEW}) {
 		for (auto null_if_exists : {false, true}) {
 			CAPTURE(create_flag.GetFlagsInternal(), null_if_exists);
-			fs->TryRemoveFile(fname);
+			fs.TryRemoveFile(fname);
 			auto flags = FileFlags::FILE_FLAGS_WRITE | create_flag | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 			if (null_if_exists) {
 				flags |= FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
@@ -867,36 +873,36 @@ TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
 
 			// Both creation modes must succeed on a new path, including with NULL_IF_EXISTS.
 			string payload = "EXCLUSIVE_CREATE_ORIGINAL_CONTENT";
-			auto handle = fs->OpenFile(fname, flags);
+			auto handle = fs.OpenFile(fname, flags);
 			REQUIRE(handle != nullptr);
 			handle->Write(QueryContext(), payload.data(), payload.size(), 0);
 			handle->Sync();
 			handle.reset();
-			REQUIRE(fs->FileExists(fname));
+			REQUIRE(fs.FileExists(fname));
 
 			if (null_if_exists) {
-				REQUIRE(fs->OpenFile(fname, flags) == nullptr);
+				REQUIRE(fs.OpenFile(fname, flags) == nullptr);
 			} else {
-				REQUIRE_THROWS_AS(fs->OpenFile(fname, flags), IOException);
+				REQUIRE_THROWS_WITH(fs.OpenFile(fname, flags), Catch::Contains("Cannot open file"));
 			}
 
 			// A collision must not truncate or alter the existing file.
 			string read_back(payload.size(), '\0');
-			auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+			auto read_handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ);
 			REQUIRE(read_handle->GetFileSize() == payload.size());
 			read_handle->Read(QueryContext(), read_back.data(), read_back.size(), 0);
 			REQUIRE(read_back == payload);
 			read_handle.reset();
 
 			// A regular file cannot be a parent directory; NULL_IF_EXISTS must not hide this error.
-			REQUIRE_THROWS_AS(fs->OpenFile(fs->JoinPath(fname, "child"), flags), IOException);
+			REQUIRE_THROWS_WITH(fs.OpenFile(fs.JoinPath(fname, "child"), flags), Catch::Contains("Cannot open file"));
 
-			auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+			auto reopen = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 			REQUIRE(reopen != nullptr);
 			reopen.reset();
 
-			fs->RemoveFile(fname);
-			REQUIRE(!fs->FileExists(fname));
+			fs.RemoveFile(fname);
+			REQUIRE(!fs.FileExists(fname));
 		}
 	}
 }
@@ -1405,8 +1411,8 @@ TEST_CASE("Path one-off tests", "[file_system]") {
 
 #ifdef _WIN32
 TEST_CASE("Check path canonicalization on Windows", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
-	auto canonical_work_dir = fs->CanonicalizePath(fs->GetWorkingDirectory());
+	auto &fs = TestLocalFileSystem();
+	auto canonical_work_dir = fs.CanonicalizePath(FileSystem::GetWorkingDirectory());
 	// check that long path prefix "\\?\" or "\\?\UNC\" is not present
 	REQUIRE(!StringUtil::StartsWith(canonical_work_dir, "\\\\"));
 }
@@ -1446,57 +1452,57 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 	idx_t max_dir_path_len = 247;
 	idx_t work_dir_path_len = 240;
 
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	string cwd = fs->GetWorkingDirectory();
+	auto &fs = TestLocalFileSystem();
+	string cwd = FileSystem::GetWorkingDirectory();
 	string test_dir = TestDirectoryPath();
-	test_dir = fs->JoinPath(test_dir, "test_long_path");
-	test_dir = fs->JoinPath(cwd, test_dir);
+	test_dir = fs.JoinPath(test_dir, "test_long_path");
+	test_dir = fs.JoinPath(cwd, test_dir);
 	REQUIRE(test_dir.length() < max_dir_path_len - 1);
-	fs->CreateDirectory(test_dir);
+	fs.CreateDirectory(test_dir);
 
-	string work_dir = fs->JoinPath(test_dir, GenPath(work_dir_path_len - test_dir.length() - 1));
+	string work_dir = fs.JoinPath(test_dir, GenPath(work_dir_path_len - test_dir.length() - 1));
 	REQUIRE(work_dir.length() == work_dir_path_len);
-	fs->CreateDirectoriesRecursive(work_dir);
-	REQUIRE(fs->DirectoryExists(work_dir));
+	fs.CreateDirectoriesRecursive(work_dir);
+	REQUIRE(fs.DirectoryExists(work_dir));
 
 	std::vector<char> test_buf = {'f', 'o', 'o'};
 
 	// create/remove files
 	for (idx_t i = 1; i < 32; i++) {
 		string name = "f_" + GenString(i);
-		string path = fs->JoinPath(work_dir, name);
-		auto fd = fs->OpenFile(path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		string path = fs.JoinPath(work_dir, name);
+		auto fd = fs.OpenFile(path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
 		fd->Write(test_buf.data(), test_buf.size());
 		fd->Close();
-		REQUIRE(fs->FileExists(path));
-		fs->RemoveFile(path);
-		REQUIRE(!fs->FileExists(path));
+		REQUIRE(fs.FileExists(path));
+		fs.RemoveFile(path);
+		REQUIRE(!fs.FileExists(path));
 	}
 
 	// create/remove directories
 	for (idx_t i = 1; i < 32; i++) {
 		string name = "d_" + GenString(i);
-		string path = fs->JoinPath(work_dir, name);
-		fs->CreateDirectory(path);
-		REQUIRE(fs->DirectoryExists(path));
-		fs->RemoveDirectory(path);
-		REQUIRE(!fs->DirectoryExists(path));
+		string path = fs.JoinPath(work_dir, name);
+		fs.CreateDirectory(path);
+		REQUIRE(fs.DirectoryExists(path));
+		fs.RemoveDirectory(path);
+		REQUIRE(!fs.DirectoryExists(path));
 	}
 
 	// move file
-	string src_path = fs->JoinPath(work_dir, "move_src_" + GenString(32));
+	string src_path = fs.JoinPath(work_dir, "move_src_" + GenString(32));
 	{
-		auto fd = fs->OpenFile(src_path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		auto fd = fs.OpenFile(src_path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
 		fd->Write(test_buf.data(), test_buf.size());
 		fd->Close();
 	}
-	REQUIRE(fs->FileExists(src_path));
-	string dest_path = fs->JoinPath(work_dir, "move_dest_" + GenString(32));
-	fs->MoveFile(src_path, dest_path);
-	REQUIRE(!fs->FileExists(src_path));
-	REQUIRE(fs->FileExists(dest_path));
+	REQUIRE(fs.FileExists(src_path));
+	string dest_path = fs.JoinPath(work_dir, "move_dest_" + GenString(32));
+	fs.MoveFile(src_path, dest_path);
+	REQUIRE(!fs.FileExists(src_path));
+	REQUIRE(fs.FileExists(dest_path));
 	{
-		auto fd = fs->OpenFile(dest_path, FileFlags::FILE_FLAGS_READ);
+		auto fd = fs.OpenFile(dest_path, FileFlags::FILE_FLAGS_READ);
 		std::vector<char> buf;
 		buf.resize(3);
 		auto read = fd->Read(buf.data(), buf.size());
@@ -1507,46 +1513,46 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 
 	// non-clean paths
 	{
-		string long_dir = fs->JoinPath(work_dir, "long_dir_" + GenString(32));
-		fs->CreateDirectory(long_dir);
-		REQUIRE(fs->DirectoryExists(long_dir));
+		string long_dir = fs.JoinPath(work_dir, "long_dir_" + GenString(32));
+		fs.CreateDirectory(long_dir);
+		REQUIRE(fs.DirectoryExists(long_dir));
 		string dir1 = long_dir + "/dir1";
 		string dir2 = long_dir + "/dir1/.//..\\dir2";
-		string dir2_clean = fs->JoinPath(long_dir, "dir2");
+		string dir2_clean = fs.JoinPath(long_dir, "dir2");
 		string file1 = dir2 + "/file1";
-		fs->CreateDirectory(dir1);
-		REQUIRE(fs->DirectoryExists(dir1));
-		fs->CreateDirectory(dir2);
-		REQUIRE(fs->DirectoryExists(dir2));
-		REQUIRE(fs->DirectoryExists(dir2_clean));
-		auto fd = fs->OpenFile(file1, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		fs.CreateDirectory(dir1);
+		REQUIRE(fs.DirectoryExists(dir1));
+		fs.CreateDirectory(dir2);
+		REQUIRE(fs.DirectoryExists(dir2));
+		REQUIRE(fs.DirectoryExists(dir2_clean));
+		auto fd = fs.OpenFile(file1, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
 		fd->Write(test_buf.data(), test_buf.size());
 		fd->Close();
-		REQUIRE(fs->FileExists(file1));
+		REQUIRE(fs.FileExists(file1));
 	}
 
 	// pre-existing prefix
 	{
 		string name = "prefix_dir_" + GenString(32);
-		string path = fs->JoinPath(work_dir, name);
+		string path = fs.JoinPath(work_dir, name);
 		string prefixed = "\\\\?\\" + path;
-		fs->CreateDirectory(prefixed);
-		REQUIRE(fs->DirectoryExists(prefixed));
-		REQUIRE(fs->DirectoryExists(path));
+		fs.CreateDirectory(prefixed);
+		REQUIRE(fs.DirectoryExists(prefixed));
+		REQUIRE(fs.DirectoryExists(path));
 	}
 
 	// cleaning up, as not all tools can remove long dirs
-	fs->RemoveDirectory(work_dir);
+	fs.RemoveDirectory(work_dir);
 }
 #endif // _WIN32
 
 TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	// Create a local file which pretends to be fake-compressed.
 	auto filepath = TestCreatePath("fake_compression_file.compress");
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	{
 		const string payload = "CREATE_COMPRESSED_FILE";
-		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		auto write_handle = fs.OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 		write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
 		                    0);
 		write_handle->Sync();
@@ -1558,7 +1564,7 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	// Auto-detection matches the fake compression filesystem based on the file name.
 	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
 	flags.SetCompression(FileCompressionType::AUTO_DETECT);
-	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	auto file_handle = vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr);
 
 	// Downcast to make sure compressed file handle is created.
 	REQUIRE(file_handle != nullptr);
@@ -1568,16 +1574,16 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 
 	// Explicitly requesting the registered compression type works as well.
 	flags.SetCompression(FileCompressionType("fake_compress"));
-	file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	file_handle = vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr);
 	REQUIRE(file_handle != nullptr);
 	REQUIRE(file_handle->Cast<FakeCompressFileHandle>().internal_file_handle != nullptr);
 	file_handle.reset();
 
 	// Explicitly requesting a compression type that has not been registered throws.
 	flags.SetCompression(FileCompressionType("nonexistent_compress"));
-	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
+	REQUIRE_THROWS(vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr));
 
-	fs->RemoveFile(filepath);
+	fs.RemoveFile(filepath);
 }
 
 TEST_CASE("JoinPath keeps a remote URL's query string at the end of the path", "[file_system]") {

@@ -130,11 +130,15 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
 	if (!select_set_op_chain_tail) {
 		return select;
 	}
+	// the chain only extends the N-ary nodes it builds itself: an operand that already is a set operation was written
+	// in parentheses and resolves its own result type before the outer operation unifies over it
+	bool chain_node = false;
 	for (auto &tail : *select_set_op_chain_tail) {
 		auto setop_result = std::move(tail.first);
 		auto right_select = std::move(tail.second);
-		if (select->node->type == QueryNodeType::SET_OPERATION_NODE && select->node->modifiers.empty() &&
-		    select->node->cte_map.map.empty()) {
+		if (chain_node) {
+			// modifiers and CTEs are attached by SelectStatementInternal, after the chain has been built
+			D_ASSERT(select->node->modifiers.empty() && select->node->cte_map.map.empty());
 			auto &existing = select->node->Cast<SetOperationNode>();
 			if (existing.setop_type == setop_result->setop_type && existing.setop_all == setop_result->setop_all &&
 			    (existing.setop_type == SetOperationType::UNION ||
@@ -146,6 +150,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
 		setop_result->children.push_back(std::move(select->node));
 		setop_result->children.push_back(std::move(right_select->node));
 		select->node = std::move(setop_result);
+		chain_node = true;
 	}
 	return select;
 }
@@ -382,6 +387,20 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLi
 	return result;
 }
 
+static unique_ptr<TableRef> ApplyJoinOrPivot(unique_ptr<TableRef> source, unique_ptr<TableRef> join_or_pivot) {
+	if (join_or_pivot->type == TableReferenceType::JOIN) {
+		join_or_pivot->Cast<JoinRef>().left = std::move(source);
+	} else if (join_or_pivot->type == TableReferenceType::PIVOT) {
+		join_or_pivot->Cast<PivotRef>().source = std::move(source);
+	} else if (join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
+		join_or_pivot->Cast<MatchRecognizeRef>().input = std::move(source);
+	} else {
+		throw NotImplementedException("Unsupported TableRef type encountered: %s",
+		                              EnumUtil::ToString(join_or_pivot->type));
+	}
+	return join_or_pivot;
+}
+
 void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -412,25 +431,18 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampolin
 	auto &repeat_join_or_pivot = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>();
 	auto repeat_children = repeat_join_or_pivot.GetChildren();
 	for (idx_t i = 0; i < repeat_children.size(); i++) {
-		auto transform_join_or_pivot = process.TakeResult<unique_ptr<TableRef>>(1 + i);
-		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
-			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
-			join_ref.left = std::move(inner_table_ref);
-			inner_table_ref = std::move(transform_join_or_pivot);
-		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
-			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
-			pivot_ref.source = std::move(inner_table_ref);
-			inner_table_ref = std::move(transform_join_or_pivot);
-		} else if (transform_join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
-			auto &match_recognize_ref = transform_join_or_pivot->Cast<MatchRecognizeRef>();
-			match_recognize_ref.input = std::move(inner_table_ref);
-			inner_table_ref = std::move(transform_join_or_pivot);
-		} else {
-			throw NotImplementedException("Unsupported TableRef type encountered: %s",
-			                              EnumUtil::ToString(transform_join_or_pivot->type));
-		}
+		inner_table_ref = ApplyJoinOrPivot(std::move(inner_table_ref), process.TakeResult<unique_ptr<TableRef>>(1 + i));
 	}
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(inner_table_ref));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformJoinedTableRefChain(PEGTransformer &transformer,
+                                                                         unique_ptr<TableRef> inner_table_ref,
+                                                                         vector<unique_ptr<TableRef>> join_or_pivot) {
+	for (auto &entry : join_or_pivot) {
+		inner_table_ref = ApplyJoinOrPivot(std::move(inner_table_ref), std::move(entry));
+	}
+	return inner_table_ref;
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGTransformer &transformer,
@@ -1049,37 +1061,49 @@ void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &trans
                                                            GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	process.ReserveChildSlots(with_statement_list.size());
-	for (idx_t i = with_statement_list.size(); i > 0; i--) {
-		auto child_idx = i - 1;
-		process.PushChild({with_statement_list[child_idx].get()}, child_idx);
-	}
+	auto entry_count = with_statement_list.size();
+	// the last slot holds the CTE map that is built up while the CTEs are transformed
+	process.ReserveChildSlots(entry_count + 1);
+	process.SetChildResult(entry_count, transformer.MakeResult<CommonTableExpressionMap>(CommonTableExpressionMap()));
+	// earlier CTEs are visible while transforming later ones (e.g. for PIVOT enum extraction)
+	transformer.stored_cte_map.push_back(process.GetResult<CommonTableExpressionMap>(entry_count));
+	process.manual_state = 0;
+	process.PushChild({with_statement_list[0].get()}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
-	CommonTableExpressionMap result;
-	for (idx_t entry_idx = 0; entry_idx < process.child_results.size(); entry_idx++) {
-		auto with_entry = process.TakeResult<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(entry_idx);
-		if (is_recursive) {
-			auto &query_node = with_entry.second->query_node;
-			if (!query_node) {
-				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
-			ValidateRecursiveCTEQueryNode(*query_node);
-			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
-			                            with_entry.second->key_targets);
+	auto entry_count = process.child_results.size() - 1;
+	auto &result = process.GetResult<CommonTableExpressionMap>(entry_count);
+
+	auto entry_idx = process.manual_state;
+	auto with_entry = process.TakeResult<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(entry_idx);
+	if (is_recursive) {
+		auto &query_node = with_entry.second->query_node;
+		if (!query_node) {
+			throw ParserException("Recursive CTEs with DML statements are not supported");
 		}
-		auto &cte_name = with_entry.first;
-		auto it = result.map.find(cte_name);
-		if (it != result.map.end()) {
-			throw ParserException("Duplicate CTE name %s", cte_name);
-		}
-		result.map.insert(with_entry.first, std::move(with_entry.second));
+		ValidateRecursiveCTEQueryNode(*query_node);
+		query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
+		                            with_entry.second->key_targets);
 	}
-	return transformer.MakeResult<CommonTableExpressionMap>(std::move(result));
+	auto &cte_name = with_entry.first;
+	auto it = result.map.find(cte_name);
+	if (it != result.map.end()) {
+		throw ParserException("Duplicate CTE name %s", cte_name);
+	}
+	result.map.insert(with_entry.first, std::move(with_entry.second));
+
+	if (entry_idx + 1 < entry_count) {
+		process.manual_state = entry_idx + 1;
+		auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+		process.PushChild({with_statement_list[entry_idx + 1].get()}, entry_idx + 1);
+		return nullptr;
+	}
+	transformer.stored_cte_map.pop_back();
+	return transformer.MakeResult<CommonTableExpressionMap>(process.TakeResult<CommonTableExpressionMap>(entry_count));
 }
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
@@ -1534,19 +1558,22 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTa
 	return make_uniq<BaseTableRef>(description);
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(
-    PEGTransformer &transformer, const optional<Identifier> &catalog_qualification,
-    const optional<vector<Identifier>> &schema_qualification, const Identifier &table_function_name) {
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTableFunctionName(
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const optional<vector<Identifier>> &schema_qualification, const Identifier &reserved_table_function_name) {
 	vector<Identifier> qualification;
-	if (catalog_qualification) {
-		qualification.push_back(*catalog_qualification);
-	}
+	qualification.push_back(catalog_qualification);
 	if (schema_qualification) {
 		for (auto &schema : *schema_qualification) {
 			qualification.push_back(schema);
 		}
 	}
-	return QualifiedName(std::move(qualification), table_function_name);
+	return QualifiedName(std::move(qualification), reserved_table_function_name);
+}
+
+QualifiedName PEGTransformerFactory::TransformTableFunctionNameAsQualifiedName(PEGTransformer &transformer,
+                                                                               const Identifier &table_function_name) {
+	return QualifiedName(table_function_name);
 }
 
 vector<FunctionArgument>

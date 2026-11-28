@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/joinside.hpp"
 
 #include "duckdb/storage/data_table.hpp"
@@ -19,11 +20,10 @@
 #include <map>
 
 namespace duckdb {
+class BoundColumnRefExpression;
 class LogicalGet;
 class Optimizer;
 
-enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
-enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
 enum class FilterPushdownResult { NO_PUSHDOWN, PUSHED_DOWN_PARTIALLY, PUSHED_DOWN_FULLY };
 
 //! The FilterCombiner combines several filters and generates a logically equivalent set that is more efficient
@@ -39,10 +39,7 @@ public:
 	ClientContext &context;
 
 public:
-	struct ExpressionValueInformation {
-		Value constant;
-		ExpressionType comparison_type;
-	};
+	using ExpressionValueInformation = ConstantComparison;
 
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Splits on AND and adds each conjunct
@@ -55,30 +52,46 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
+	//! Whether expression equality preserves the identity of constants within this expression.
+	static bool CanMatchExpression(const Expression &expr);
+	//! A predicate that can be copied without changing evaluation effects or conflating matched operands.
+	static bool CanCopyFilter(const Expression &filter);
+	//! A safe predicate with the same truth value for keys equal under NOT DISTINCT FROM.
+	static bool IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys);
+	//! Append a linear set of equalities and key constraints in projection output bindings.
+	//! lookup_output maps an exact input expression to an existing output column; source filters are retained.
+	static void GenerateProjectionFilters(
+	    ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+	    const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output,
+	    vector<unique_ptr<Expression>> &result);
+	//! Remove exact duplicate, non-throwing, non-volatile predicates.
+	static void DeduplicateFilters(vector<unique_ptr<Expression>> &filters);
 	void GenerateEquivalentFilters(const Expression &filter,
 	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
 	//! The expression that a comparison, BETWEEN or IN filter compares with constants, or nullptr for other filters.
 	//! Such a filter is false for NULL and has the same result for all values equal to that expression.
 	static optional_ptr<const Expression> GetComparedExpression(const Expression &filter);
-	//! Generates the comparisons with constants that filters on one side of a join imply for the target side through
-	//! the equality conditions, e.g. [i = a and i = 500] => [a = 500]. Unlike GenerateEquivalentFilters, it only
-	//! replaces a compared expression as a whole, so values that are equal but not identical stay apart.
+	//! Generates key constraints implied for the target side by equality conditions, e.g. [i = a, i = 500] => [a =
+	//! 500]. Replaces only whole keys, including in NULL tests and Boolean combinations, preserving value equality.
 	static void GenerateJoinFilters(const vector<JoinCondition> &conditions,
 	                                const vector<reference<const Expression>> &filters, JoinSide target_side,
 	                                const std::function<void(unique_ptr<Expression> filter)> &callback);
-	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
-	                                        vector<FilterPushdownResult> &pushdown_results);
+	//! Append generated filters to the scan's existing filters.
+	void GenerateTableScanFilters(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                              vector<FilterPushdownResult> &pushdown_results);
 
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
 private:
+	void AddProjectionEqualities(const vector<unique_ptr<Expression>> &filters);
+	void GenerateEquivalentKeyFilters(const Expression &filter,
+	                                  const std::function<void(unique_ptr<Expression> filter)> &callback);
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
 	FilterResult AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root = true);
 	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
-	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
 	FilterPushdownResult TryPushdownConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                               column_t column_id, vector<ExpressionValueInformation> &info_list);

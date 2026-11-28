@@ -53,30 +53,60 @@ static bool WidenByInfinities(const BaseStatistics &input, const LogicalType &ta
 	return true;
 }
 
+//! The statistics of numeric values: the fixed-size types and the bignum_t tier of decimals
+static bool IsNumericStats(const BaseStatistics &stats) {
+	return stats.GetStatsType() == StatisticsType::NUMERIC_STATS ||
+	       stats.GetStatsType() == StatisticsType::BIGNUM_STATS;
+}
+
+static bool HasNumericMinMax(const BaseStatistics &stats) {
+	if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+		return BignumStats::HasMinMax(stats);
+	}
+	return NumericStats::HasMinMax(stats);
+}
+
+static Value NumericMin(const BaseStatistics &stats) {
+	return stats.GetStatsType() == StatisticsType::BIGNUM_STATS ? BignumStats::Min(stats) : NumericStats::Min(stats);
+}
+
+static Value NumericMax(const BaseStatistics &stats) {
+	return stats.GetStatsType() == StatisticsType::BIGNUM_STATS ? BignumStats::Max(stats) : NumericStats::Max(stats);
+}
+
+static void SetNumericMinMax(BaseStatistics &stats, const Value &min, const Value &max) {
+	if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+		BignumStats::SetMin(stats, min);
+		BignumStats::SetMax(stats, max);
+	} else {
+		NumericStats::SetMin(stats, min);
+		NumericStats::SetMax(stats, max);
+	}
+}
+
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
 	// Bail out if the stats are not numeric
-	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+	if (!IsNumericStats(input)) {
 		return nullptr;
 	}
 	if (!input.CanHaveNoNull()) {
-		auto result = NumericStats::CreateEmpty(target);
+		auto result = BaseStatistics::CreateEmpty(target);
 		result.CopyBase(input);
 		return result.ToUnique();
 	}
-	if (!NumericStats::HasMinMax(input)) {
+	if (!HasNumericMinMax(input)) {
 		return nullptr;
 	}
-	auto min = NumericStats::Min(input).DefaultTryCastAs(target);
-	auto max = NumericStats::Max(input).DefaultTryCastAs(target);
+	auto min = NumericMin(input).DefaultTryCastAs(target);
+	auto max = NumericMax(input).DefaultTryCastAs(target);
 	if (!min || !max || !WidenByInfinities(input, target, *min, *max)) {
 		// overflow in cast: bailout
 		return nullptr;
 	}
-	auto result = NumericStats::CreateEmpty(target);
+	auto result = BaseStatistics::CreateEmpty(target);
 	result.CopyBase(input);
-	NumericStats::SetMin(result, *min);
-	NumericStats::SetMax(result, *max);
+	SetNumericMinMax(result, *min, *max);
 	return result.ToUnique();
 }
 
@@ -88,6 +118,13 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 		return false;
 	}
 	// we can only propagate numeric -> numeric
+	if (BaseStatistics::GetStatsType(source) == StatisticsType::BIGNUM_STATS) {
+		// the bignum_t tier of decimals casts to the numeric types
+		return target.IsNumeric();
+	}
+	if (BaseStatistics::GetStatsType(target) == StatisticsType::BIGNUM_STATS) {
+		return source.IsNumeric();
+	}
 	switch (source.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -125,7 +162,8 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 	// for time/timestamps/dates - there are various limitations on what we can propagate
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
@@ -160,9 +198,15 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 		// (the ICU extension overrides them at execution time) but Value::DefaultTryCastAs
 		// uses the static, UTC-only operator, so propagated min/max would diverge from
 		// runtime values. See issue #22235.
+		// The time of day of every timestamp wraps at midnight, as for TIME and TIME_NS above
 		switch (source.id()) {
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return false;
 		default:
 			break;
@@ -224,7 +268,30 @@ static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStati
 
 	auto result = ListStats::CreateEmpty(target);
 	result.CopyBase(input);
+	auto array_size = ArrayType::GetSize(source);
+	ListStats::SetLengthBounds(result, array_size, array_size);
 	ListStats::GetChildStats(result).Copy(ArrayStats::GetChildStats(input));
+	return result.ToUnique();
+}
+
+static unique_ptr<BaseStatistics> StatisticsPropagateListToList(const BaseStatistics &input, const LogicalType &source,
+                                                                const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST);
+	if (input.GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	if (source == target) {
+		return input.Copy().ToUnique();
+	}
+	// casting the elements keeps the length of the lists
+	auto result = ListStats::CreateUnknown(target);
+	result.CopyValidity(input);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(input));
+	auto child_stats = CastStatistics::TryPropagate(ListStats::GetChildStats(input), ListType::GetChildType(source),
+	                                                ListType::GetChildType(target));
+	if (child_stats) {
+		ListStats::SetChildStats(result, std::move(child_stats));
+	}
 	return result.ToUnique();
 }
 
@@ -242,8 +309,15 @@ unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &st
 		// type set and null-ness are unchanged: propagate the statistics as-is.
 		return stats.Copy().ToUnique();
 	}
+	if (source.id() == LogicalTypeId::GEOGRAPHY && target.id() == LogicalTypeId::GEOGRAPHY) {
+		// Same as geometry -> geometry: only the CRS changes, so the (geodetic) statistics carry over as-is.
+		return stats.Copy().ToUnique();
+	}
 	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {
 		return StatisticsPropagateArrayToList(stats, source, target);
+	}
+	if (source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST) {
+		return StatisticsPropagateListToList(stats, source, target);
 	}
 	if (!CanPropagate(source, target)) {
 		return nullptr;

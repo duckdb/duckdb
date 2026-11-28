@@ -2,6 +2,7 @@ add_library_unity(
   test_optimizer
   OBJECT
   aggregate_rewrite.cpp
+  aggregate_statistics.cpp
   bound_function_identity.cpp
   build_probe_side_optimizer.cpp
   column_binding_rewrite.cpp
@@ -10,12 +11,16 @@ add_library_unity(
   dynamic_filter_groups.cpp
   expression_type_serialization.cpp
   filter_pushdown_alias.cpp
+  filter_pushdown_existing_filters.cpp
   function_invocation_serialization.cpp
   join_filter_optimizer_hooks.cpp
   join_order_conflict_detector.cpp
   join_order_enumeration.cpp
+  join_order_linearized.cpp
   logical_plan_verification.cpp
   multi_file_metadata.cpp
+  multi_file_repeatability.cpp
+  physical_plan_properties.cpp
   relation_statistics.cpp
   remove_unused_columns.cpp
   runtime_filter_schedule.cpp

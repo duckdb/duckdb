@@ -17,11 +17,14 @@ namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_AGGREGATE;
+	//! Preserves the first argument's domain for singleton input when the second argument is non-NULL
+	static constexpr const char *NON_NULL_SELECTOR_DOMAIN_PROPERTY = "duckdb.aggregate.non_null_selector_domain";
+	//! Stores the returned first argument as a sort key, which does not keep the sign of a zero
+	static constexpr const char *ARG_STORED_AS_SORT_KEY_PROPERTY = "duckdb.aggregate.arg_stored_as_sort_key";
 
 public:
 	BoundAggregateExpression(BoundAggregateFunction function, vector<unique_ptr<Expression>> children,
-	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
-	                         AggregateType aggr_type);
+	                         unique_ptr<Expression> filter, cow_ptr<FunctionData> bind_info, AggregateType aggr_type);
 
 public:
 	bool IsDistinct() const {
@@ -40,10 +43,10 @@ public:
 	vector<unique_ptr<Expression>> &GetChildrenMutable() {
 		return children;
 	}
-	const unique_ptr<FunctionData> &BindInfo() const {
+	const cow_ptr<FunctionData> &BindInfo() const {
 		return bind_info;
 	}
-	unique_ptr<FunctionData> &BindInfoMutable() {
+	cow_ptr<FunctionData> &BindInfoMutable() {
 		return bind_info;
 	}
 	AggregateType GetAggregateType() const {
@@ -80,6 +83,7 @@ public:
 	bool IsVolatile() const override;
 	bool CanThrow() const override;
 	bool PropagatesNullValues() const override;
+	bool CanForwardSingletonInputDomain() const;
 
 	string ToString() const override;
 
@@ -96,7 +100,7 @@ private:
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
 	//! The bound function data (if any)
-	unique_ptr<FunctionData> bind_info;
+	cow_ptr<FunctionData> bind_info;
 	//! The aggregate type (distinct or non-distinct)
 	AggregateType aggr_type;
 	//! Whether or not we are exporting state in this aggregate

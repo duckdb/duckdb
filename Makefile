@@ -32,8 +32,7 @@ EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
 EXE_SUFFIX := .exe
 endif
-UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
-SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
+TEST_RUNNER ?= test/run
 SMOKE_RUNNER ?= build/relassert/test/run
 UNITTEST_SLOW_FLAGS ?= --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
@@ -557,6 +556,7 @@ unittest_release:
 	build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/approximate_join_order.json \
 	test/configs/verify_statement_explain_sql.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
@@ -567,7 +567,8 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/verify_statement_serialization.json \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json
+	test/configs/verify_column_bindings.json \
+	test/configs/warnings_as_errors.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
@@ -635,7 +636,8 @@ test_table_scan:
 	./build/release/test/run --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"'
 
 test_storage:
-	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" \
+		--new-unittest build/release/$(TEST_RUNNER) --new-cli build/release/duckdb
 
 .PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
@@ -659,14 +661,14 @@ ifndef CI
 allunit: release
 endif
 
+.PHONY: unittest_threadsan unittest_threadsan_extra
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
+
+unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
+unittest_threadsan_extra:
 	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
 	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage --force-reload" "[interquery]" $(T)
-
-.PHONY: unittest_threadsan_extra
-unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
-unittest_threadsan_extra: unittest_reldebug
 	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage" "[interquery]" $(T)
 
 docs:
@@ -685,23 +687,24 @@ relassert: ${EXTENSION_CONFIG_STEP}
 .PHONY: relassert-artifact
 
 relassert-artifact:
-	RELEASE_ARTIFACT_SOURCE_DIR="$(RELEASE_ARTIFACT_SOURCE_DIR)" \
-	RELEASE_ARTIFACT_STAGING_DIR="$(RELEASE_ARTIFACT_STAGING_DIR)" \
-	RELEASE_ARTIFACT_TARBALL="$(RELEASE_ARTIFACT_TARBALL)" \
-	bash scripts/prepare_build_artifact.sh relassert
+	bash scripts/prepare_build_artifact.sh relassert \
+		"$(RELEASE_ARTIFACT_SOURCE_DIR)" "$(RELEASE_ARTIFACT_STAGING_DIR)" "$(RELEASE_ARTIFACT_TARBALL)"
 
 .PHONY: release-artifact
 
 release-artifact:
-	RELEASE_ARTIFACT_SOURCE_DIR="$(RELEASE_ARTIFACT_SOURCE_DIR)" \
-	RELEASE_ARTIFACT_STAGING_DIR="$(RELEASE_ARTIFACT_STAGING_DIR)" \
-	RELEASE_ARTIFACT_TARBALL="$(RELEASE_ARTIFACT_TARBALL)" \
-	bash scripts/prepare_build_artifact.sh release
+	bash scripts/prepare_build_artifact.sh release \
+		"$(RELEASE_ARTIFACT_SOURCE_DIR)" "$(RELEASE_ARTIFACT_STAGING_DIR)" "$(RELEASE_ARTIFACT_TARBALL)"
 
 .PHONY: cli-release-artifact
 
 cli-release-artifact:
 	bash scripts/package_release_artifact.sh cli "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)"
+
+.PHONY: test-release-artifact
+
+test-release-artifact:
+	bash scripts/package_release_artifact.sh test "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)" "$(TEST_EXTENSION_BINARY)"
 
 .PHONY: cli-zip-release-artifact
 
@@ -936,8 +939,8 @@ parser-grammar: parser-grammar-tools
 	PYTHON="$(FORMAT_PYTHON)" ./scripts/parser/build_grammar.sh
 
 .PHONY: check-extension-entries
-check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
-	$(PYTHON) scripts/generate_extensions_function.py
+check-extension-entries: $(if $(strip $(EXTENSION_ENTRIES)),,extension_configuration) $(FORMAT_SETUP_DEPS)
+	$(PYTHON) scripts/generate_extensions_function.py $(if $(EXTENSION_ENTRIES),--extensions "$(EXTENSION_ENTRIES)")
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
 	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
 	@if [ -s extension_entries.hpp.diff ]; then \

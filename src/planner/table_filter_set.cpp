@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
@@ -24,27 +25,6 @@
 
 namespace duckdb {
 
-static bool ContainsInternalTableFilterFunction(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
-			return true;
-		}
-		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
-		if (optional_child && ContainsInternalTableFilterFunction(*optional_child)) {
-			return true;
-		}
-	}
-	bool found = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (found) {
-			return;
-		}
-		found = ContainsInternalTableFilterFunction(child);
-	});
-	return found;
-}
-
 static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expression &expr);
 
 static ExpressionType FlipComparisonType(ExpressionType type) {
@@ -62,20 +42,6 @@ static ExpressionType FlipComparisonType(ExpressionType type) {
 	}
 }
 
-static bool IsSupportedConstantComparison(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return true;
-	default:
-		return false;
-	}
-}
-
 static bool TryExtractLegacySubject(const Expression &expr, vector<StructExtractPathEntry> &struct_path) {
 	return ExpressionFilter::IsSimpleFilterColumnRef(PeelStructExtractPath(expr, struct_path));
 }
@@ -89,12 +55,16 @@ static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filt
 }
 
 static void NormalizeLegacyExpression(unique_ptr<Expression> &expr) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expr, [](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &owned_expr) {
-		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
-	    });
-	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.IndexMutable() = 0; });
+	expr = ExpressionIterator::PreorderReplace(std::move(expr), [](const Expression &child) -> unique_ptr<Expression> {
+		switch (child.GetExpressionClass()) {
+		case ExpressionClass::BOUND_COLUMN_REF:
+			return make_uniq<BoundReferenceExpression>(child.GetAlias(), child.GetReturnType(), 0ULL);
+		case ExpressionClass::BOUND_REF:
+			return child.Cast<BoundReferenceExpression>().WithIndex(0);
+		default:
+			return nullptr;
+		}
+	});
 }
 
 static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundFunctionExpression &comparison) {
@@ -127,7 +97,7 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundF
 			return nullptr;
 		}
 	}
-	if (!IsSupportedConstantComparison(comparison_type)) {
+	if (!ConstantFilterCombiner::IsSupportedComparison(comparison_type)) {
 		return nullptr;
 	}
 	return WrapStructFilterPath(make_uniq<LegacyConstantFilter>(comparison_type, constant), struct_path);
@@ -253,7 +223,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}
-	if (ContainsInternalTableFilterFunction(expr)) {
+	if (ExpressionFilter::ContainsInternalTableFilterFunction(expr)) {
 		return nullptr;
 	}
 	auto normalized_expr = expr.Copy();
@@ -418,9 +388,8 @@ void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter>
 	} else {
 		// there is already a filter: AND it together
 		auto &existing = ExpressionFilter::GetExpressionFilter(*entry->second, "TableFilterSet::PushFilter");
-		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-		and_expr->GetChildrenMutable().push_back(std::move(existing.expr));
-		and_expr->GetChildrenMutable().push_back(std::move(new_filter.expr));
+		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(existing.expr),
+		                                                      std::move(new_filter.expr));
 		filters[col_idx] = make_uniq<ExpressionFilter>(std::move(and_expr));
 	}
 }
@@ -562,6 +531,8 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	if (!result->HasFilters() && !result->HasMultiColumnFilters()) {
 		return nullptr;
 	}
+	// Work only on this execution's copy. Contradictions can safely retain their original scan predicates.
+	result->Finalize();
 	return result;
 }
 

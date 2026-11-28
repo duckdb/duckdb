@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/table_index.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -30,12 +31,34 @@ struct FunctionStatisticsInput;
 
 enum class StatisticsPropagationMode : uint8_t { FILTER_SIMPLIFICATION, FULL };
 
+//! Suspends attaching verification statistics to propagated expressions for the lifetime of the guard
+struct VerificationStatsGuard {
+	explicit VerificationStatsGuard(bool &attach_p) : attach(attach_p), previous(attach_p) {
+		attach = false;
+	}
+	~VerificationStatsGuard() {
+		Release();
+	}
+	//! Restores attaching before the guard goes out of scope
+	void Release() {
+		attach = previous;
+	}
+
+	bool &attach;
+	bool previous;
+};
+
 class StatisticsPropagator {
 public:
 	StatisticsPropagator(Optimizer &optimizer, unique_ptr<LogicalOperator> &root,
 	                     StatisticsPropagationMode mode = StatisticsPropagationMode::FULL);
 
+	//! Propagate bottom-up, returning a subtree with resolved types (including any replacement operators).
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
+	//! Propagate statistics through a standalone expression, given the statistics of the columns it references
+	unique_ptr<BaseStatistics>
+	PropagateExpressionStatistics(unique_ptr<Expression> &expr,
+	                              column_binding_map_t<unique_ptr<BaseStatistics>> column_statistics);
 
 	column_binding_map_t<unique_ptr<BaseStatistics>> GetStatisticsMap() {
 		return std::move(statistics_map);
@@ -59,6 +82,11 @@ public:
 	//! Statistics callback for monotone functions that return NULL for infinite arguments
 	DUCKDB_API static unique_ptr<BaseStatistics> PropagateFiniteMonotoneBounds(ClientContext &context,
 	                                                                           FunctionStatisticsInput &input);
+	//! The statistics of a column emitted by a scan, or nullptr if the scan has none for it
+	static unique_ptr<BaseStatistics> GetColumnStatistics(ClientContext &context, LogicalGet &get,
+	                                                      const ColumnIndex &column_index);
+	//! Whether the statistics prove that an expression is NULL in every row of a non-empty input
+	static bool HasNoValidValue(optional_ptr<const BaseStatistics> stats);
 	//! Compare two sets of statistics and return whether the comparison is always true or false
 	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
 	                                                 ExpressionType comparison);
@@ -84,11 +112,18 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalLimit &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOrder &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalWindow &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalUnnest &op, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
 	//! Return statistics from a constant value
 	unique_ptr<BaseStatistics> StatisticsFromValue(const Value &input);
+	//! The min/max of numeric statistics: the fixed-size types and the bignum_t tier of decimals
+	static bool HasNumericMinMax(const BaseStatistics &stats);
+	static Value NumericMin(const BaseStatistics &stats);
+	static Value NumericMax(const BaseStatistics &stats);
+	static void SetNumericMin(BaseStatistics &stats, const Value &val);
+	static void SetNumericMax(BaseStatistics &stats, const Value &val);
 	//! Update filter statistics from a filter with a constant
 	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
@@ -102,7 +137,9 @@ private:
 	//! Reset additive statistics of bindings whose rows an operator can emit more than once
 	void ResetAdditiveStatistics(const vector<ColumnBinding> &bindings);
 	//! Reset additive statistics in the verification statistics of an expression tree
-	void ResetAdditiveVerificationStats(Expression &expr);
+	//! Join conditions are evaluated over candidate pairs that repeat rows and still hold NULLs: their verification
+	//! statistics carry neither additive totals nor the absence of NULLs
+	void RelaxJoinConditionVerificationStats(Expression &expr);
 	//! Determine whether a propagated condition can be pruned
 	FilterPropagateResult ClassifyFilter(Expression &condition);
 	//! Simplify conjunctions using filter truth semantics
@@ -151,10 +188,12 @@ private:
 	                                                 optional_ptr<const BaseStatistics> right,
 	                                                 ComparisonContext context);
 
-	//! Try to execute aggregates using only the statistics if possible
+	//! Try to execute aggregates using only the statistics, resolving any replacement subtree before returning.
 	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
+	//! Whether an expression can be removed from the plan without an observable effect
+	static bool IsRemovable(const Expression &expr);
 	bool ExpressionIsConstant(Expression &expr, const Value &val);
 	bool ExpressionIsConstantOrNull(Expression &expr, const Value &val);
 

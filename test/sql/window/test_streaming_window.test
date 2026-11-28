@@ -6,7 +6,7 @@ statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-PRAGMA explain_output = PHYSICAL_ONLY;
+SET explain_output = 'PHYSICAL_ONLY';
 
 statement ok
 create table integers (i int, j int)
@@ -44,6 +44,20 @@ EXPLAIN
 SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT j, arg_max(i, j, 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT j, max(j::SMALLINT, 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	[2]
+1	[2, 1]
+2	[2, 2]
+NULL	[2, 2]
 
 # Test each of the streaming window functions
 # row_number() over() is rewritten by the window_rewriter optimizer to use a virtual column
@@ -627,6 +641,16 @@ select
 [{'key': A}, {'key': B}]
 [{'key': A}, {'key': B}, {'key': C}]
 
+# Array Slicing
+query I
+from (values ([1]::INT[1]), ([2]::INT[1]), ([3]::INT[1]))
+select
+   list(col0) over (rows between unbounded preceding and current row) as result
+----
+[[1]]
+[[1], [2]]
+[[1], [2], [3]]
+
 # Reset argument test (fails in debug)
 statement ok
 CREATE TABLE issue17621(i INT, j INT, k INT);
@@ -980,3 +1004,37 @@ WITH w AS (
 SELECT COUNT(*), COUNT(*) FILTER (WHERE x IS NOT NULL) FROM w;
 ----
 2051	0
+
+query TT
+EXPLAIN SELECT histogram(i % 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), approx_top_k(i % 3, 2) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+SELECT count(*) FROM (
+	SELECT histogram(i % 7) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) a, histogram(i % 7) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) b,
+	       approx_top_k(i % 7, 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) c, approx_top_k(i % 7, 3) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) d
+	FROM range(5000) r(i)
+) WHERE a != b OR c != d;
+----
+0
+
+# a per-row n keeps top-n off the streaming window, which would check n only on the first row
+statement error
+SELECT arg_max(i, i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+----
+n value must be > 0
+
+statement error
+SELECT min(i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+----
+n value must be > 0
+
+# also when a collation rebinds min/max to arg_min/arg_max, and when a view binds it again
+statement ok
+CREATE VIEW per_row_n AS SELECT max(i::VARCHAR COLLATE nocase, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+
+statement error
+SELECT * FROM per_row_n;
+----
+n value must be > 0

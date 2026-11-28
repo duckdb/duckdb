@@ -43,10 +43,26 @@ static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &resu
 	}
 }
 
+//! Decimals wider than 38 digits are BIGNUM blobs
+static void WriteShreddedWideDecimal(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
+                                     const SelectionVector &value_index_sel, const SelectionVector &result_sel,
+                                     idx_t count) {
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto row = sel[i];
+		auto result_row = result_sel[i];
+		auto value_index = value_index_sel[i];
+		D_ASSERT(variant.RowIsValid(row) && variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
+
+		result_data[result_row] = VariantUtils::DecodeWideDecimalData(variant, row, value_index);
+	}
+}
+
 #ifdef D_ASSERT_IS_ENABLED
 static bool IsVariantStringType(VariantLogicalType type_id) {
 	switch (type_id) {
 	case VariantLogicalType::GEOMETRY:
+	case VariantLogicalType::GEOGRAPHY:
 	case VariantLogicalType::BITSTRING:
 	case VariantLogicalType::BLOB:
 	case VariantLogicalType::VARCHAR:
@@ -142,6 +158,9 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 		case PhysicalType::INT128:
 			WriteShreddedDecimal<hugeint_t>(variant, result, sel, value_index_sel, result_sel, count);
 			break;
+		case PhysicalType::VARCHAR:
+			WriteShreddedWideDecimal(variant, result, sel, value_index_sel, result_sel, count);
+			break;
 		default:
 			throw InvalidInputException("Can't shred on column of type '%s'", type.ToString());
 		}
@@ -150,6 +169,7 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::VARCHAR: {
 		WriteShreddedString(variant, result, sel, value_index_sel, result_sel, count);
@@ -346,7 +366,7 @@ VariantShreddingState::VariantShreddingState(const LogicalType &type, idx_t tota
 
 bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index) {
 	auto type_id = variant.GetTypeId(row, values_index);
-	if (!GetVariantTypes().count(type_id)) {
+	if (!GetVariantTypes().count(VariantTypeToLogicalTypeId(type_id))) {
 		return false;
 	}
 	if (type_id == VariantLogicalType::DECIMAL) {

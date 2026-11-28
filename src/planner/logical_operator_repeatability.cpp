@@ -65,10 +65,8 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 		if (get.GetTable()) {
 			return LogicalOperatorRepeatability::REPEATABLE;
 		}
-		if (!get.function.is_repeatable || !get.function.is_repeatable(get.bind_data.get())) {
-			return LogicalOperatorRepeatability::UNKNOWN;
-		}
-		return LogicalOperatorRepeatability::REPEATABLE;
+		return get.function.stability == FunctionStability::VOLATILE ? LogicalOperatorRepeatability::NON_REPEATABLE
+		                                                             : LogicalOperatorRepeatability::REPEATABLE;
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE: {
 		auto &sample = op.Cast<LogicalSample>();
@@ -78,6 +76,7 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INVALID:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_TOP_KEY_FILTER:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -107,7 +106,6 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_PREPARE:
-	case LogicalOperatorType::LOGICAL_EXECUTE:
 	case LogicalOperatorType::LOGICAL_EXPORT:
 	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_SET:
@@ -124,10 +122,7 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 	return LogicalOperatorRepeatability::UNKNOWN;
 }
 
-LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperator &op) {
-	if (op.HasSideEffects()) {
-		return LogicalOperatorRepeatability::NON_REPEATABLE;
-	}
+LogicalOperatorRepeatability ClassifyLogicalOperatorLocalRepeatability(LogicalOperator &op) {
 	auto classification = ClassifyOperatorType(op);
 	if (classification != LogicalOperatorRepeatability::REPEATABLE) {
 		return classification;
@@ -138,6 +133,13 @@ LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperato
 	});
 	return expressions_repeatable ? LogicalOperatorRepeatability::REPEATABLE
 	                              : LogicalOperatorRepeatability::NON_REPEATABLE;
+}
+
+LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperator &op) {
+	if (op.HasSideEffects()) {
+		return LogicalOperatorRepeatability::NON_REPEATABLE;
+	}
+	return ClassifyLogicalOperatorLocalRepeatability(op);
 }
 
 bool LogicalSubtreeIsRepeatable(LogicalOperator &op) {

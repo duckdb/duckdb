@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -32,8 +33,16 @@ StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, unique_ptr<Lo
 	root->ResolveOperatorTypes();
 }
 
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpressionStatistics(
+    unique_ptr<Expression> &expr, column_binding_map_t<unique_ptr<BaseStatistics>> column_statistics) {
+	statistics_map = std::move(column_statistics);
+	return PropagateExpression(expr);
+}
+
 void StatisticsPropagator::ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node) {
 	node = make_uniq<LogicalEmptyResult>(std::move(node));
+	// A parent may retain this replacement as an already propagated child.
+	node->ResolveOperatorTypesFromChildren();
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperator &node,
@@ -55,12 +64,14 @@ void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &
 	}
 }
 
-void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+void StatisticsPropagator::RelaxJoinConditionVerificationStats(Expression &expr) {
 	auto &stats = expr.GetVerificationStats();
 	if (stats) {
 		stats->ResetAdditiveStatistics();
+		// the candidate pairs still hold the NULLs that the comparison rejects
+		stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RelaxJoinConditionVerificationStats(child); });
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
@@ -120,14 +131,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST:
-		result = PropagateChildren(node, node_ptr);
-		// unnest emits its input row once per unnested entry
-		ResetAdditiveStatistics(node.children[0]->GetColumnBindings());
+		result = PropagateStatistics(node.Cast<LogicalUnnest>(), node_ptr);
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}
 
+	// Children have been propagated; only this operator's output types need refreshing.
+	node_ptr->ResolveOperatorTypesFromChildren();
 	if (mode == StatisticsPropagationMode::FULL &&
 	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
@@ -140,7 +151,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr) {
-	return PropagateStatistics(*node_ptr, node_ptr);
+	auto result = PropagateStatistics(*node_ptr, node_ptr);
+	if (propagation_path.empty() && Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
+		// Check our bottom-up invariant before the ordinary plan verifier can repair stale types.
+		node_ptr->VerifyOperatorTypes();
+	}
+	return result;
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopyToFile &op,
@@ -174,7 +190,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopy
 			column_stats[i] = entry->second.get();
 		}
 	}
-	CopyToPropagateStatsInput input {context, *op.bind_data, column_stats};
+	CopyToPropagateStatsInput input {context, op.bind_data, column_stats};
 	op.function.copy_to_propagate_statistics(input);
 	return stats;
 }

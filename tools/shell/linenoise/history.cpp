@@ -110,6 +110,9 @@ int History::Add(const char *line, idx_t len) {
 			}
 		}
 		linecopy = (char *)malloc((len + replaced_newline_count + 1) * sizeof(char));
+		if (!linecopy) {
+			return 0;
+		}
 		idx_t pos = 0;
 		for (len = 0; line[len]; len++) {
 			if (line[len] == '\r' && line[len + 1] == '\n') {
@@ -318,7 +321,9 @@ public:
 		capacity = read_data;
 		total_read += read_data;
 		data_buffer[read_data] = '\0';
-
+		if (ferror(fp)) {
+			fprintf(stderr, "Failed to read history file \"%s\": %s\n", filename, strerror(errno));
+		}
 		if (read_data == 0) {
 			end_of_file = true;
 		}

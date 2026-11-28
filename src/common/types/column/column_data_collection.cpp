@@ -3,7 +3,6 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -17,6 +16,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -80,6 +80,11 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type, ColumnDataCollectionLifetime lifetime)
+    : ColumnDataCollection(context.GetContext(), std::move(types_p), type, lifetime) {
+}
+
+ColumnDataCollection::ColumnDataCollection(Context &context, vector<LogicalType> types_p, ColumnDataAllocatorType type,
+                                           ColumnDataCollectionLifetime lifetime)
     : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type, lifetime), std::move(types_p)) {
 }
 
@@ -436,18 +441,21 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 	while (remaining > 0) {
 		EnsureVectorDataAllocated(meta_data, current_index, OP::TypeSize());
 		auto &current_segment = segment.GetVectorData(current_index);
-		idx_t append_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE - current_segment.count, remaining);
+		const auto capacity = ColumnDataCollectionSegment::GetVectorCapacity(current_segment);
+		D_ASSERT(current_segment.count <= capacity);
+		idx_t append_count = MinValue<idx_t>(capacity - current_segment.count, remaining);
 
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, OP::TypeSize());
+		auto validity_data =
+		    ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, OP::TypeSize(), capacity);
 
-		ValidityMask result_validity(validity_data, STANDARD_VECTOR_SIZE);
+		ValidityMask result_validity(validity_data, capacity);
 		if (current_segment.count == 0) {
 			// first time appending to this vector
 			// all data here is still uninitialized
 			// initialize the validity mask to set all to valid
-			result_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+			result_validity.SetAllValid(capacity);
 		}
 		if (source_data.validity.CannotHaveNull()) {
 			// Fast path: all valid
@@ -738,9 +746,12 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
 	while (remaining > 0) {
 		EnsureVectorDataAllocated(meta_data, current_index, sizeof(string_t));
-		// how many values fit in the current string vector
-		const auto vector_remaining =
-		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(current_index).count, remaining);
+		// how many values fit in the current string vector, which keeps the standard layout (16-bit swizzle offsets)
+		const idx_t current_count = segment.GetVectorData(current_index).count;
+		D_ASSERT(ColumnDataCollectionSegment::GetVectorCapacity(segment.GetVectorData(current_index)) ==
+		         STANDARD_VECTOR_SIZE);
+		D_ASSERT(current_count <= STANDARD_VECTOR_SIZE);
+		const auto vector_remaining = MinValue<idx_t>(STANDARD_VECTOR_SIZE - current_count, remaining);
 
 		idx_t append_count = 0;
 		idx_t heap_size = 0;
@@ -814,7 +825,9 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			D_ASSERT(base_heap_ptr == segment.allocator->GetDataPointer(append_state.current_chunk_state,
 			                                                            child_segment.block_id, child_segment.offset));
 #endif
-			current_segment.swizzle_data.emplace_back(child_index, base_heap_ptr, current_segment.count, append_count);
+			current_segment.swizzle_data.emplace_back(child_index, base_heap_ptr,
+			                                          UnsafeNumericCast<uint16_t>(current_segment.count),
+			                                          UnsafeNumericCast<uint16_t>(append_count));
 		}
 
 		current_segment.count += append_count;
@@ -832,6 +845,60 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 	}
 }
 
+//! Block capacities are 32-bit
+static constexpr idx_t MAXIMUM_LARGE_LIST_CHILD_SIZE = NumericLimits<uint32_t>::Maximum();
+
+//! Store a list child longer than a vector, appended into an empty child chain of a buffer-managed collection, as a
+//! single LARGE_FLAT entry, so scans read it without copying. Returns false if the child must be appended as a chain of
+//! vector-sized entries
+static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
+                                    const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count) {
+	auto &segment = meta_data.segment;
+	if (segment.allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		// in-memory blocks round their capacity up to a power of two, a child-sized block could double its footprint
+		return false;
+	}
+	const auto length = info.child_list_info.length;
+	if (meta_data.GetVectorMetaData().child_index.IsValid() || length <= STANDARD_VECTOR_SIZE) {
+		return false;
+	}
+	auto &child_type = child_vector.GetType();
+	const auto internal_type = child_type.InternalType();
+	if (!TypeIsConstantSize(internal_type)) {
+		return false;
+	}
+	const auto type_size = GetTypeIdSize(internal_type);
+	if (ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) >
+	    MAXIMUM_LARGE_LIST_CHILD_SIZE) {
+		return false;
+	}
+
+	auto &chunk_state = meta_data.state.current_chunk_state;
+	auto child_index = segment.AllocateLargeVector(type_size, length, meta_data.chunk_data, &chunk_state);
+	meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
+	auto &child_vdata = segment.GetVectorData(child_index);
+	auto base_ptr = segment.allocator->GetDataPointer(chunk_state, child_vdata.block_id, child_vdata.offset);
+
+	Vector target(child_type, base_ptr, length);
+	if (info.needs_slicing) {
+		SelectionVector sel(length);
+		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+		VectorOperations::Copy(child_vector, target, sel, length, 0, 0, length);
+	} else {
+		const auto child_offset = info.child_list_info.offset;
+		VectorOperations::Copy(child_vector, target, *FlatVector::IncrementalSelectionVector(), child_offset + length,
+		                       child_offset, 0, length);
+	}
+	auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, type_size, length);
+	auto &target_validity = FlatVector::Validity(target);
+	if (target_validity.CanHaveNull()) {
+		memcpy(validity_data, target_validity.GetData(), ValidityMask::ValidityMaskSize(length));
+	} else {
+		ValidityMask(validity_data, length).SetAllValid(length);
+	}
+	return true;
+}
+
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
@@ -839,45 +906,47 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 
 	auto &child_vector = ListVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
-
-	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
-		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
-		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
-	}
-
-	auto &child_function = meta_data.copy_function.child_functions[0];
-	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
 
 	// figure out the current list size by traversing the set of child entries
 	idx_t current_list_size = 0;
-	auto current_child_index = child_index;
-	while (current_child_index.IsValid()) {
-		auto &child_vdata = segment.GetVectorData(current_child_index);
-		current_list_size += child_vdata.count;
-		current_child_index = child_vdata.next_data;
+	if (meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto current_child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+		while (current_child_index.IsValid()) {
+			auto &child_vdata = segment.GetVectorData(current_child_index);
+			current_list_size += child_vdata.count;
+			current_child_index = child_vdata.next_data;
+		}
 	}
 
-	// set the child vector
-	UnifiedVectorFormat child_vector_data;
-	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
+	if (!TryAppendLargeListChild(meta_data, source, child_vector, info, offset, copy_count)) {
+		if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+			auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+			meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+		}
+		auto &child_function = meta_data.copy_function.child_functions[0];
+		auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
 
-	if (info.needs_slicing) {
-		SelectionVector sel(info.child_list_info.length);
-		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+		// set the child vector
+		UnifiedVectorFormat child_vector_data;
+		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
+		if (info.needs_slicing) {
+			SelectionVector sel(info.child_list_info.length);
+			ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
 
-		auto sliced_child_vector = Vector(child_vector, sel, info.child_list_info.length);
-		sliced_child_vector.Flatten();
-		info.child_list_info.offset = 0;
+			auto sliced_child_vector = Vector(child_vector, sel, info.child_list_info.length);
+			sliced_child_vector.Flatten();
+			info.child_list_info.offset = 0;
 
-		sliced_child_vector.ToUnifiedFormat(child_vector_data);
-		child_function.function(child_meta_data, child_vector_data, sliced_child_vector, info.child_list_info.offset,
-		                        info.child_list_info.length);
+			sliced_child_vector.ToUnifiedFormat(child_vector_data);
+			child_function.function(child_meta_data, child_vector_data, sliced_child_vector,
+			                        info.child_list_info.offset, info.child_list_info.length);
 
-	} else {
-		child_vector.ToUnifiedFormat(child_vector_data);
-		child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
-		                        info.child_list_info.length);
+		} else {
+			child_vector.ToUnifiedFormat(child_vector_data);
+			child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
+			                        info.child_list_info.length);
+		}
 	}
 
 	// now copy the list entries
@@ -1087,7 +1156,7 @@ static void AppendConstantEntry(ColumnDataMetaData &meta_data, const UnifiedVect
 	auto &vdata = meta_data.GetVectorMetaData();
 	vdata.constant = constant;
 	vdata.representation = ColumnDataRepresentation::CONSTANT;
-	vdata.count = UnsafeNumericCast<uint16_t>(copy_count);
+	vdata.count = UnsafeNumericCast<uint32_t>(copy_count);
 	// account the metadata bytes that hold the value
 	segment.constant_metadata_size += sizeof(ColumnDataConstantValue);
 	segment.total_allocated += sizeof(ColumnDataConstantValue);
@@ -1120,7 +1189,7 @@ static bool TryExtendConstantEntry(ColumnDataMetaData &meta_data, const UnifiedV
 			}
 		}
 	}
-	vdata.count += UnsafeNumericCast<uint16_t>(copy_count);
+	vdata.count += UnsafeNumericCast<uint32_t>(copy_count);
 	return true;
 }
 
@@ -1280,7 +1349,7 @@ static bool TryAppendDictionaryEntry(ColumnDataMetaData &meta_data, const Unifie
 	vdata.representation = ColumnDataRepresentation::DICTIONARY;
 	vdata.dictionary_slot = slot;
 	WriteDictionaryCodes(meta_data, source_data, offset, copy_count, 0);
-	meta_data.GetVectorMetaData().count = UnsafeNumericCast<uint16_t>(copy_count);
+	meta_data.GetVectorMetaData().count = UnsafeNumericCast<uint32_t>(copy_count);
 	return true;
 }
 
@@ -1301,7 +1370,7 @@ static bool TryExtendDictionaryEntry(ColumnDataMetaData &meta_data, const Unifie
 	}
 	D_ASSERT(vdata.count + copy_count <= STANDARD_VECTOR_SIZE);
 	WriteDictionaryCodes(meta_data, source_data, offset, copy_count, vdata.count);
-	vdata.count += UnsafeNumericCast<uint16_t>(copy_count);
+	vdata.count += UnsafeNumericCast<uint32_t>(copy_count);
 	return true;
 }
 
@@ -1729,6 +1798,55 @@ void ColumnDataCollection::Swap(ColumnDataCollection &other) {
 	std::swap(copy_functions, other.copy_functions);
 	std::swap(finished_append, other.finished_append);
 	std::swap(partition_index, other.partition_index);
+}
+
+void ColumnDataCollection::Truncate(idx_t new_count) {
+	if (Count() <= new_count) {
+		return;
+	}
+
+	//	Run through the segments until we have too many rows
+	idx_t segment_index = 0;
+	idx_t segment_rows = 0;
+	for (; segment_index < segments.size(); ++segment_index) {
+		auto &segment = segments[segment_index];
+		if (segment_rows + segment->count <= new_count) {
+			segment_rows += segment->count;
+			if (segment_rows <= new_count) {
+				continue;
+			}
+			segments.resize(segment_index + 1);
+			count = new_count;
+			break;
+		}
+
+		// Replace the last partial segment with a truncated copy.
+		auto truncated = std::move(segment);
+		segments.resize(segment_index);
+		this->count = segment_rows;
+
+		ColumnDataScanState scan;
+		DataChunk chunk;
+		InitializeScan(scan);
+		InitializeScanChunk(scan, chunk);
+
+		//	If this collection has finished_append true, then calling InitializeAppend is not valid.
+		//	So build the tail into a new collection and Combine it back in.
+		auto tail = make_uniq<ColumnDataCollection>(allocator, types);
+		ColumnDataAppendState append;
+		tail->InitializeAppend(append);
+		idx_t chunk_index = 0;
+		while (segment_rows < new_count) {
+			scan.current_chunk_state.properties = scan.properties;
+			truncated->ReadChunk(chunk_index++, scan.current_chunk_state, chunk, scan.column_ids);
+			idx_t append_count = MinValue(chunk.size(), new_count - segment_rows);
+			chunk.SetChildCardinality(append_count);
+			tail->Append(append, chunk);
+			segment_rows += append_count;
+		}
+		Combine(*tail);
+		break;
+	}
 }
 
 //===--------------------------------------------------------------------===//

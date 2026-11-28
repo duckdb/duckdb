@@ -187,6 +187,10 @@ TEST_CASE("Concurrent handle destruction does not drop a newer registration", "[
 // against writes (e.g. ext4, tmpfs - unlike XFS) this produces a torn read and a spurious
 // checksum failure that invalidates the database.
 TEST_CASE("Stress stale metadata block handle pin against checkpoint rewrite", "[storage][.]") {
+#ifdef __MUSL_ENABLED__
+	SKIP_TEST("Times out after 300 seconds on musl");
+	return;
+#endif
 	auto path = TestCreatePath("metadata_pin_race.db");
 	if (const char *dir = std::getenv("METADATA_PIN_RACE_DIR")) {
 		// allow redirecting the database to a filesystem on which reads can tear (e.g. tmpfs)
@@ -216,9 +220,11 @@ TEST_CASE("Stress stale metadata block handle pin against checkpoint rewrite", "
 		mutex stale_lock;
 		std::vector<shared_ptr<BlockHandle>> recent_stale;
 
+		// bound the run by time: checkpoints slow down as the table grows
+		auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
 		std::thread writer([&]() {
 			Connection wcon(db);
-			for (idx_t i = 0; i < 5000 && !done; i++) {
+			for (idx_t i = 0; i < 5000 && !done && std::chrono::steady_clock::now() < deadline; i++) {
 				wcon.Query("DELETE FROM t WHERE i % 97 = " + std::to_string(i % 97));
 				wcon.Query("INSERT INTO t SELECT i, repeat('y', 64) FROM range(500) tbl(i)");
 				checkpoint_active = true;

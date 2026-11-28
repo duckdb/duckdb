@@ -11,35 +11,10 @@
 
 #include <string>
 #include <cstring>
-
-//----------------------------------------------------------------------------------------------------------------------
-// String helpers (need to be in global namespace)
-//----------------------------------------------------------------------------------------------------------------------
-
-inline bool operator==(duckdb_v2_str a, const std::string &b) {
-	return a.len == b.size() && (a.len == 0 || std::memcmp(a.ptr, b.data(), a.len) == 0);
-}
-inline bool operator==(const std::string &a, duckdb_v2_str b) {
-	return b == a;
-}
-inline bool operator==(duckdb_v2_str a, const char *b) {
-	return a == std::string(b ? b : "");
-}
-inline bool operator==(const char *a, duckdb_v2_str b) {
-	return b == std::string(a ? a : "");
-}
-inline bool operator!=(duckdb_v2_str a, const std::string &b) {
-	return !(a == b);
-}
-inline bool operator!=(const std::string &a, duckdb_v2_str b) {
-	return !(b == a);
-}
-inline bool operator!=(duckdb_v2_str a, const char *b) {
-	return !(a == b);
-}
-inline bool operator!=(const char *a, duckdb_v2_str b) {
-	return !(b == a);
-}
+#include <initializer_list>
+#include <map>
+#include <string_view>
+#include <vector>
 
 namespace test_capi_v2 {
 //----------------------------------------------------------------------------------------------------------------------
@@ -48,13 +23,13 @@ namespace test_capi_v2 {
 
 //! Creates an instance handle under `env`, attaches `path` and makes it the default database, destroying the handle
 //! again if that fails.
-inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_str path,
+inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, std::string_view path,
                                     duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
 	auto rc = duckdb_v2_instance_create(env, out_instance, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
-	rc = duckdb_v2_instance_attach(*out_instance, nullptr, &path, nullptr, true, err);
+	rc = duckdb_v2_instance_attach(*out_instance, nullptr, 0, path.data(), path.size(), nullptr, true, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_instance_destroy(out_instance);
 	}
@@ -66,6 +41,132 @@ inline duckdb_v2_factory_handle FactoryOf(duckdb_v2_connection_handle conn) {
 	duckdb_v2_factory_handle factory = nullptr;
 	REQUIRE(duckdb_v2_connection_get_factory(conn, &factory, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return factory;
+}
+
+//! Tests of table functions that only care about how a function scans share this helper: a table function has no scan
+//! callbacks of its own, so the one a test creates with `TestCreateTable` gets a data source that the test configures
+//! through `TestSourceOf`, and which `TestRegisterTable` hands to the function right before it is registered.
+struct TestTableSources {
+	struct Entry {
+		duckdb_v2_factory_handle factory = nullptr;
+		duckdb_v2_data_source_handle source = nullptr;
+	};
+	static std::map<duckdb_v2_table_function_handle, Entry> &Entries() {
+		static std::map<duckdb_v2_table_function_handle, Entry> entries;
+		return entries;
+	}
+};
+
+inline DUCKDB_V2_ERROR TestCreateTable(duckdb_v2_factory_handle factory, duckdb_v2_table_function_handle *function,
+                                       duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_table_function_create(factory, function, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		TestTableSources::Entries()[*function].factory = factory;
+	}
+	return rc;
+}
+
+//! The data source of the function, created on first use. Null for a null or unknown function.
+inline duckdb_v2_data_source_handle TestSourceOf(duckdb_v2_table_function_handle function) {
+	auto &entries = TestTableSources::Entries();
+	auto entry = entries.find(function);
+	if (entry == entries.end()) {
+		return nullptr;
+	}
+	if (!entry->second.source) {
+		REQUIRE(duckdb_v2_data_source_create(entry->second.factory, &entry->second.source, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
+	return entry->second.source;
+}
+
+//! Hands the data source to the function, as it is now
+inline void TestAttachSource(duckdb_v2_table_function_handle function) {
+	auto source = TestSourceOf(function);
+	if (source) {
+		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
+}
+
+inline DUCKDB_V2_ERROR TestRegisterTable(duckdb_v2_connection_handle conn, duckdb_v2_table_function_handle function,
+                                         duckdb_v2_error_info_handle *err) {
+	TestAttachSource(function);
+	return duckdb_v2_connection_register_table_function(conn, function, err);
+}
+
+inline DUCKDB_V2_ERROR TestDestroyTable(duckdb_v2_table_function_handle *function) {
+	if (function && *function) {
+		auto &entries = TestTableSources::Entries();
+		auto entry = entries.find(*function);
+		if (entry != entries.end()) {
+			duckdb_v2_data_source_destroy(&entry->second.source);
+			entries.erase(entry);
+		}
+	}
+	return duckdb_v2_table_function_destroy(function);
+}
+
+//! The COPY FROM side of a copy function scans with a data source as well. The one a test creates with `TestCreateCopy`
+//! gets a data source on first use of `TestCopySourceOf`, which `TestRegisterCopy` hands to the function right before
+//! it is registered. A function whose source was never asked for has no COPY FROM scan.
+struct TestCopySources {
+	struct Entry {
+		duckdb_v2_factory_handle factory = nullptr;
+		duckdb_v2_data_source_handle source = nullptr;
+	};
+	static std::map<duckdb_v2_copy_function_handle, Entry> &Entries() {
+		static std::map<duckdb_v2_copy_function_handle, Entry> entries;
+		return entries;
+	}
+};
+
+inline DUCKDB_V2_ERROR TestCreateCopy(duckdb_v2_factory_handle factory, duckdb_v2_copy_function_handle *function,
+                                      duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_copy_function_create(factory, function, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		TestCopySources::Entries()[*function].factory = factory;
+	}
+	return rc;
+}
+
+//! The data source of the COPY FROM side, created on first use. Null for a null or unknown function.
+inline duckdb_v2_data_source_handle TestCopySourceOf(duckdb_v2_copy_function_handle function) {
+	auto &entries = TestCopySources::Entries();
+	auto entry = entries.find(function);
+	if (entry == entries.end()) {
+		return nullptr;
+	}
+	if (!entry->second.source) {
+		REQUIRE(duckdb_v2_data_source_create(entry->second.factory, &entry->second.source, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
+	return entry->second.source;
+}
+
+inline void TestAttachCopySource(duckdb_v2_copy_function_handle function) {
+	auto &entries = TestCopySources::Entries();
+	auto entry = entries.find(function);
+	if (entry != entries.end() && entry->second.source) {
+		REQUIRE(duckdb_v2_copy_from_set_data_source(function, entry->second.source, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
+}
+
+inline DUCKDB_V2_ERROR TestRegisterCopy(duckdb_v2_connection_handle conn, duckdb_v2_copy_function_handle function,
+                                        duckdb_v2_error_info_handle *err) {
+	TestAttachCopySource(function);
+	return duckdb_v2_connection_register_copy_function(conn, function, err);
+}
+
+inline DUCKDB_V2_ERROR TestDestroyCopy(duckdb_v2_copy_function_handle *function) {
+	if (function && *function) {
+		auto &entries = TestCopySources::Entries();
+		auto entry = entries.find(*function);
+		if (entry != entries.end()) {
+			duckdb_v2_data_source_destroy(&entry->second.source);
+			entries.erase(entry);
+		}
+	}
+	return duckdb_v2_copy_function_destroy(function);
 }
 
 struct EnvFixture {
@@ -80,7 +181,7 @@ struct EnvFixture {
 	duckdb_v2_config_handle instance_config = nullptr;
 	EnvFixture() {
 		duckdb_v2_environment_create(&env, nullptr);
-		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		OpenInstance(env, std::string_view(), &instance, nullptr);
 		duckdb_v2_connection_create(instance, &conn, nullptr);
 		duckdb_v2_connection_get_factory(conn, &factory, nullptr);
 		duckdb_v2_connection_get_config(conn, &config, nullptr);
@@ -124,29 +225,60 @@ DUCKDB_V2_ERROR SetErrorInfo(duckdb_v2_error_info_handle *err, DUCKDB_V2_ERROR c
 // String Helpers
 //----------------------------------------------------------------------------------------------------------------------
 
-// Build a borrowed string view from a null-terminated C string. A null pointer yields the empty view {NULL, 0}.
-inline auto Convert(const char *s) -> duckdb_v2_str {
-	return duckdb_v2_str {s, s ? std::strlen(s) : 0};
-}
+// Parallel pointer/length arrays for a string-array parameter, built from views. Both are NULL while empty.
+class StrArray {
+public:
+	StrArray() = default;
+	StrArray(std::initializer_list<std::string_view> views) {
+		for (auto &view : views) {
+			push_back(view);
+		}
+	}
+	StrArray(const std::string_view *views, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			push_back(views[i]);
+		}
+	}
 
-inline auto Convert(const std::string &s) -> duckdb_v2_str {
-	return duckdb_v2_str {s.data(), s.size()};
-}
+	void push_back(std::string_view view) {
+		push_back(view.data(), view.size());
+	}
+	//! Appends an entry as given, including a malformed NULL pointer with a nonzero length.
+	void push_back(const char *ptr, idx_t length) {
+		ptr_storage.push_back(ptr);
+		length_storage.push_back(length);
+	}
+	void Set(idx_t i, std::string_view view) {
+		ptr_storage[i] = view.data();
+		length_storage[i] = view.size();
+	}
+	auto ptrs() const -> const char *const * {
+		return ptr_storage.empty() ? nullptr : ptr_storage.data();
+	}
+	auto lengths() -> const idx_t * {
+		return length_storage.empty() ? nullptr : length_storage.data();
+	}
+	auto size() const -> idx_t {
+		return ptr_storage.size();
+	}
+	auto empty() const -> bool {
+		return ptr_storage.empty();
+	}
 
-// Materialize a borrowed view as a std::string for comparison/printing.
-inline auto Convert(duckdb_v2_str s) -> std::string {
-	return s.ptr ? std::string(s.ptr, s.len) : std::string();
-}
+private:
+	std::vector<const char *> ptr_storage;
+	std::vector<idx_t> length_storage;
+};
 
-inline auto Convert(const duckdb_v2_bytes &s) -> duckdb_v2_str {
+inline auto Convert(const duckdb_v2_bytes &s) -> std::string_view {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 	uint32_t len = s.value.pointer.length;
 	const char *ptr = s.value.pointer.ptr;
-	return duckdb_v2_str {ptr, len};
+	return std::string_view(ptr, len);
 #else
 	uint32_t len = s.value.inlined.length;
 	const char *ptr = len <= DUCKDB_V2_BYTES_INLINE_LENGTH ? s.value.inlined.inlined : s.value.pointer.ptr;
-	return duckdb_v2_str {ptr, len};
+	return std::string_view(ptr, len);
 #endif
 }
 
@@ -196,19 +328,19 @@ struct TextSinkTarget {
 	std::string text;
 	idx_t calls = 0;
 };
-inline void AppendToString(const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *) {
+inline void AppendToString(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *) {
 	auto &target = *static_cast<TextSinkTarget *>(user_data);
 	target.calls++;
-	if (text->ptr && text->len) {
-		target.text.append(text->ptr, text->len);
+	if (text && text_length) {
+		target.text.append(text, text_length);
 	}
 }
 
 // Fails the producing call by populating the slot the library handed over.
-inline void FailWithIOError(const duckdb_v2_str *, void *, duckdb_v2_error_info_handle *err) {
+inline void FailWithIOError(const char *, idx_t, void *, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	auto text_str = Convert("sink could not write");
-	duckdb_v2_error_info_set_text(*err, &text_str);
+	std::string_view text_str = "sink could not write";
+	duckdb_v2_error_info_set_text(*err, text_str.data(), text_str.size());
 }
 
 // Assemble a duckdb_v2_bytes from raw bytes, using arena_allocate for the
@@ -280,13 +412,15 @@ inline idx_t ColumnCount(duckdb_v2_result_handle r) {
 }
 
 // Asserts result column `index` has the given name and type id, via the result schema
-inline void RequireColumn(duckdb_v2_result_handle r, idx_t index, const char *name, DUCKDB_V2_LOGICAL_TYPE_ID id) {
+inline void RequireColumn(duckdb_v2_result_handle r, idx_t index, std::string_view name, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_schema_handle schema = nullptr;
 	REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_str field_name = {nullptr, 0};
+	const char *field_name = nullptr;
+	idx_t field_name_length = 0;
 	duckdb_v2_logical_type_handle field_type = nullptr; // borrowed; do not destroy
-	REQUIRE(duckdb_v2_schema_get_field(schema, index, &field_name, &field_type, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(std::string(field_name.ptr ? field_name.ptr : "", field_name.len) == name);
+	REQUIRE(duckdb_v2_schema_get_field(schema, index, &field_name, &field_name_length, &field_type, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(std::string(field_name ? field_name : "", field_name_length) == name);
 	DUCKDB_V2_LOGICAL_TYPE_ID got = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
 	REQUIRE(duckdb_v2_logical_type_get_id(field_type, &got, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(got == id);
@@ -302,13 +436,13 @@ inline void RequireSchemaDeferred(duckdb_v2_result_handle r) {
 }
 
 // Perform a query, returning the result handle
-inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_result_handle *out_result,
-                             duckdb_v2_error_info_handle *err = nullptr) {
+inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, std::string_view sql,
+                             duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err = nullptr) {
 	if (out_result) {
 		*out_result = nullptr;
 	}
 	duckdb_v2_statement_iterator_handle iter = nullptr;
-	auto rc = duckdb_v2_parse_sql(conn, sql, true, &iter, err);
+	auto rc = duckdb_v2_parse_sql(conn, sql.data(), sql.size(), true, &iter, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
@@ -328,7 +462,7 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 		}
 	}
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_statement_execute(conn, stmt, nullptr, nullptr, 0, out_result, err);
+		rc = duckdb_v2_statement_execute(conn, stmt, nullptr, nullptr, nullptr, 0, out_result, err);
 	}
 	// The statement is always still alive (it executes a copy), so destroy it unconditionally.
 	duckdb_v2_sql_statement_destroy(&stmt);
@@ -338,7 +472,7 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 
 // Runs a single statement to exhaustion, returning the code it failed with. Execution is lazy, so a failure may only
 // show up while stepping; nothing is asserted, so it also suits statements that are expected to fail.
-inline DUCKDB_V2_ERROR RunSql(duckdb_v2_connection_handle conn, const char *sql) {
+inline DUCKDB_V2_ERROR RunSql(duckdb_v2_connection_handle conn, std::string_view sql) {
 	duckdb_v2_result_handle result = nullptr;
 	auto rc = Query(conn, sql, &result);
 	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
@@ -467,7 +601,7 @@ inline DUCKDB_V2_RESULT_STEP_STATUS StepUntilCancelled(duckdb_v2_result_handle r
 
 // Executes a side-effecting statement (DDL, DML, SET, ...) to completion (query + drain + destroy).
 // Streaming execution is lazy, so a statement only takes effect once its result is stepped.
-inline void ExecSQL(duckdb_v2_connection_handle conn, const char *sql) {
+inline void ExecSQL(duckdb_v2_connection_handle conn, std::string_view sql) {
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, sql, &r) == DUCKDB_V2_ERROR_NONE);
 	DrainRowCount(r);
@@ -555,16 +689,15 @@ inline duckdb_v2_value_handle MakeInt64Value(duckdb_v2_factory_handle factory, i
 	REQUIRE(duckdb_v2_value_create_bigint(factory, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
-inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_factory_handle factory, const char *s) {
+inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_factory_handle factory, std::string_view s) {
 	duckdb_v2_value_handle value = nullptr;
-	auto value_str = Convert(s);
-	REQUIRE(duckdb_v2_value_create_varchar(factory, &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_varchar(factory, s.data(), s.size(), &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_factory_handle factory, const void *data, idx_t len) {
 	duckdb_v2_value_handle value = nullptr;
-	duckdb_v2_str bytes = {static_cast<const char *>(data), len};
-	REQUIRE(duckdb_v2_value_create_blob(factory, &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto bytes = static_cast<const char *>(data);
+	REQUIRE(duckdb_v2_value_create_blob(factory, bytes, len, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 
@@ -572,7 +705,7 @@ inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_factory_handle factory, co
 // INTERVAL, UUID, DECIMAL, ENUM — are built the way the API intends: a VARCHAR
 // through the cast machinery.
 inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_factory_handle factory, duckdb_v2_logical_type_handle type,
-                                                const char *text) {
+                                                std::string_view text) {
 	auto varchar = MakeVarcharValue(factory, text);
 	duckdb_v2_value_handle value = nullptr;
 	auto rc = duckdb_v2_value_cast(factory, varchar, type, &value, nullptr);
@@ -583,9 +716,9 @@ inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_factory_handle factory
 }
 
 inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID id,
-                                                const char *text) {
+                                                std::string_view text) {
 	duckdb_v2_logical_type_handle type = nullptr;
-	REQUIRE(duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, 0, &type, nullptr) ==
+	REQUIRE(duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, nullptr, 0, &type, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	auto value = MakeValueFromText(factory, type, text);
 	duckdb_v2_logical_type_destroy(&type);
@@ -646,9 +779,10 @@ inline T ConsumeValue(duckdb_v2_value_handle &value) {
 // VARCHAR: the borrowed string is copied out before the value goes away.
 template <>
 inline std::string ConsumeValue(duckdb_v2_value_handle &value) {
-	duckdb_v2_str str = {nullptr, 0};
-	auto rc = duckdb_v2_value_get_varchar(value, &str, nullptr);
-	std::string out = rc == DUCKDB_V2_ERROR_NONE ? Convert(str) : std::string();
+	const char *str = nullptr;
+	idx_t str_length = 0;
+	auto rc = duckdb_v2_value_get_varchar(value, &str, &str_length, nullptr);
+	std::string out = rc == DUCKDB_V2_ERROR_NONE ? std::string(str, str_length) : std::string();
 	duckdb_v2_value_destroy(&value);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	return out;
@@ -656,9 +790,10 @@ inline std::string ConsumeValue(duckdb_v2_value_handle &value) {
 
 // Same, through the byte-string getter: BLOB, BIT and BIGNUM storage.
 inline std::string ConsumeBlob(duckdb_v2_value_handle &value) {
-	duckdb_v2_str str = {nullptr, 0};
-	auto rc = duckdb_v2_value_get_blob(value, &str, nullptr);
-	std::string out = rc == DUCKDB_V2_ERROR_NONE ? Convert(str) : std::string();
+	const char *str = nullptr;
+	idx_t str_length = 0;
+	auto rc = duckdb_v2_value_get_blob(value, &str, &str_length, nullptr);
+	std::string out = rc == DUCKDB_V2_ERROR_NONE ? std::string(str, str_length) : std::string();
 	duckdb_v2_value_destroy(&value);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	return out;
@@ -670,7 +805,7 @@ inline std::string ConsumeBlob(duckdb_v2_value_handle &value) {
 
 inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	REQUIRE(duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, 0, &t, nullptr) ==
+	REQUIRE(duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, nullptr, 0, &t, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	return t;
 }
@@ -683,28 +818,28 @@ inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_factory_handle factory, du
 
 inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, 0, &t, nullptr);
+	duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, nullptr, 0, &t, nullptr);
 	auto v = MakeTypeValue(factory, t);
 	duckdb_v2_logical_type_destroy(&t);
 	return v;
 }
 
-inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_factory_handle factory, const char *name,
+inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_factory_handle factory, std::string_view name,
                                               const std::vector<const char *> *names,
                                               std::vector<duckdb_v2_value_handle> values) {
-	std::vector<duckdb_v2_str> name_views;
+	StrArray name_views;
 	if (names) {
 		for (auto *n : *names) {
-			name_views.push_back(Convert(n));
+			name_views.push_back(n ? n : "");
 		}
 	}
 	// The type name is a qualified name; an unqualified one is a single part.
-	duckdb_v2_identifier_t parts[1] = {Convert(name)};
+	StrArray parts = {name};
 	duckdb_v2_qname_handle qname = nullptr;
-	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts, 1, &qname, nullptr);
+	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts.ptrs(), parts.lengths(), 1, &qname, nullptr);
 	duckdb_v2_logical_type_handle t = nullptr;
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_factory_create_type_from_name(factory, qname, names ? name_views.data() : nullptr,
+		rc = duckdb_v2_factory_create_type_from_name(factory, qname, name_views.ptrs(), name_views.lengths(),
 		                                             values.empty() ? nullptr : values.data(), values.size(), &t,
 		                                             nullptr);
 	}

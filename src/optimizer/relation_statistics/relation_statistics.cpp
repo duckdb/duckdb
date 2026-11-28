@@ -2,13 +2,13 @@
 
 namespace duckdb {
 
-DistinctCount::DistinctCount(idx_t distinct_count, DistinctCountSource source)
+DistinctCount::DistinctCount(CardinalityValue distinct_count, DistinctCountSource source)
     : distinct_count(distinct_count), source(source) {
 }
 
-void SemiAntiJoinDomainEvidence::TightenFilterDomainBound(idx_t bound) {
-	if (!filter_domain_bound.IsValid() || bound < filter_domain_bound.GetIndex()) {
-		filter_domain_bound = optional_idx(bound);
+void SemiAntiJoinDomainEvidence::TightenDomainBound(idx_t bound) {
+	if (!domain_bound.IsValid() || bound < domain_bound.GetIndex()) {
+		domain_bound = optional_idx(bound);
 	}
 }
 
@@ -17,22 +17,22 @@ void SemiAntiJoinDomainEvidence::MarkUnique() {
 }
 
 void SemiAntiJoinDomainEvidence::Invalidate() {
-	filter_domain_bound = optional_idx();
+	domain_bound = optional_idx();
 	is_unique = false;
 }
 
-optional_idx SemiAntiJoinDomainEvidence::GetFilterDomainBound() const {
-	return filter_domain_bound;
+optional_idx SemiAntiJoinDomainEvidence::GetDomainBound() const {
+	return domain_bound;
 }
 
-optional_idx SemiAntiJoinDomainEvidence::GetSupportedDomainSize(idx_t current_domain) const {
-	optional_idx result;
+optional<CardinalityValue> SemiAntiJoinDomainEvidence::GetSupportedDomainSize(CardinalityValue current_domain) const {
+	optional<CardinalityValue> result;
 	if (is_unique) {
-		result = optional_idx(current_domain);
+		result = current_domain;
 	}
-	if (filter_domain_bound.IsValid()) {
-		result = optional_idx(result.IsValid() ? MinValue(result.GetIndex(), filter_domain_bound.GetIndex())
-		                                       : filter_domain_bound.GetIndex());
+	if (domain_bound.IsValid()) {
+		auto bound = CardinalityValue(domain_bound.GetIndex());
+		result = result ? MinValue(*result, bound) : bound;
 	}
 	return result;
 }
@@ -48,11 +48,29 @@ RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount to
       semi_anti_join_domain_evidence(semi_anti_join_domain_evidence), name(std::move(name)) {
 }
 
-optional_idx RelationColumnStats::GetSupportedSemiAntiDomainSize() const {
+optional<CardinalityValue> RelationColumnStats::GetSupportedSemiAntiDomainSize() const {
 	return semi_anti_join_domain_evidence.GetSupportedDomainSize(current_domain.distinct_count);
 }
 
 RelationStats::RelationStats() : cardinality(1), row_retention(1), stats_initialized(false) {
+}
+
+bool RelationStats::IsEmpty() const {
+	return max_cardinality.IsValid() && max_cardinality.GetIndex() == 0;
+}
+
+CardinalityValue RelationStats::GetCardinality() const {
+	return max_cardinality.IsValid() ? MinValue(cardinality, CardinalityValue(max_cardinality.GetIndex()))
+	                                 : cardinality;
+}
+
+CardinalityValue RelationStats::GetCardinalityForCost() const {
+	return IsEmpty() ? CardinalityValue(0) : MaxValue(CardinalityValue(1), GetCardinality());
+}
+
+idx_t RelationStats::GetCardinalityForPlan() const {
+	auto result = GetCardinalityForCost().GetIndex();
+	return max_cardinality.IsValid() ? MinValue(result, max_cardinality.GetIndex()) : result;
 }
 
 optional_idx RelationStats::FindColumn(ColumnBinding binding) const {
@@ -85,6 +103,7 @@ bool RelationStats::MatchesBindings(const vector<ColumnBinding> &bindings) const
 }
 
 void RelationStats::CapCurrentDomainsToCardinality() {
+	cardinality = GetCardinality();
 	for (auto &column : columns) {
 		column.current_domain.distinct_count = MinValue(column.current_domain.distinct_count, cardinality);
 	}
@@ -113,6 +132,7 @@ void RelationStats::Verify(const vector<ColumnBinding> &bindings) const {
 	if (!stats_initialized) {
 		return;
 	}
+	D_ASSERT(cardinality == GetCardinality());
 	D_ASSERT(row_retention >= 0 && row_retention <= 1);
 	for (auto &column : columns) {
 		(void)column;

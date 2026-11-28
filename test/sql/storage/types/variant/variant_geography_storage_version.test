@@ -1,0 +1,90 @@
+# name: test/sql/storage/types/variant/variant_geography_storage_version.test
+# description: A VARIANT column of a database written before GEOGRAPHY refuses GEOGRAPHY values
+# group: [variant]
+
+statement ok
+ATTACH '{TEST_DIR}/variant_geography_old.db' AS old (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+CREATE TABLE old.v(x VARIANT);
+
+statement ok
+INSERT INTO old.v VALUES ('POINT(1 2)'::GEOMETRY::VARIANT), ({'a': [42]}::VARIANT), (NULL);
+
+# the unshredded payload of a GEOGRAPHY value cannot be read by the engines of this storage version
+statement error
+INSERT INTO old.v VALUES ('POINT(1 2)'::GEOGRAPHY::VARIANT)
+----
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
+
+statement error
+INSERT INTO old.v SELECT {'a': ['POINT(1 2)'::GEOGRAPHY]}::VARIANT
+----
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
+
+statement error
+INSERT INTO old.v SELECT [{'a': 'POINT(1 2)'::GEOGRAPHY}]::VARIANT
+----
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
+
+statement error
+UPDATE old.v SET x = 'POINT(1 2)'::GEOGRAPHY::VARIANT
+----
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
+
+statement error
+CREATE TABLE old.v2 AS SELECT 'POINT(1 2)'::GEOGRAPHY::VARIANT x
+----
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
+
+query I
+SELECT x::VARCHAR FROM old.v ORDER BY ALL
+----
+POINT (1 2)
+{'a': [42]}
+NULL
+
+statement ok
+CHECKPOINT old
+
+statement ok
+DETACH old
+
+statement ok
+ATTACH '{TEST_DIR}/variant_geography_old.db' AS old;
+
+query I
+SELECT count(*) FROM old.v
+----
+3
+
+statement ok
+DETACH old
+
+# a database of the current storage version stores them
+statement ok
+ATTACH '{TEST_DIR}/variant_geography_new.db' AS new (STORAGE_VERSION 'latest');
+
+statement ok
+CREATE TABLE new.v(x VARIANT);
+
+statement ok
+INSERT INTO new.v VALUES ('POINT(1 2)'::GEOGRAPHY::VARIANT)
+
+statement ok
+INSERT INTO new.v SELECT {'a': ['POINT(3 4)'::GEOGRAPHY]}::VARIANT
+
+statement ok
+CHECKPOINT new
+
+statement ok
+DETACH new
+
+statement ok
+ATTACH '{TEST_DIR}/variant_geography_new.db' AS new;
+
+query I
+SELECT x::VARCHAR FROM new.v ORDER BY ALL
+----
+POINT (1 2)
+{'a': ['POINT (3 4)']}

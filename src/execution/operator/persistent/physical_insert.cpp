@@ -118,7 +118,12 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info)->Cast<DuckTableEntry>();
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info);
+		if (!created_table) {
+			// a connection that shares the transaction created the table after the statement was bound
+			throw TransactionException("Catalog write-write conflict on create with %s", info->Base().GetTableName());
+		}
+		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -286,7 +291,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		data_table.Delete(delete_state, context.client, table, row_ids, update_chunk.size());
 	} else {
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
-		local_storage.Delete(data_table, table, row_ids, update_chunk.size());
+		local_storage.Delete(context.client.GetContext(), data_table, table, row_ids, update_chunk.size());
 	}
 
 	if (!op.parallel && op.return_chunk) {
@@ -416,9 +421,9 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 		throw InternalException("VerifyAppendConstraints was expected to throw but didn't");
 	}
 
-	auto &indexes = local_storage.GetIndexes(context.client, data_table);
+	auto &indexes = local_storage.GetIndexes(context.client.GetContext(), data_table);
 	auto storage = local_storage.GetStorage(data_table);
-	indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, tuples, nullptr);
+	indexes.VerifyUniqueIndexes(storage ? &storage->GetDeleteIndexes() : nullptr, tuples, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -439,8 +444,8 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
 		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, storage, &conflict_manager);
 	} else {
-		auto &indexes = local_storage.GetIndexes(context.client, data_table);
-		indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, tuples, &conflict_manager);
+		auto &indexes = local_storage.GetIndexes(context.client.GetContext(), data_table);
+		indexes.VerifyUniqueIndexes(storage ? &storage->GetDeleteIndexes() : nullptr, tuples, &conflict_manager);
 	}
 
 	if (!conflict_manager.HasConflicts()) {
@@ -530,7 +535,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		matching_index_columns = global_indexes.GetConflictTargetColumns(conflict_info);
 
-		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
+		const auto &local_indexes = local_storage.GetIndexes(context.client.GetContext(), data_table);
 		auto local_index_columns = local_indexes.GetConflictTargetColumns(conflict_info);
 		for (auto &column_set : local_index_columns) {
 			matching_index_columns.push_back(std::move(column_set));
@@ -630,9 +635,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
 		lock_guard<mutex> l(gstate.lock);
-		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(data_table);
 		// Create the local row group collection.
-		auto optimistic_collection = lstate.optimistic_writer->CreateCollection(storage, insert_types);
+		auto optimistic_collection =
+		    lstate.optimistic_writer->CreateCollection(context.client.GetContext(), storage, insert_types);
 		auto &collection = *optimistic_collection->collection;
 		collection.InitializeEmpty();
 		collection.InitializeAppend(lstate.local_append_state);
@@ -648,7 +654,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	auto &collection = *optimistic_collection.collection;
 	auto flushed_row_group_idx = collection.Append(insert_chunk, lstate.local_append_state);
 	if (flushed_row_group_idx.IsValid()) {
-		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
+		lstate.optimistic_writer->WriteNewRowGroup(context.client.GetContext(), optimistic_collection,
+		                                           flushed_row_group_idx.GetIndex());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -680,8 +687,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	if (append_count >= row_group_size) {
 		// flush thread-local optimistic data
-		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
-		lstate.optimistic_writer->FinalFlush();
+		lstate.optimistic_writer->WriteUnflushedRowGroups(context.client.GetContext(), optimistic_collection);
+		lstate.optimistic_writer->FinalFlush(context.client.GetContext());
 	}
 
 	lock_guard<mutex> lock(gstate.lock);
@@ -693,7 +700,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
 		gstate.table.GetStorage().LocalMerge(context.client, gstate.table, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
-		optimistic_writer.Merge(*lstate.optimistic_writer);
+		optimistic_writer.Merge(context.client.GetContext(), *lstate.optimistic_writer);
 	}
 
 	return SinkCombineResultType::FINISHED;
@@ -735,7 +742,7 @@ public:
 		auto &data_table = table.GetStorage();
 		vector<shared_ptr<Task>> tasks;
 		for (idx_t i = 0; i < mergers.size(); i++) {
-			writers.push_back(make_uniq<OptimisticDataWriter>(context, data_table));
+			writers.push_back(make_uniq<OptimisticDataWriter>(data_table));
 			tasks.push_back(make_uniq<MergeCollectionsTask>(context, shared_from_this(), *mergers[i], *writers[i],
 			                                                merged_collections[i], op));
 		}
@@ -750,9 +757,9 @@ public:
 			auto &collection = data_table.GetOptimisticCollection(context, merged_collections[i]);
 			data_table.LocalMerge(context, table, collection);
 			data_table.ResetOptimisticCollection(context, merged_collections[i]);
-			optimistic_writer.Merge(*writers[i]);
+			optimistic_writer.Merge(context.GetContext(), *writers[i]);
 		}
-		optimistic_writer.FinalFlush();
+		optimistic_writer.FinalFlush(context.GetContext());
 	}
 
 private:

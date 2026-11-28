@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "vector_buffer_lifetime.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -185,11 +186,11 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		column.Dictionary(entry, original, 3);
 	}
 	output.Slice(input, select, 2);
-	duckdb::weak_ptr<VectorBuffer> retained = output.data[0].GetBufferRef();
+	duckdb::shared_ptr<bool> destroyed;
 	for (idx_t iteration = 0; iteration < 3; iteration++) {
-		retained = output.data[0].GetBufferRef();
+		destroyed = ObserveVectorBufferDestruction(output.data[0]);
 		output.Reset();
-		REQUIRE(retained.expired());
+		REQUIRE(*destroyed);
 		REQUIRE(output.size() == 0);
 		REQUIRE(output.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 		REQUIRE(output.GetAllocationSize() == 0);
@@ -223,7 +224,7 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		}
 		REQUIRE(output.GetValue(0, 0) == Value::BIGINT(9));
 	}
-	REQUIRE(retained.expired());
+	REQUIRE(*destroyed);
 }
 
 TEST_CASE("Empty lazy buffers preserve slicing ownership", "[lazy_vector]") {
@@ -312,7 +313,8 @@ TEST_CASE("Nested payloads remain lazy through empty reads and recover from allo
 		chunk.Reset();
 		REQUIRE(allocations.allocations == initial_allocations);
 		allocations.fail = true;
-		REQUIRE_THROWS_AS(column.Append(value, VectorAppendMode::ALLOW_RESIZE), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(column.Append(value, VectorAppendMode::ALLOW_RESIZE),
+		                    Catch::Contains("lazy vector test allocation failure"));
 		chunk.Reset();
 		allocations.fail = false;
 		column.Append(value, VectorAppendMode::ALLOW_RESIZE);
@@ -353,13 +355,17 @@ TEST_CASE("Recursive reset releases nested dictionary inputs", "[lazy_vector]") 
 		for (idx_t iteration = 0; iteration < 3; iteration++) {
 			FlatVector::SetSize(column, type.InternalType() == PhysicalType::ARRAY ? 1 : 2);
 			column.Buffer().Verify(type);
-			duckdb::weak_ptr<DictionaryEntry> entry = lists.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
-			duckdb::weak_ptr<DictionaryEntry> child_entry =
-			    elements.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
-			auto entry_references = entry.use_count();
+			auto lists_destroyed = ObserveVectorBufferDestruction(lists);
+			auto elements_destroyed = ObserveVectorBufferDestruction(elements);
+			// The input dictionary remains alive independently of the reset chunk.
+			auto &input_dictionary = dictionary.BufferMutable().Cast<DictionaryBuffer>();
+			auto entry_references = input_dictionary.GetEntryPtr().use_count();
+			const bool shares_entry =
+			    &lists.Buffer().Cast<DictionaryBuffer>().GetEntry() == &input_dictionary.GetEntry();
 			chunk.Reset();
-			REQUIRE(entry.use_count() == entry_references - 1);
-			REQUIRE(child_entry.expired());
+			REQUIRE(input_dictionary.GetEntryPtr().use_count() == entry_references - (shares_entry ? 1 : 0));
+			REQUIRE(*lists_destroyed);
+			REQUIRE(*elements_destroyed);
 			REQUIRE(lists.GetVectorType() == VectorType::FLAT_VECTOR);
 			REQUIRE(elements.GetVectorType() == VectorType::FLAT_VECTOR);
 			REQUIRE(column.size() == 0);
@@ -437,7 +443,7 @@ TEST_CASE("Nested reset buffers support list mutations and preserve grown capaci
 	}
 	SECTION("Failed allocation remains resettable and can be retried") {
 		allocations.fail = true;
-		REQUIRE_THROWS_AS(ListVector::Reserve(lists, 6), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(ListVector::Reserve(lists, 6), Catch::Contains("lazy vector test allocation failure"));
 		chunk.Reset();
 		allocations.fail = false;
 		ListVector::Reserve(lists, 6);
@@ -499,7 +505,7 @@ TEST_CASE("Nested C API outputs allocate before raw pointer access", "[lazy_vect
 	DataChunk chunk;
 	chunk.Initialize(allocator, {LogicalType::LIST(structure)}, 2);
 	allocations.fail = true;
-	REQUIRE_THROWS_AS(PrepareCAPIVector(chunk.data[0]), OutOfMemoryException);
+	REQUIRE_THROWS_WITH(PrepareCAPIVector(chunk.data[0]), Catch::Contains("lazy vector test allocation failure"));
 	allocations.fail = false;
 	PrepareCAPIVector(chunk.data[0]);
 	REQUIRE(allocations.allocations == 3);
@@ -618,7 +624,8 @@ TEST_CASE("Lazy scalar buffers handle failed allocation and capacity growth", "[
 	DataChunk chunk;
 	chunk.Initialize(allocator, {LogicalType::BIGINT}, 16);
 	allocations.fail = true;
-	REQUIRE_THROWS_AS(FlatVector::Writer<int64_t>(chunk.data[0], 1), OutOfMemoryException);
+	REQUIRE_THROWS_WITH(FlatVector::Writer<int64_t>(chunk.data[0], 1),
+	                    Catch::Contains("lazy vector test allocation failure"));
 	REQUIRE(chunk.size() == 0);
 	REQUIRE(FlatVector::GetData(chunk.data[0]) == nullptr);
 	chunk.Reset();

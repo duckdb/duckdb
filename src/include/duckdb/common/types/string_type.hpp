@@ -21,6 +21,8 @@
 
 namespace duckdb {
 
+enum class StringComparisonMode { GENERIC, INLINED, PREFIX };
+
 struct string_t {
 	friend struct StringComparisonOperators;
 
@@ -195,27 +197,53 @@ public:
 			return false;
 		}
 		// compare up to shared length. if still the same, compare lengths
+		template <StringComparisonMode MODE = StringComparisonMode::INLINED>
 		static bool GreaterThan(const string_t &left, const string_t &right) {
-			const uint32_t left_length = UnsafeNumericCast<uint32_t>(left.GetSize());
-			const uint32_t right_length = UnsafeNumericCast<uint32_t>(right.GetSize());
-			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
-
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			uint32_t a_prefix = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
-			uint32_t b_prefix = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
-
-			// Check on prefix -----
-			// We don't need to mask since:
-			//	if the prefix is greater(after bswap), it will stay greater regardless of the extra bytes
-			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
-			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
-
+			const auto a_prefix = left.GetPrefixIntegerComparable();
+			const auto b_prefix = right.GetPrefixIntegerComparable();
 			if (a_prefix != b_prefix) {
-				return BSwapIfLE(a_prefix) > BSwapIfLE(b_prefix);
+				return a_prefix > b_prefix;
+			}
+			if constexpr (MODE == StringComparisonMode::INLINED) {
+				if (left.IsInlined() && right.IsInlined()) {
+					return InlinedSuffixGreaterThan(left, right);
+				}
+			} else if constexpr (MODE == StringComparisonMode::PREFIX) {
+				// Inline strings are zero-padded; out-of-line strings contain more than twelve bytes.
+				const auto a_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(left.GetData()) + PREFIX_BYTES));
+				const auto b_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(right.GetData()) + PREFIX_BYTES));
+				if (a_suffix != b_suffix) {
+					return a_suffix > b_suffix;
+				}
+				if (left.IsInlined() || right.IsInlined()) {
+					return left.GetSize() > right.GetSize();
+				}
+				const auto min_length = MinValue(left.GetSize(), right.GetSize());
+				const auto cmp =
+				    memcmp(left.GetData() + INLINE_BYTES, right.GetData() + INLINE_BYTES, min_length - INLINE_BYTES);
+				return cmp > 0 || (cmp == 0 && left.GetSize() > right.GetSize());
 			}
 #endif
+			const auto left_length = left.GetSize();
+			const auto right_length = right.GetSize();
+			const auto min_length = MinValue(left_length, right_length);
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
+		}
+		//! Both strings must be inlined and have equal prefixes: the zero-padded inlined bytes are compared as one
+		//! big-endian integer, ties are broken by length (e.g. "a" < "a\0")
+		static inline bool InlinedSuffixGreaterThan(const string_t &left, const string_t &right) {
+			const auto a_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(&left) + 8u));
+			const auto b_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(&right) + 8u));
+			return (a_suffix > b_suffix) | ((a_suffix == b_suffix) & (left.GetSize() > right.GetSize()));
+		}
+		//! At least one side must be inlined: equal strings then have equal (inlined) lengths, so all 16 bytes match
+		static inline bool InlinedEquals(const string_t &a, const string_t &b) {
+			const auto a_ptr = const_data_ptr_cast(&a);
+			const auto b_ptr = const_data_ptr_cast(&b);
+			return ((Load<uint64_t>(a_ptr) ^ Load<uint64_t>(b_ptr)) |
+			        (Load<uint64_t>(a_ptr + 8u) ^ Load<uint64_t>(b_ptr + 8u))) == 0;
 		}
 	};
 

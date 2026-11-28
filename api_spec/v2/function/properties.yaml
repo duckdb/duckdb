@@ -29,7 +29,7 @@ enums:
   FUNCTION_PROPERTY_KEY:
     description: |
       Identifies a configurable function property. Pass one of these to
-      `[[scalar_function_set_property]]` or `[[aggregate_function_set_property]]` together with a
+      `[[scalar_function_set_property]]`, `[[aggregate_function_set_property]]` or `[[table_function_set_property]]` together with a
       matching `[[FUNCTION_PROPERTY_VALUE]]`. The high byte is the function-type
       group: COMMON (`0x01xxxx`) keys apply to all function types, while
       group-specific keys (e.g. aggregate `0x03xxxx`) are only valid for that

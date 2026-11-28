@@ -1,0 +1,31 @@
+diff --git a/src/function/scan_planning/iceberg_row_filter.cpp b/src/function/scan_planning/iceberg_row_filter.cpp
+index 89ca357..5041bda 100644
+--- a/src/function/scan_planning/iceberg_row_filter.cpp
++++ b/src/function/scan_planning/iceberg_row_filter.cpp
+@@ -63,7 +63,10 @@ TableFilterSet IcebergRowFilter::TableFilters(ClientContext &context, const Expr
+ 		}
+ 	}
+ 	vector<FilterPushdownResult> results;
+-	return combiner.GenerateTableScanFilters(columns, results);
++	TableFilterSet filters;
++	combiner.GenerateTableScanFilters(filters, columns, results);
++	always_false = filters.Finalize() == FilterResult::UNSATISFIABLE;
++	return filters;
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index ab18008..a2ae53a 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -142,7 +142,9 @@ unique_ptr<MultiFileList> IcebergMultiFileList::ComplexFilterPushdown(ClientCont
+ 		combiner.AddFilter(filter->Copy());
+ 	}
+ 	vector<FilterPushdownResult> unused;
+-	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, unused);
++	TableFilterSet filter_set;
++	combiner.GenerateTableScanFilters(filter_set, info.column_indexes, unused);
++	filter_set.Finalize();
+ 	if (!filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}

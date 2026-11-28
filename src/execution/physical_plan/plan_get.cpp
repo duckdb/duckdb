@@ -31,7 +31,7 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
-		reference<PhysicalOperator> child = ResolveAndPlan(std::move(op.children[0]));
+		reference<PhysicalOperator> child = ResolveAndPlan(*op.children[0]);
 		auto &child_types = child.get().types;
 
 		// this is for table producing functions that consume subquery results
@@ -82,9 +82,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				auto column_idx = projection_indices.empty() ? output_idx : projection_indices[output_idx];
 				if (column_ids[column_idx].GetPrimaryIndex() == op.ordinality_idx.GetIndex()) {
 					ordinality_idx = output_idx;
+					// the operator produces the ordinality column, not the function:
+					// present the position as an empty column so strict functions do not reject it
+					column_ids[column_idx] = ColumnIndex(COLUMN_IDENTIFIER_EMPTY);
 					break;
 				}
 			}
+		}
+		bool table_input = false;
+		const auto &signature = op.function.GetSignature();
+		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+			if (signature.GetParameter(i).GetType().id() == LogicalTypeId::TABLE) {
+				table_input = true;
+				break;
+			}
+		}
+		if (!op.projected_input.empty() && op.function.in_out_function_final) {
+			throw NotImplementedException("Table in-out function %s has a finalize step, which is not supported for "
+			                              "input that is correlated with an outer query",
+			                              op.function.GetName());
 		}
 		auto &table_in_out = Make<PhysicalTableInOutFunction>(
 		    op.types, op.function, std::move(op.bind_data), column_ids, std::move(projection_indices),
@@ -92,6 +108,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		table_in_out.children.push_back(child);
 		auto &cast_table_in_out = table_in_out.Cast<PhysicalTableInOutFunction>();
 		cast_table_in_out.ordinality_idx = ordinality_idx;
+		cast_table_in_out.table_input = table_input;
 		return table_in_out;
 	}
 

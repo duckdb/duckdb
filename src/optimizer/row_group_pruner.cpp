@@ -47,15 +47,17 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 			return false;
 		}
 
-		const auto op_type = current_op.get().type;
-		if (op_type == LogicalOperatorType::LOGICAL_LIMIT) {
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_LIMIT:
 			return false;
-		}
-		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
-		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-		    op_type == LogicalOperatorType::LOGICAL_WINDOW || op_type == LogicalOperatorType::LOGICAL_DISTINCT) {
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			break;
+		default:
+			// Any other operator can change the row count, so we only order the row groups but do not prune
 			row_limit.SetInvalid();
 			row_offset.SetInvalid();
+			break;
 		}
 		current_op = *current_op.get().children[0];
 	}
@@ -78,8 +80,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 	// We can use the RowGroupReorderer!
 	const auto &primary_order = logical_order->orders[0];
+	const bool has_secondary_order = logical_order->orders.size() > 1;
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
-	                                              logical_limit);
+	                                              logical_limit, has_secondary_order);
 	if (!options) {
 		return false;
 	}
@@ -99,6 +102,12 @@ void RowGroupPruner::GetLimitAndOffset(const LogicalLimit &logical_limit, option
 		row_offset = logical_limit.offset_val.GetConstantValue();
 	} else if (logical_limit.offset_val.Type() == LimitNodeType::UNSET) {
 		row_offset = 0;
+	}
+
+	const auto limit_type = logical_limit.limit_val.Type();
+	if (limit_type == LimitNodeType::CONSTANT_PERCENTAGE || limit_type == LimitNodeType::EXPRESSION_PERCENTAGE) {
+		// A percentage limit counts the rows before the offset, so we cannot prune with the offset
+		row_offset.SetInvalid();
 	}
 }
 
@@ -133,21 +142,18 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 
 	JoinFilterPushdownColumn column;
 	column.probe_column_index = colref.Binding();
-	vector<JoinFilterPushdownColumn> columns {std::move(column)};
+	vector<JoinFilterPushdownColumn> columns;
+	columns.push_back(std::move(column));
 	vector<PushdownFilterTarget> pushdown_targets;
-	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
-	                                                      pushdown_targets);
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], columns, pushdown_targets);
 
 	if (pushdown_targets.size() != 1 || pushdown_targets[0].columns.size() != 1) {
 		return nullptr;
 	}
 
 	auto &pushed_column = pushdown_targets[0].columns[0];
-	if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
-	    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column)) {
-		// the sort key reaches the scan through a cast chain that does not preserve the raw column's
-		// ordering (an explicit TRY_CAST, or a cast that can throw) - ordering row groups by the raw
-		// column statistics would be incorrect - bail out
+	if (!RuntimeFilterCastUtil::PreservesStorageOrdering(pushed_column)) {
+		// Field extractions and casts that can fail cannot use the raw column's ordering statistics.
 		return nullptr;
 	}
 
@@ -166,16 +172,19 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 unique_ptr<RowGroupOrderOptions>
 RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, const optional_idx row_offset,
                                                const BoundOrderByNode &primary_order, const LogicalGet &logical_get,
-                                               const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
+                                               const StorageIndex &storage_index, LogicalLimit &logical_limit,
+                                               const bool has_secondary_order) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
 	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 	const auto order_type = primary_order.type;
 	const auto null_order = primary_order.null_order;
 	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-	optional_idx combined_limit = row_limit.IsValid()
-	                                  ? row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0)
-	                                  : optional_idx();
+	// Without a known offset, we cannot tell which rows the limit keeps
+	optional_idx combined_limit;
+	if (row_limit.IsValid() && row_offset.IsValid()) {
+		combined_limit = row_limit.GetIndex() + row_offset.GetIndex();
+	}
 
 	if (row_offset.IsValid() && row_offset.GetIndex() > 0 && logical_get.function.get_partition_stats) {
 		// Try to prune with offset
@@ -183,8 +192,9 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		auto partition_stats = logical_get.function.get_partition_stats(context, input);
 
 		if (!partition_stats.empty()) {
-			auto offset_puning_result = RowGroupReorderer::GetOffsetAfterPruning(
-			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
+			auto offset_puning_result =
+			    RowGroupReorderer::GetOffsetAfterPruning(order_by, column_type, order_type, null_order, storage_index,
+			                                             row_offset.GetIndex(), partition_stats, has_secondary_order);
 			if (offset_puning_result.pruned_row_group_count > 0 || offset_puning_result.leading_null_group_offset > 0) {
 				// We can prune row groups and/or reduce the offset by consuming definite NULL-only groups
 				if (!logical_limit.unpruned_offset.IsValid()) {

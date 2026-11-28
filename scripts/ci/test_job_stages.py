@@ -3,10 +3,15 @@ import json
 import os
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -95,6 +100,7 @@ class JobStagesTest(unittest.TestCase):
         reduced_ci_mode: str | None = None,
         runner_provider: str = "github",
         run_all: bool = True,
+        changed_extension_files: list[str] | None = None,
     ) -> job_stages.JobSelection:
         if reduced_ci_mode is None:
             reduced_ci_mode = "enabled" if event_name == "pull_request" else "disabled"
@@ -108,10 +114,205 @@ class JobStagesTest(unittest.TestCase):
                 changed_keys=changed_keys or set(),
                 reduced_ci_mode=reduced_ci_mode,
                 run_all=run_all,
-                runners={"linux_x64": "runner-x64", "linux_arm64": "runner-arm64"},
+                runners={
+                    "linux_x64": "runner-x64",
+                    "linux_x64_8xlarge": "runner-x64-8xlarge",
+                    "linux_arm64": "runner-arm64",
+                },
                 runner_provider=runner_provider,
+                changed_extension_files=changed_extension_files or [],
             )
         )
+
+    def _read_github_output(self, content: str) -> dict[str, str]:
+        outputs = {}
+        lines = iter(content.splitlines())
+        for line in lines:
+            if "<<" in line:
+                key, delimiter = line.split("<<", 1)
+                value = []
+                for value_line in lines:
+                    if value_line == delimiter:
+                        break
+                    value.append(value_line)
+                outputs[key] = "\n".join(value)
+            else:
+                key, value = line.split("=", 1)
+                outputs[key] = value
+        return outputs
+
+    def test_pr_without_extension_changes_selects_main_groups(self):
+        selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
+        self.assertEqual(list(selection.extension_groups), ["core", "cloud", "search", "scanner"])
+        self.assertNotIn("delta", selection.extension_entries.split(","))
+        self.assertNotIn("lance", selection.extension_entries.split(","))
+        self.assertIn("extensions-build", selection.enabled_jobs)
+
+    def test_pr_extension_files_select_their_groups(self):
+        cases = [
+            (".github/config/extensions/avro.cmake", "cloud"),
+            (".github/config/extensions/iceberg.cmake", "cloud"),
+            (".github/patches/extensions/glue/deleted.patch", "cloud"),
+            (".github/config/extensions/legacy_parser.cmake", "core"),
+            (".github/config/extensions/vss.cmake", "search"),
+            (".github/config/extensions/mysql_scanner.cmake", "scanner"),
+            (".github/config/extensions/delta.cmake", "rust"),
+            (".github/config/extensions/lance.cmake", "external"),
+            (".github/config/rust_based_extensions.cmake", "rust"),
+            (".github/config/external_extensions.cmake", "external"),
+        ]
+        for filename, group in cases:
+            with self.subTest(filename=filename):
+                selection = self._compute_job_selection(
+                    "pull_request",
+                    "feature/my-branch",
+                    "duckdb/duckdb",
+                    changed_keys={"extensions", "github", "tests"},
+                    changed_extension_files=[filename],
+                )
+                self.assertEqual(list(selection.extension_groups), [group])
+                if group in {"rust", "external"}:
+                    self.assertEqual(selection.extension_entries, "")
+
+    def test_pr_extension_groups_are_unioned_and_keep_architecture_settings(self):
+        selection = self._compute_job_selection(
+            "pull_request",
+            "feature/my-branch",
+            "duckdb/duckdb",
+            changed_keys={"extensions"},
+            changed_extension_files=[
+                ".github/config/extensions/iceberg.cmake",
+                ".github/patches/extensions/iceberg/deleted.patch",
+                ".github/config/extensions/spatial.cmake",
+                ".github/config/core.cmake",
+            ],
+        )
+        self.assertEqual(list(selection.extension_groups), ["core", "cloud", "search"])
+        self.assertEqual(selection.reduced_ci_mode, "disabled")
+        self.assertTrue(selection.windows_full_matrix)
+        self.assertEqual(selection.extension_opt_in_archs, "windows_arm64;linux_arm64_musl")
+        self.assertEqual(
+            selection.extension_groups["cloud"],
+            {
+                "config": "duckdb/.github/config/cloud.cmake",
+                "extra_toolchains": "unixodbc;parser_tools",
+                "opt_in_archs": "windows_arm64;linux_arm64_musl",
+                "toolchain": "main",
+            },
+        )
+
+    def test_shared_unknown_or_missing_extension_files_select_all_groups(self):
+        for files in [
+            [".github/config/in_tree_extensions.cmake"],
+            [".github/config/out_of_tree_extensions.cmake"],
+            [".github/config/extensions/removed_extension.cmake"],
+            [".github/patches/extensions/unknown/deleted.patch"],
+            [],
+        ]:
+            with self.subTest(files=files), redirect_stderr(StringIO()):
+                selection = self._compute_job_selection(
+                    "pull_request",
+                    "feature/my-branch",
+                    "duckdb/duckdb",
+                    changed_keys={"extensions"},
+                    changed_extension_files=files,
+                )
+                self.assertEqual(list(selection.extension_groups), list(job_stages.EXTENSION_GROUP_CONFIGS))
+
+    def test_non_pr_events_select_all_groups_without_enabling_jobs(self):
+        for event in ["push", "merge_group", "workflow_dispatch"]:
+            with self.subTest(event=event):
+                selection = self._compute_job_selection(
+                    event,
+                    "feature/my-branch",
+                    "duckdb/duckdb",
+                    run_all=False,
+                    changed_keys={"extensions"},
+                    changed_extension_files=[".github/config/extensions/iceberg.cmake"],
+                )
+                self.assertEqual(list(selection.extension_groups), list(job_stages.EXTENSION_GROUP_CONFIGS))
+                self.assertEqual(selection.extension_groups["rust"]["toolchain"], "rust")
+                self.assertEqual(
+                    selection.extension_groups["rust"]["default_exclude_archs"],
+                    job_stages.RUST_EXTENSION_EXCLUDE_ARCHS,
+                )
+                if event == "merge_group":
+                    self.assertNotIn("extensions-build", selection.enabled_jobs)
+                    self.assertNotIn("extensions-deploy", selection.enabled_jobs)
+
+    def test_group_selection_is_independent_of_architecture_and_job_overrides(self):
+        with mock.patch.dict(os.environ, {"OVERRIDE_REDUCED_CI_MODE": "disabled", "OVERRIDE_JOBS": "linux-relassert"}):
+            selection = self._compute_job_selection(
+                "pull_request",
+                "feature/my-branch",
+                "duckdb/duckdb",
+                changed_keys={"extensions"},
+                changed_extension_files=[".github/config/extensions/iceberg.cmake"],
+            )
+        self.assertEqual(list(selection.extension_groups), ["cloud"])
+        self.assertEqual(selection.enabled_jobs, ["prepare", "linux-relassert"])
+
+    def test_cloud_entry_subset_includes_dependencies_and_excludes_other_groups(self):
+        selection = self._compute_job_selection(
+            "pull_request",
+            "feature/my-branch",
+            "duckdb/duckdb",
+            changed_keys={"extensions"},
+            changed_extension_files=[".github/config/extensions/iceberg.cmake"],
+        )
+        self.assertEqual(
+            set(selection.extension_entries.split(",")),
+            {"avro", "aws", "azure", "ducklake", "glue", "httpfs", "iceberg", "json", "parquet"},
+        )
+        self.assertNotIn("avro", job_stages.extension_group_members()["core"])
+
+    def test_main_consumes_changed_extension_file_and_writes_group_yaml(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "outputs"
+            files_path = Path(directory) / "changed_extensions.txt"
+            files_path.write_text(".github/config/extensions/avro.cmake\n\n", encoding="utf-8")
+            argv = [
+                "job_stages.py",
+                "--event",
+                "pull_request",
+                "--ref_name",
+                "feature/my-branch",
+                "--default_branch",
+                "main",
+                "--changed-keys",
+                "extensions",
+                "--changed-extensions-file",
+                str(files_path),
+                "--reduced-ci-mode",
+                "enabled",
+                "--run-all",
+                "true",
+                "--runners",
+                '{"linux_x64":"runner-x64","linux_arm64":"runner-arm64"}',
+                "--runner-provider",
+                "namespace",
+            ]
+            with mock.patch.object(sys, "argv", argv), mock.patch.dict(
+                os.environ, {"GITHUB_OUTPUT": str(output_path)}
+            ), redirect_stderr(StringIO()):
+                self.assertEqual(job_stages.main(), 0)
+                outputs = self._read_github_output(output_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    outputs["extension_groups"],
+                    'cloud:\n'
+                    '  config: "duckdb/.github/config/cloud.cmake"\n'
+                    '  extra_toolchains: "unixodbc;parser_tools"\n'
+                    '  opt_in_archs: "windows_arm64;linux_arm64_musl"\n'
+                    '  toolchain: "main"',
+                )
+                self.assertIn("avro", outputs["extension_entries"].split(","))
+
+                files_path.unlink()
+                output_path.write_text("", encoding="utf-8")
+                self.assertEqual(job_stages.main(), 0)
+                outputs = self._read_github_output(output_path.read_text(encoding="utf-8"))
+                groups = re.findall(r"^(\w+):$", outputs["extension_groups"], re.MULTILINE)
+                self.assertEqual(groups, list(job_stages.EXTENSION_GROUP_CONFIGS))
 
     def _main_workflow_job_ids(self) -> set[str]:
         workflow_path = REPO_ROOT / ".github" / "workflows" / "Main.yml"
@@ -140,13 +341,19 @@ class JobStagesTest(unittest.TestCase):
         selection = self._compute_job_selection(
             "merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb", changed_keys={"osx"}
         )
-        required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
-        self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
-        self.assertNotIn("osx", selection.enabled_jobs)
+        required_jobs = {"linux-relassert", "linux-release", "tidy-check", "check-patches"}
+        self.assertEqual(set(selection.enabled_jobs), required_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
         self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
         self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertFalse(selection.save_cache)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_patch_check_enabled_for_prs_and_merge_groups(self):
+        for event in ("pull_request", "merge_group"):
+            with self.subTest(event=event):
+                selection = self._compute_job_selection(event, "feature/my-branch", "duckdb/duckdb")
+                self.assertIn("check-patches", selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_default_branch_includes_nightly_only_jobs(self):
@@ -154,6 +361,7 @@ class JobStagesTest(unittest.TestCase):
             "push", "v2.0-cyanoptera", "duckdb/duckdb", default_branch="v2.0-cyanoptera"
         )
         self.assertIn("codecov", selection.enabled_jobs)
+        self.assertIn("linux-release-tests", selection.enabled_jobs)
         self.assertEqual(selection.enabled_jobs.count("osx"), 1)
         self.assertFalse(selection.save_cache)
 
@@ -172,6 +380,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertTrue(expected_base_jobs.issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertNotIn("regression", workflow_dispatch_selection.enabled_jobs)
+            self.assertIn("linux-release-tests", workflow_dispatch_selection.enabled_jobs)
             self.assertTrue(workflow_dispatch_selection.optimized_release)
             self.assertEqual(
                 workflow_dispatch_selection.extension_opt_in_archs,
@@ -228,6 +437,7 @@ class JobStagesTest(unittest.TestCase):
         self.assertNotIn("codecov", selection.enabled_jobs)
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
+        self.assertIn("linux-release-tests", selection.enabled_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
         self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
         self.assertTrue(selection.linux_release_matrix[0]["test_static"])
@@ -375,20 +585,52 @@ class JobStagesTest(unittest.TestCase):
             selection.runners,
             {
                 "linux_x64": "runner-x64;job.priority=2",
+                "linux_x64_8xlarge": "runner-x64-8xlarge;job.priority=2",
                 "linux_arm64": "runner-arm64;job.priority=2",
             },
         )
-        self.assertEqual(selection.linux_release_matrix[0]["runner"], "runner-x64;job.priority=2")
+        self.assertEqual(selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge;job.priority=2")
 
         pull_request_selection = self._compute_job_selection(
             "pull_request", "feature/my-branch", "duckdb/duckdb", runner_provider="namespace"
         )
         self.assertEqual(pull_request_selection.runners["linux_x64"], "runner-x64")
+        self.assertEqual(pull_request_selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge")
 
         github_selection = self._compute_job_selection(
             "merge_group", "gh-readonly-queue/main/pr-1-abc", "somefork/duckdb", runner_provider="github"
         )
         self.assertEqual(github_selection.runners["linux_x64"], "runner-x64")
+        self.assertEqual(github_selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge")
+
+    def test_release_runner_selection(self):
+        for event_name in ["pull_request", "push", "workflow_dispatch"]:
+            with self.subTest(event_name=event_name):
+                selection = self._compute_job_selection(event_name, "main", "duckdb/duckdb")
+                for config in selection.linux_release_matrix:
+                    expected_runner = "runner-x64-8xlarge" if config["arch"] == "amd64" else "runner-arm64"
+                    self.assertEqual(config["runner"], expected_runner)
+                for config in selection.linux_musl_matrix:
+                    expected_runner = "runner-x64" if config["arch"] == "amd64" else "runner-arm64"
+                    self.assertEqual(config["runner"], expected_runner)
+
+    def test_release_runner_selection_with_legacy_map(self):
+        selection_input = job_stages.JobSelectionInput(
+            event_name="workflow_dispatch",
+            ref_name="main",
+            default_branch="main",
+            repository="somefork/duckdb",
+            skip_tests=False,
+            changed_keys=set(),
+            reduced_ci_mode="disabled",
+            run_all=True,
+            runners={"linux_x64": "ubuntu-latest", "linux_arm64": "ubuntu-24.04-arm"},
+        )
+        matrix = job_stages.linux_release_matrix(selection_input, optimized_release=True, full_extension_matrix=True)
+        self.assertEqual(
+            [config["runner"] for config in matrix],
+            ["ubuntu-latest", "ubuntu-24.04-arm", "ubuntu-latest", "ubuntu-24.04-arm"],
+        )
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(
@@ -416,6 +658,9 @@ class JobStagesTest(unittest.TestCase):
         self.assertEqual(lines[6], "runners={}")
         self.assertEqual(lines[7], "linux_release_matrix=[]")
         self.assertEqual(lines[8], "linux_musl_matrix=[]")
+        self.assertEqual(lines[9], "extension_entries=")
+        self.assertEqual(lines[10], "extension_groups<<EXTENSION_GROUPS")
+        self.assertEqual(lines[11], "EXTENSION_GROUPS")
 
     def test_reduced_ci_mode_override(self):
         self.assertEqual(job_stages.resolve_reduced_ci_mode("enabled", "disabled"), "disabled")
@@ -473,9 +718,9 @@ class JobStagesTest(unittest.TestCase):
             self.assertIn("extension_opt_in_archs=", out)
             payload = out.splitlines()[0].split("=", 1)[1]
             selected_jobs = json.loads(payload)
-            required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
-            self.assertTrue(required_jobs.issubset(set(selected_jobs)))
-            output_values = dict(line.split("=", 1) for line in out.splitlines())
+            required_jobs = {"linux-relassert", "linux-release", "tidy-check", "check-patches"}
+            self.assertEqual(set(selected_jobs), required_jobs)
+            output_values = self._read_github_output(out)
             release_matrix = json.loads(output_values["linux_release_matrix"])
             self.assertEqual(release_matrix[0]["runner"], "runner-x64;job.priority=2")
         finally:
@@ -516,6 +761,16 @@ class JobStagesTest(unittest.TestCase):
                 os.environ.pop("OVERRIDE_JOBS", None)
             else:
                 os.environ["OVERRIDE_JOBS"] = old_value
+
+    def test_merge_group_can_override_release_tests(self):
+        with mock.patch.dict(os.environ, {"OVERRIDE_JOBS": "linux-release linux-release-tests"}):
+            selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+        self.assertEqual(selection.enabled_jobs, ["prepare", "linux-release", "linux-release-tests"])
+
+    def test_patch_check_can_be_selected_by_override(self):
+        with mock.patch.dict(os.environ, {"OVERRIDE_JOBS": "check-patches"}):
+            selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+        self.assertEqual(selection.enabled_jobs, ["prepare", "check-patches"])
 
     def test_all_jobs_matches_main_workflow(self):
         workflow_jobs = self._main_workflow_job_ids()
@@ -579,6 +834,53 @@ class JobStagesTest(unittest.TestCase):
             extra_in_summary,
             f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
         )
+
+    def _run_summary_status_check(self, results: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "Main.yml"
+        commands = [
+            command
+            for _, command in self._extract_run_commands(workflow_path.read_text(encoding="utf-8"))
+            if "NEEDS_JSON='${{ toJSON(needs) }}'" in command
+        ]
+        self.assertEqual(len(commands), 1, "failed to locate the Summary status check")
+        needs = {job_id: {"result": result} for job_id, result in results.items()}
+        command = commands[0].replace("${{ toJSON(needs) }}", json.dumps(needs))
+        return subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", command],
+            capture_output=True,
+            text=True,
+        )
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_requires_successful_prepare(self):
+        for prepare_result in ("failure", "cancelled", "skipped", None):
+            with self.subTest(prepare_result=prepare_result):
+                results = {job_id: "skipped" for job_id in self._main_workflow_job_ids() - {"summary", "prepare"}}
+                if prepare_result is not None:
+                    results["prepare"] = prepare_result
+                proc = self._run_summary_status_check(results)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("The prepare job did not succeed.", proc.stdout)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_allows_intentionally_skipped_jobs(self):
+        results = {job_id: "skipped" for job_id in self._main_workflow_job_ids() - {"summary"}}
+        results.update(
+            {"prepare": "success", "linux-relassert": "success", "linux-release": "success", "tidy-check": "success"}
+        )
+        proc = self._run_summary_status_check(results)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_rejects_failed_or_cancelled_jobs(self):
+        for job_id in ("linux-release-tests", "check-patches"):
+            for job_result in ("failure", "cancelled"):
+                with self.subTest(job_id=job_id, job_result=job_result):
+                    results = {job: "success" for job in self._main_workflow_job_ids() - {"summary"}}
+                    results[job_id] = job_result
+                    proc = self._run_summary_status_check(results)
+                    self.assertNotEqual(proc.returncode, 0)
+                    self.assertIn(f"{job_id}: {job_result}", proc.stdout)
 
     def test_workflow_unittest_commands_use_wrapped_runner(self):
         violations: list[str] = []

@@ -150,6 +150,17 @@ void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PRO
 	SetCommonProperty(props, key, value);
 }
 
+void SetTableFunctionProperty(FunctionStability &stability, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                              DUCKDB_V2_FUNCTION_PROPERTY_VALUE value) {
+	ValidateValueMatchesKey(key, value);
+	if (key != DUCKDB_V2_FUNCTION_PROPERTY_STABILITY) {
+		throw InvalidInputException("Function property key " + ToHex(AsU32(key)) + " is not valid for table functions");
+	}
+	FunctionProperties props;
+	SetCommonProperty(props, key, value);
+	stability = props.GetStability();
+}
+
 void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
                                   DUCKDB_V2_FUNCTION_PROPERTY_VALUE value) {
 	ValidateValueMatchesKey(key, value);
@@ -163,6 +174,27 @@ void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_
 		return;
 	}
 	throw InvalidInputException("Function property key " + ToHex(AsU32(key)) + " is not valid for aggregate functions");
+}
+
+static auto GenericPropertyName(const char *name, idx_t name_length) -> string {
+	auto result = ConvertIdentifierName(name, name_length);
+	if (result.empty()) {
+		throw InvalidInputException("Function property name cannot be empty");
+	}
+	return string(result);
+}
+
+void SetGenericFunctionProperty(FunctionProperties &props, const char *name, idx_t name_length, const Value &value) {
+	props.SetProperty(GenericPropertyName(name, name_length), value);
+}
+
+auto GetGenericFunctionProperty(const FunctionProperties &props, const char *name, idx_t name_length)
+    -> duckdb_v2_value_handle {
+	auto value = props.GetProperty(GenericPropertyName(name, name_length));
+	if (!value) {
+		return nullptr;
+	}
+	return Convert(new Value(*value));
 }
 
 } // namespace duckdb::capiv2

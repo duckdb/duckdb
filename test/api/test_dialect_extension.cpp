@@ -57,10 +57,9 @@ private:
 };
 
 static vector<MatcherToken> Tokenize(const Tokenizer &tokenizer, const string &sql) {
-	vector<MatcherToken> tokens;
-	TokenizerBehavior behavior(sql, tokens);
+	TokenizerBehavior behavior(sql);
 	tokenizer.TokenizeInput(behavior);
-	return tokens;
+	return std::move(behavior.tokens);
 }
 
 TEST_CASE("Register and select a dialect extension", "[api][dialect_extension]") {
@@ -79,6 +78,38 @@ TEST_CASE("Register and select a dialect extension", "[api][dialect_extension]")
 	auto current_dialect = con.Query("SELECT current_setting('current_dialect')");
 	REQUIRE_NO_FAIL(*current_dialect);
 	REQUIRE(current_dialect->Collection().GetValue(0, 0) == Value("test"));
+}
+
+TEST_CASE("Leaving a dialect resets the compatibility mode it set", "[api][dialect_extension]") {
+	DBConfig config;
+	DialectExtension::Register(config, make_uniq<DialectExtension>("with_mode", DialectCompatibilityMode::SPARK));
+	DialectExtension::Register(config, make_uniq<DialectExtension>("without_mode"));
+
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	auto result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"SPARK"}));
+	REQUIRE_NO_FAIL(con.Query("RESET current_dialect"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = NULL"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'without_mode'"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	// a mode the user set is kept when the dialect did not set one
+	REQUIRE_NO_FAIL(con.Query("SET dialect_compatibility_mode = 'SPARK'"));
+	REQUIRE_NO_FAIL(con.Query("RESET current_dialect"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"SPARK"}));
 }
 
 TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {
@@ -115,8 +146,8 @@ TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {
 
 class TerminatorTokenizerBehavior final : public TokenizerBehavior {
 public:
-	TerminatorTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens, bool autocomplete)
-	    : TokenizerBehavior(sql, tokens), autocomplete(autocomplete) {
+	TerminatorTokenizerBehavior(const string &sql, bool autocomplete)
+	    : TokenizerBehavior(sql), autocomplete(autocomplete) {
 	}
 	TokenType GetTerminator() const override {
 		return autocomplete ? TokenType::END_OF_INPUT_AUTOCOMPLETE : TokenType::END_OF_INPUT;
@@ -137,8 +168,8 @@ TEST_CASE("Tokenizer preserves delimiters and incomplete input across long runs"
 			for (auto &literal : {"'" + padding + "''b'", "E'" + padding + "\\'b'", "\"" + padding + "\"\"b\"",
 			                      "`" + padding + "``b`", "$tag$" + padding + "$wrong$b$tag$"}) {
 				auto sql = literal + " 42";
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				REQUIRE(tokenizer.TokenizeInput(behavior) == autocomplete);
 				REQUIRE(tokens.size() == 3);
 				REQUIRE(tokens[0].text == literal);
@@ -151,8 +182,8 @@ TEST_CASE("Tokenizer preserves delimiters and incomplete input across long runs"
 			}
 			{
 				auto sql = "'" + padding + "\\'b' 42";
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				REQUIRE(escaped_tokenizer.TokenizeInput(behavior) == autocomplete);
 				REQUIRE(tokens.size() == 3);
 				REQUIRE(tokens[0].text == sql.substr(0, sql.size() - 3));
@@ -161,8 +192,8 @@ TEST_CASE("Tokenizer preserves delimiters and incomplete input across long runs"
 			}
 			{
 				auto sql = "1 /*" + padding + "/*nested*/" + padding + "*/\n2 ";
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				REQUIRE(tokenizer.TokenizeInput(behavior) == autocomplete);
 				REQUIRE(tokens.size() == 3);
 				REQUIRE(tokens[0].text == "1");
@@ -173,23 +204,23 @@ TEST_CASE("Tokenizer preserves delimiters and incomplete input across long runs"
 			}
 			for (auto &ending : {"", "\n", "\r"}) {
 				auto sql = "--" + padding + ending;
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				bool clean = ending[0] != '\0';
 				REQUIRE(tokenizer.TokenizeInput(behavior) == (clean && autocomplete));
 				REQUIRE(tokens.size() == 1);
 				REQUIRE(tokens.back().type == (clean ? terminator : TokenType::END_OF_INPUT));
 			}
 			for (auto &sql : {"/*" + padding, "$tag$" + padding + "$ta"}) {
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				REQUIRE_FALSE(tokenizer.TokenizeInput(behavior));
 				REQUIRE(tokens.back().type == TokenType::END_OF_INPUT);
 			}
 			{
 				auto sql = "'" + padding;
-				vector<MatcherToken> tokens;
-				TerminatorTokenizerBehavior behavior(sql, tokens, autocomplete);
+				TerminatorTokenizerBehavior behavior(sql, autocomplete);
+				auto &tokens = behavior.tokens;
 				REQUIRE(tokenizer.TokenizeInput(behavior) == autocomplete);
 				REQUIRE(tokens.size() == 2);
 				REQUIRE(tokens[0].text == sql);

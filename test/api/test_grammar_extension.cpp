@@ -4,9 +4,12 @@
 #include <thread>
 #include <type_traits>
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -233,9 +236,10 @@ TEST_CASE("Keyword category masks require explicit conversions and valid IDs", "
 	REQUIRE((first & last) == keyword_categories_t());
 	REQUIRE(((first | last) & first) == first);
 	REQUIRE(first != keyword_categories_t());
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
-	                  InvalidInputException);
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(256), InvalidInputException);
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
+	                    Catch::Contains("Keyword category ID must be between"));
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(256),
+	                    Catch::Contains("Keyword category ID must be between"));
 }
 
 TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
@@ -594,7 +598,7 @@ TEST_CASE("Transform stack growth preserves processes and unwinds expression dep
 	{
 		TransformStack stack(transformer);
 		if (lifetime.throw_at_leaf || lifetime.throw_in_factory) {
-			REQUIRE_THROWS_AS(stack.Execute<bool>({*nodes.back()}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute<bool>({*nodes.back()}), Catch::Contains("Nested transform"));
 		} else {
 			REQUIRE(stack.Execute<bool>({*nodes.back()}));
 			REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
@@ -734,7 +738,12 @@ static idx_t MeasureTransformScratchMemory(bool throws, bool reentrant) {
 				if (!stack.Execute<bool>({root})) {
 					throw InternalException("Scratch transform returned false");
 				}
-			} catch (InvalidInputException &) {
+			} catch (std::exception &ex) {
+				const ErrorData error(ex);
+				if (error.Type() != ExceptionType::INVALID_INPUT ||
+				    error.RawMessage() != "Scratch transform test failure") {
+					throw;
+				}
 				caught = true;
 			}
 			if (caught != bool(state.throw_after) || state.active || !state.intact ||
@@ -793,7 +802,8 @@ TEST_CASE("Failed generated process initialization releases child buffers", "[ap
 		ArenaAllocator results(underlying);
 		PEGTransformer transformer(results, iterator, options, *grammar);
 		for (idx_t i = 0; i < 512; i++) {
-			REQUIRE_THROWS_AS(transformer.Transform<bool>(input), InvalidInputException);
+			REQUIRE_THROWS_WITH(transformer.Transform<bool>(input),
+			                    Catch::Contains("Generated initializer test failure"));
 		}
 		REQUIRE(stats.peak < 4 * 1024 * 1024);
 	}
@@ -944,6 +954,36 @@ static void ActivateGrammarExtensionTestSyntax(Connection &con) {
 	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['extension_test_value', 'extension_test_atom']"));
 }
 
+TEST_CASE("Grammar changes expose their flags and whether they depend on code", "[api][grammar_extension]") {
+	auto cursor = [](const PEGExpression &) {
+		return true;
+	};
+	auto matcher = [](const PEGKeywordHelper &) {
+		return make_uniq<GrammarExtensionTestMatcher>();
+	};
+
+	// changes that are data: their type, rule name and definition describe them
+	auto add_rule =
+	    GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'", StartGrammarExtensionTestValueTransform, true);
+	REQUIRE_FALSE(add_rule.HasCode());
+	REQUIRE(add_rule.SuppressSuggestions());
+	REQUIRE_FALSE(add_rule.Collapsible());
+	auto set_transform = GrammarChange::SetTransformProcess("GrammarExtensionTestValue",
+	                                                        StartGrammarExtensionTestValueTransform, true, false);
+	REQUIRE_FALSE(set_transform.HasCode());
+	REQUIRE(set_transform.Collapsible());
+	REQUIRE_FALSE(set_transform.SuppressSuggestions());
+	REQUIRE_FALSE(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'").HasCode());
+	REQUIRE_FALSE(GrammarChange::PrependChoice("UnreservedKeyword", "'ANSWER'").HasCode());
+
+	// changes that depend on a function
+	REQUIRE(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'", cursor).HasCode());
+	REQUIRE(GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::RemoveChoice("SelectAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::ReplaceChoice("SelectAtom", "GrammarExtensionTestAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::AddTerminalRuleOverride("GrammarExtensionTestValue", matcher).HasCode());
+}
+
 TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1015,6 +1055,60 @@ TEST_CASE("add_grammar_extension appends to the active grammar extensions", "[ap
 	REQUIRE_NO_FAIL(*con.Query("CALL remove_grammar_extension('extension_test_value')"));
 	REQUIRE(CompiledGrammar::Get(*con.context) == base);
 	result = con.Query("SELECT count(*) FROM duckdb_grammar_extensions() WHERE active");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
+}
+
+TEST_CASE("duckdb_grammar_changes lists the changes of the active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection con(db);
+
+	// no active grammar extension, no changes
+	auto result = con.Query("SELECT count(*) FROM duckdb_grammar_changes()");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
+
+	// the changes come in the order they are applied: by extension as activated, then by position
+	ActivateGrammarExtensionTestSyntax(con);
+	result = con.Query("SELECT extension, position, type, rule_name, definition, collapsible, suppress_suggestions, "
+	                   "has_code FROM duckdb_grammar_changes() ORDER BY extension DESC, position");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 5);
+	struct ExpectedChange {
+		const char *extension;
+		int64_t position;
+		const char *type;
+		const char *rule_name;
+		const char *definition;
+		bool has_code;
+	};
+	// the definitions of a change are data, a change that depends on a function (a cursor lookup or a matcher) is
+	// flagged: a client that parses on its own cannot rebuild it
+	ExpectedChange expected[] = {
+	    {"extension_test_value", 0, "ADD_RULE", "GrammarExtensionTestValue", "GrammarExtensionTestValue <- 'WRONG'",
+	     false},
+	    {"extension_test_value", 1, "ADD_CHOICE", "UnreservedKeyword", "'ANSWER'", false},
+	    {"extension_test_value", 2, "ADD_TERMINAL_RULE_OVERRIDE", "GrammarExtensionTestValue", "", true},
+	    {"extension_test_atom", 0, "ADD_RULE", "GrammarExtensionTestAtom",
+	     "GrammarExtensionTestAtom <- GrammarExtensionTestValue", false},
+	    {"extension_test_atom", 1, "PREPEND_CHOICE", "SelectAtom", "GrammarExtensionTestAtom", true},
+	};
+	for (idx_t row = 0; row < 5; row++) {
+		auto &change = expected[row];
+		REQUIRE(result->Collection().GetValue(0, row) == Value(change.extension));
+		REQUIRE(result->Collection().GetValue(1, row) == Value::BIGINT(change.position));
+		REQUIRE(result->Collection().GetValue(2, row) == Value(change.type));
+		REQUIRE(result->Collection().GetValue(3, row) == Value(change.rule_name));
+		REQUIRE(result->Collection().GetValue(4, row) == Value(change.definition));
+		REQUIRE(result->Collection().GetValue(5, row) == Value::BOOLEAN(false));
+		REQUIRE(result->Collection().GetValue(6, row) == Value::BOOLEAN(false));
+		REQUIRE(result->Collection().GetValue(7, row) == Value::BOOLEAN(change.has_code));
+	}
+
+	// an extension that is registered but not active lists nothing
+	REQUIRE_NO_FAIL(*con.Query("CALL remove_grammar_extension('extension_test_atom')"));
+	result = con.Query("SELECT count(*) FROM duckdb_grammar_changes() WHERE extension = 'extension_test_atom'");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
 }
@@ -1109,8 +1203,9 @@ TEST_CASE("Small grammars resolve missing generated references only when used", 
 	PEGTransformer transformer(arena, iterator, options, grammar);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// InternalException aborts instead of throwing in crash-on-assert builds.
-	REQUIRE_THROWS_AS(transformer.GetRule(id), InternalException);
-	REQUIRE_THROWS_AS(transformer.GetRule("AdditiveExpression"), InternalException);
+	REQUIRE_THROWS_WITH(transformer.GetRule(id), Catch::Contains("No registered data exists for rule"));
+	REQUIRE_THROWS_WITH(transformer.GetRule("AdditiveExpression"),
+	                    Catch::Contains("No registered data exists for rule"));
 #endif
 }
 
@@ -1242,6 +1337,310 @@ TEST_CASE("Grammars for active grammar extensions are compiled once and outlive 
 	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
 	RequireSeven(shared_con);
 	REQUIRE(compilations == 1);
+}
+
+//! Rewrites every additive expression to the constant seven
+class SevenGrammarExtension final : public GrammarExtension {
+public:
+	explicit SevenGrammarExtension(const string &name) : GrammarExtension(name, "SevenGrammarExtension") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantSevenTransform, false));
+		return changes;
+	}
+};
+
+//! The rendered constant of the single select-list expression of a parsed SELECT
+static string ParsedSelectConstant(const SQLStatement &statement) {
+	auto &select = statement.Cast<SelectStatement>().node->Cast<SelectNode>();
+	REQUIRE(select.select_list[0]->GetExpressionClass() == ExpressionClass::CONSTANT);
+	return select.select_list[0]->ToString();
+}
+
+//! SET through the C++ setting entry: the seven/eight transforms rewrite every parsed expression,
+//! so a SQL SET statement's own list value could not survive parsing
+static void SetActiveGrammarExtensions(Connection &con, const vector<Value> &names) {
+	ActiveGrammarExtensionsSetting::SetLocal(*con.context, Value::LIST(LogicalType::VARCHAR, names));
+}
+
+//! SET GLOBAL through the C++ setting entry, for the same reason as SetActiveGrammarExtensions
+static void SetDefaultGrammarExtensions(DuckDB &db, const vector<Value> &names) {
+	DefaultGrammarExtensionsSetting::SetGlobal(db.instance.get(), db.instance->config,
+	                                           Value::LIST(LogicalType::VARCHAR, names));
+}
+
+TEST_CASE("The database default applies to sessions without an explicit selection", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection empty_con(db);
+	auto result = empty_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	auto base_grammar = CompiledGrammar::Get(*con.context);
+	// registration alone activates nothing
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SevenGrammarExtension>("seven"));
+	result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+
+	// one iterator across the global SET: the second statement must parse with the new default,
+	// the snapshot identity (not only the registry version) invalidates the session cache
+	ParseIterator iterator(*empty_con.context, "SELECT 1; SELECT 1", false, nullptr);
+	REQUIRE(iterator.Peek());
+	auto first = iterator.GetStatement();
+	REQUIRE(ParsedSelectConstant(*first) == "1");
+	SetDefaultGrammarExtensions(db, {Value("seven")});
+	REQUIRE(iterator.Peek());
+	auto second = iterator.GetStatement();
+	REQUIRE(ParsedSelectConstant(*second) == "7");
+
+	// every session without an explicit selection parses with the default, existing or new
+	RequireSeven(con);
+	RequireSeven(empty_con);
+	Connection later(db);
+	RequireSeven(later);
+	REQUIRE(CompiledGrammar::Get(*con.context) != base_grammar);
+
+	// an explicitly empty session selection opts out, RESET returns to the database default
+	SetActiveGrammarExtensions(con, {});
+	result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	RequireSeven(later);
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	RequireSeven(con);
+
+	// resetting the global deactivates it for every session without an explicit selection
+	DefaultGrammarExtensionsSetting::ResetGlobal(db.instance.get(), db.instance->config);
+	result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+}
+
+class ConstantEightTransformProcess final : public TransformProcess {
+public:
+	explicit ConstantEightTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(
+		    transformer.MakeResult<unique_ptr<ParsedExpression>>(ConstantExpression::Integer(8)));
+	}
+
+private:
+	PEGTransformer &transformer;
+};
+
+static arena_ptr<TransformProcess> StartConstantEightTransform(PEGTransformer &transformer, ParseResult &) {
+	return transformer.MakeProcess<ConstantEightTransformProcess>(transformer);
+}
+
+//! Overrides the same rule as SevenGrammarExtension and yields 8
+class OverrideAdditiveExpressionEight final : public GrammarExtension {
+public:
+	explicit OverrideAdditiveExpressionEight(const string &name)
+	    : GrammarExtension(name, "OverrideAdditiveExpressionEight") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantEightTransform, false));
+		return changes;
+	}
+};
+
+static void RequireEight(Connection &con) {
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(8));
+}
+
+TEST_CASE("The session selection replaces the database default", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SevenGrammarExtension>("seven"));
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionEight>("explicit_eight"));
+	SetDefaultGrammarExtensions(db, {Value("seven")});
+	Connection con(db);
+	RequireSeven(con);
+	// a session selection does not compose with the default, it replaces it
+	SetActiveGrammarExtensions(con, {Value("explicit_eight")});
+	RequireEight(con);
+	// both listed: the later grammar wins, names are case insensitive
+	SetActiveGrammarExtensions(con, {Value("explicit_eight"), Value("SEVEN")});
+	RequireSeven(con);
+	SetActiveGrammarExtensions(con, {Value("seven"), Value("explicit_eight")});
+	RequireEight(con);
+	// the settings surface the session list and the database default independently
+	auto session_value = ActiveGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(session_value).size() == 2);
+	auto default_value = DefaultGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(default_value).size() == 1);
+	REQUIRE(ListValue::GetChildren(default_value)[0] == Value("seven"));
+	// RESET returns the session to the database default
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	RequireSeven(con);
+	session_value = ActiveGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(session_value).empty());
+	// a local NULL also returns to the database default
+	SetActiveGrammarExtensions(con, {Value("explicit_eight")});
+	RequireEight(con);
+	ActiveGrammarExtensionsSetting::SetLocal(*con.context, Value(LogicalType::LIST(LogicalType::VARCHAR)));
+	RequireSeven(con);
+}
+
+//! Grammar adding a rule another grammar can reference
+class ProvidingGrammarExtension final : public GrammarExtension {
+public:
+	ProvidingGrammarExtension() : GrammarExtension("providing_grammar", "ProvidingGrammarExtension") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("ProvidedTestRule <- 'PROVIDEDTESTTOKEN'"));
+		return changes;
+	}
+};
+
+//! Grammar that only compiles together with the providing grammar
+class DependentGrammarExtension final : public GrammarExtension {
+public:
+	DependentGrammarExtension() : GrammarExtension("dependent_grammar", "DependentGrammarExtension") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("DependentTestRule <- ProvidedTestRule"));
+		return changes;
+	}
+};
+
+TEST_CASE("The session selection does not compose with the database default", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<ProvidingGrammarExtension>());
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DependentGrammarExtension>());
+	SetDefaultGrammarExtensions(db, {Value("providing_grammar")});
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// the dependent grammar compiles only together with the provider: a session selection that
+	// composed WITH the default would succeed here, replacement must fail
+	REQUIRE_THROWS(SetActiveGrammarExtensions(con, {Value("dependent_grammar")}));
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// listing both in the session selection composes
+	SetActiveGrammarExtensions(con, {Value("providing_grammar"), Value("dependent_grammar")});
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// clearing a nonempty database default with an empty list and with NULL deactivates it
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SevenGrammarExtension>("seven_b"));
+	SetDefaultGrammarExtensions(db, {Value("seven_b")});
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	RequireSeven(con);
+	SetDefaultGrammarExtensions(db, {});
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	SetDefaultGrammarExtensions(db, {Value("seven_b")});
+	RequireSeven(con);
+	DefaultGrammarExtensionsSetting::SetGlobal(db.instance.get(), db.instance->config,
+	                                           Value(LogicalType::LIST(LogicalType::VARCHAR)));
+	result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+}
+
+TEST_CASE("Add and remove grammar extensions act on the effective selection", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<ProvidingGrammarExtension>());
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SevenGrammarExtension>("seven"));
+	SetDefaultGrammarExtensions(db, {Value("providing_grammar")});
+
+	// a no-op add on a default-driven session must not install a session selection
+	Connection noop_con(db);
+	REQUIRE_NO_FAIL(*noop_con.Query("CALL add_grammar_extension('providing_grammar')"));
+	REQUIRE(ListValue::GetChildren(ActiveGrammarExtensionsSetting::GetSetting(*noop_con.context)).empty());
+
+	// adding snapshots the default into the session selection, keeping its entries in order
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("CALL add_grammar_extension('seven')"));
+	auto children = ListValue::GetChildren(ActiveGrammarExtensionsSetting::GetSetting(*con.context));
+	REQUIRE(children.size() == 2);
+	REQUIRE(children[0] == Value("providing_grammar"));
+	REQUIRE(children[1] == Value("seven"));
+	RequireSeven(con);
+
+	// the snapshot decouples that session from later default changes, the no-op add did not
+	SetDefaultGrammarExtensions(db, {});
+	RequireSeven(con);
+	// the inherited entry stays in the stored session selection after the default change
+	children = ListValue::GetChildren(ActiveGrammarExtensionsSetting::GetSetting(*con.context));
+	REQUIRE(children.size() == 2);
+	REQUIRE(children[0] == Value("providing_grammar"));
+	auto noop_active =
+	    noop_con.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*noop_active);
+	REQUIRE(noop_active->Collection().GetValue(0, 0) == Value::BOOLEAN(false));
+	// restoring the default re-applies to the no-op session, so the no-op installed no opt-out
+	SetDefaultGrammarExtensions(db, {Value("providing_grammar")});
+	auto noop_follows =
+	    noop_con.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*noop_follows);
+	REQUIRE(noop_follows->Collection().GetValue(0, 0) == Value::BOOLEAN(true));
+	SetDefaultGrammarExtensions(db, {});
+
+	// removing a default-provided grammar opts the session out without touching the default
+	SetDefaultGrammarExtensions(db, {Value("providing_grammar")});
+	Connection removing(db);
+	auto before = removing.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*before);
+	REQUIRE(before->Collection().GetValue(0, 0) == Value::BOOLEAN(true));
+	REQUIRE_NO_FAIL(*removing.Query("CALL remove_grammar_extension('providing_grammar')"));
+	auto after = removing.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*after);
+	REQUIRE(after->Collection().GetValue(0, 0) == Value::BOOLEAN(false));
+	Connection still_default(db);
+	auto fresh_active =
+	    still_default.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*fresh_active);
+	REQUIRE(fresh_active->Collection().GetValue(0, 0) == Value::BOOLEAN(true));
+
+	// a no-op remove of an inactive name leaves the selection untouched: the session still
+	// follows the default rather than holding an installed empty opt-out
+	REQUIRE_NO_FAIL(*still_default.Query("CALL remove_grammar_extension('seven')"));
+	REQUIRE(ListValue::GetChildren(ActiveGrammarExtensionsSetting::GetSetting(*still_default.context)).empty());
+	auto still_follows =
+	    still_default.Query("SELECT active FROM duckdb_grammar_extensions() WHERE name = 'providing_grammar'");
+	REQUIRE_NO_FAIL(*still_follows);
+	REQUIRE(still_follows->Collection().GetValue(0, 0) == Value::BOOLEAN(true));
+}
+
+TEST_CASE("The database default rejects values it cannot validate", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// unknown names fail at SET and leave the default unchanged
+	REQUIRE_FAIL(con.Query("SET GLOBAL default_grammar_extensions = ['no_such_grammar']"));
+	auto default_value = DefaultGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(default_value).empty());
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// without a running database the named extensions cannot be validated, so the value is rejected:
+	// a broken default would make every parse fail, including the SET that fixes it
+	DBConfig config;
+	REQUIRE_THROWS(config.SetOptionByName(Identifier("default_grammar_extensions"),
+	                                      Value::LIST(LogicalType::VARCHAR, {Value("not_loaded")})));
+	// a registered selection that does not compile: the eager composition fails the SET and the
+	// previous default stays, so sessions never meet a default they cannot parse with
+	GrammarExtension::Register(*db.instance, make_shared_ptr<ProvidingGrammarExtension>());
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DependentGrammarExtension>());
+	REQUIRE_NO_FAIL(*con.Query("SET GLOBAL default_grammar_extensions = ['providing_grammar', 'dependent_grammar']"));
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	REQUIRE_FAIL(con.Query("SET GLOBAL default_grammar_extensions = ['dependent_grammar']"));
+	default_value = DefaultGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(default_value).size() == 2);
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// RESET deactivates the default for sessions without an explicit selection
+	REQUIRE_NO_FAIL(*con.Query("RESET GLOBAL default_grammar_extensions"));
+	default_value = DefaultGrammarExtensionsSetting::GetSetting(*con.context);
+	REQUIRE(ListValue::GetChildren(default_value).empty());
 }
 
 TEST_CASE("The least recently used grammar for active grammar extensions is evicted", "[api][grammar_extension]") {
@@ -1398,7 +1797,7 @@ TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[ap
 		lifetime.throw_at_leaf = true;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}), Catch::Contains("Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.state_valid);
@@ -1811,7 +2210,7 @@ TEST_CASE("Deep leading list chains retain heap-owned state through exceptions",
 	MatchContext context(suggestions, allocator, processes, max_position);
 	MatchState state(iterator, context);
 	if (lifetime.throw_at_leaf) {
-		REQUIRE_THROWS_AS(lists.back()->MatchParseResult(state), InvalidInputException);
+		REQUIRE_THROWS_WITH(lists.back()->MatchParseResult(state), Catch::Contains("Nested matcher test failure"));
 	} else {
 		REQUIRE(lists.back()->MatchParseResult(state).IsSuccess());
 	}
@@ -1822,10 +2221,9 @@ TEST_CASE("Deep leading list chains retain heap-owned state through exceptions",
 }
 
 static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
-	vector<MatcherToken> tokens;
-	ParserTokenizerBehavior behavior(sql, tokens);
+	ParserTokenizerBehavior behavior(sql);
 	grammar.GetTokenizer().TokenizeInput(behavior);
-	return tokens;
+	return std::move(behavior.tokens);
 }
 
 TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]") {
@@ -1840,9 +2238,10 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	const uint8_t generic_operator = MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
 	const uint8_t string_literal = MatcherTokenClass::STRING | MatcherTokenClass::WORD;
 
+	const uint8_t identifier = MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
 	REQUIRE(token_class("select") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("some_column") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("\"quoted name\"") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("some_column") == identifier);
+	REQUIRE(token_class("\"quoted name\"") == identifier);
 	// string literals are accepted in identifier positions
 	REQUIRE(token_class("'str'") == string_literal);
 	REQUIRE(token_class("E'str'") == string_literal);
@@ -1850,6 +2249,9 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("42") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class(".5") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
+	// malformed numbers are matched by nothing
+	REQUIRE(token_class("1.2.3") == 0);
+	REQUIRE(token_class("1e5e5") == 0);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
 	for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
@@ -1892,6 +2294,114 @@ static void CheckFirstSet(const CompiledGrammar &grammar, const Matcher &matcher
 	}
 }
 
+//! A matcher that describes its FIRST set but not how many tokens it consumes
+class FirstOnlyKeywordTestMatcher final : public KeywordMatcher {
+public:
+	FirstOnlyKeywordTestMatcher(const string &word, const GrammarLiteralTable &table)
+	    : KeywordMatcher(word, KeywordInfo()), literal(table.Lookup(word).LiteralId()) {
+	}
+	void InitializeFirstSet(MatcherFirstSet &first, const GrammarLiteralTable &table) const override {
+		first.AddLiteral(literal);
+	}
+
+private:
+	idx_t literal;
+};
+
+TEST_CASE("Lookahead sets reject matchers that cannot continue with the second token", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+	auto &table = helper.GetLiteralTable();
+
+	// keyword matchers created by the factory are matched by literal id
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- '.' ','");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &keywords = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers;
+	auto &dot = keywords[0].get();
+	auto &comma = keywords[1].get();
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	NumberLiteralMatcher number;
+	StringLiteralMatcher string_literal;
+	FirstOnlyKeywordTestMatcher first_only("SELECT", table);
+	// IDENTIFIER '.'
+	ListMatcher qualified({identifier, dot});
+	// IDENTIFIER '.' / IDENTIFIER
+	ChoiceMatcher name({qualified, identifier});
+	// NUMBER? IDENTIFIER '.'
+	OptionalMatcher optional_number(number);
+	ListMatcher optional_prefix({optional_number, qualified});
+	// IDENTIFIER ','*
+	RepeatMatcher commas(comma);
+	OptionalMatcher optional_commas(commas);
+	ListMatcher trailing({identifier, optional_commas});
+	// 'SELECT' NUMBER with a first-only leading matcher
+	ListMatcher first_only_list({first_only, number});
+	ChoiceMatcher root({name, optional_prefix, trailing, first_only_list, string_literal});
+	for (auto matcher : vector<reference<Matcher>> {qualified, name, optional_number, optional_prefix, commas,
+	                                                optional_commas, trailing, first_only_list, root}) {
+		matcher.get().SetStructural();
+	}
+	ComputeFirstSets(root, table);
+
+	SECTION("Sequences need their second token") {
+		CheckFirstSet(*grammar, qualified, "foo . bar", true);
+		CheckFirstSet(*grammar, qualified, "foo , bar", false);
+		CheckFirstSet(*grammar, qualified, "foo", false);
+		CheckFirstSet(*grammar, qualified, "42 . bar", false);
+	}
+	SECTION("One-token alternatives accept any second token") {
+		CheckFirstSet(*grammar, name, "foo , bar", true);
+		CheckFirstSet(*grammar, name, "foo", true);
+		CheckFirstSet(*grammar, trailing, "foo , ,", true);
+		CheckFirstSet(*grammar, trailing, "foo 42", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 'b'", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 42", true);
+	}
+	SECTION("Nullable prefixes shift the second token") {
+		CheckFirstSet(*grammar, optional_prefix, "42 foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "42 foo , bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo , bar", false);
+		CheckFirstSet(*grammar, optional_prefix, "42 , bar", false);
+	}
+	SECTION("Matchers that only describe FIRST may consume any number of tokens") {
+		REQUIRE(first_only.first_set.one.any);
+		REQUIRE(first_only.first_set.second.any);
+		CheckFirstSet(*grammar, first_only_list, "select", true);
+		CheckFirstSet(*grammar, first_only_list, "select foo", true);
+		CheckFirstSet(*grammar, first_only_list, "foo", false);
+	}
+	SECTION("The autocomplete cursor can stand for any second token") {
+		vector<MatcherToken> tokens {MatcherToken("foo", 0, TokenType::IDENTIFIER),
+		                             MatcherToken("", 3, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE(qualified.first_set.MightMatch(state));
+	}
+	SECTION("A rejected matcher still reports the token it would have consumed") {
+		auto tokens = TokenizeFirstSetTestInput(*grammar, "foo , bar");
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE_FALSE(qualified.first_set.MightMatch(state));
+		REQUIRE(max_token_index == 1);
+		REQUIRE(iterator.Position() == 0);
+	}
+}
+
 TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1908,6 +2418,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	// other keyword matchers can have their own semantics
 	KeywordMatcher custom_keyword("SELECT", KeywordInfo(), helper);
 	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	IdentifierMatcher table_name(SuggestionState::SUGGEST_TABLE_NAME, helper);
 	NumberLiteralMatcher number;
 	StringLiteralMatcher string_literal;
 	OperatorMatcher generic_operator;
@@ -1933,7 +2444,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	ListMatcher uncomputed_list({number});
 
 	ChoiceMatcher root({choice, optional_prefix, nullable_list, repeat, sequence, custom_list, unmarked_list,
-	                    identifier, string_literal, generic_operator, any_operator, arithmetic_operator,
+	                    identifier, table_name, string_literal, generic_operator, any_operator, arithmetic_operator,
 	                    custom_keyword});
 	for (auto matcher : vector<reference<Matcher>> {choice, optional_number, optional_prefix, nullable_list, repeat,
 	                                                sequence, custom_list, root}) {
@@ -1944,7 +2455,12 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	SECTION("Atomic matchers") {
 		CheckFirstSet(*grammar, identifier, "some_column", true);
 		CheckFirstSet(*grammar, identifier, "\"quoted name\"", true);
-		CheckFirstSet(*grammar, identifier, "'path'", true);
+		// only names that can be given as paths accept string literals
+		CheckFirstSet(*grammar, identifier, "'path'", false);
+		CheckFirstSet(*grammar, table_name, "'path'", true);
+		// keywords are accepted where their category allows it
+		CheckFirstSet(*grammar, identifier, "select", false);
+		CheckFirstSet(*grammar, identifier, "comment", true);
 		CheckFirstSet(*grammar, identifier, "42", false);
 		CheckFirstSet(*grammar, identifier, "+", false);
 		CheckFirstSet(*grammar, identifier, ";", false);
@@ -2078,7 +2594,9 @@ TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api
 		lifetime.depth = 130;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}),
+			                    Catch::Contains(lifetime.throw_in_constructor ? "Nested process constructor failure"
+			                                                                  : "Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.started == lifetime.depth);
@@ -2849,7 +3367,7 @@ TEST_CASE("Derived matchers can forward to built-in processes through deep heap 
 		MatchStack stack;
 		lifetime.throw_at_leaf = true;
 		starts = 0;
-		REQUIRE_THROWS_AS(stack.Execute({*lists.back(), state}), InvalidInputException);
+		REQUIRE_THROWS_WITH(stack.Execute({*lists.back(), state}), Catch::Contains("Nested matcher test failure"));
 		REQUIRE(starts == lists.size());
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(processes.SizeInBytes() == parent_bytes);
@@ -3144,7 +3662,7 @@ TEST_CASE("Deep prepared list groups keep success and exception state on the hea
 		atom.should_throw = fail;
 		MatchState state(iterator, context);
 		if (fail) {
-			REQUIRE_THROWS_AS(stack.Execute({*root, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({*root, state}), Catch::Contains("group leaf failure"));
 		} else {
 			auto result = stack.Execute({*root, state});
 			REQUIRE(result.IsSuccess());
@@ -3205,8 +3723,9 @@ TEST_CASE("Generated list finalization validates its tree before consuming child
 		process.SetChildResult(0, transformer.MakeResult<Identifier>("alpha"));
 		process.SetChildResult(1, transformer.MakeResult<Identifier>("beta"));
 		if (shape >= 2) {
-			REQUIRE_THROWS_AS(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
-			                  InternalException);
+			REQUIRE_THROWS_WITH(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
+			                    Catch::Contains("Failed to cast parse result") ||
+			                        Catch::Contains("Child index out of bounds"));
 			REQUIRE(process.GetResult<Identifier>(0) == Identifier("alpha"));
 			REQUIRE(process.GetResult<Identifier>(1) == Identifier("beta"));
 		} else {
@@ -3220,4 +3739,135 @@ TEST_CASE("Generated list finalization validates its tree before consuming child
 			REQUIRE(*values == expected);
 		}
 	}
+}
+
+//! SOURCE_TEXT (<select>) returns the select's text as written, which only the query text itself still contains.
+class SourceTextTransformProcess final : public TransformProcess {
+public:
+	SourceTextTransformProcess(PEGTransformer &transformer_p, ParseResult &parse_result_p)
+	    : transformer(transformer_p), parse_result(parse_result_p) {
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		auto source = transformer.token_iterator.Source();
+		if (!source) {
+			throw InternalException("SOURCE_TEXT needs the query text");
+		}
+		auto &list = parse_result.Cast<ListParseResult>();
+		auto open = list.GetChild(1).GetOffset().GetIndex() + 1;
+		auto close = list.GetChild(3).GetOffset().GetIndex();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(ConstantExpression::String(source->substr(open, close - open)));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		unique_ptr<SQLStatement> statement = make_uniq<SelectStatement>();
+		statement->Cast<SelectStatement>().node = std::move(select_node);
+		return TransformStep::Complete(transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(statement)));
+	}
+
+private:
+	PEGTransformer &transformer;
+	ParseResult &parse_result;
+};
+
+class SourceTextGrammarExtension final : public GrammarExtension {
+public:
+	SourceTextGrammarExtension() : GrammarExtension("source_text", "SOURCE_TEXT (<select>)") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule(
+		    "SourceTextStatement <- 'SOURCE_TEXT' '(' SelectStatementInternal ')'",
+		    [](PEGTransformer &transformer, ParseResult &parse_result) -> arena_ptr<TransformProcess> {
+			    return transformer.MakeProcess<SourceTextTransformProcess>(transformer, parse_result);
+		    }));
+		changes.push_back(GrammarChange::PrependChoice("Statement", "SourceTextStatement"));
+		return changes;
+	}
+};
+
+TEST_CASE("Grammar extension transforms can read the query text", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SourceTextGrammarExtension>());
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['source_text']"));
+
+	const string body = "SELECT 42 /* kept */\n-- also kept\n";
+	auto result = con.Query("/* leading */ SOURCE_TEXT (" + body + ")");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value(body));
+}
+
+TEST_CASE("The parser's tokens keep the literal info the tokenizer cached", "[api][grammar_extension]") {
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto &table = grammar->GetKeywordHelper().GetLiteralTable();
+	const string sql = "SELECT a.b, 42, 'text', \"quoted\" FROM tbl WHERE x <= 1.5e3 AND y::INT IN (1, 2);";
+	// the owning iterator is what Parser::ParseQuery matches on: a word the tokenizer looked up is not looked up again
+	ParserTokenizerBehavior behavior(sql);
+	grammar->GetTokenizer().TokenizeInput(behavior);
+	TokenIterator iterator(behavior);
+	REQUIRE(iterator.Size() > 20);
+	idx_t words = 0;
+	for (idx_t i = 0; i < iterator.Size(); i++) {
+		auto &token = iterator.GetToken(i);
+		const bool quoted = !token.text.empty() && token.text[0] == '"';
+		if (token.type != TokenType::KEYWORD && (token.type != TokenType::IDENTIFIER || quoted)) {
+			continue;
+		}
+		INFO("token " << i << ": " << token.text);
+		REQUIRE(token.HasLiteralInfo(table));
+		words++;
+	}
+	REQUIRE(words == 11);
+	// a borrowed token vector may have been edited by its owner, so its cache is dropped
+	auto borrowed = TokenizeFirstSetTestInput(*grammar, sql);
+	TokenIterator borrowing_iterator(borrowed);
+	REQUIRE_FALSE(borrowing_iterator.GetToken(0).HasLiteralInfo(table));
+	REQUIRE(borrowed[0].GetLiteralInfo(table).LiteralId() == table.Lookup("SELECT").LiteralId());
+}
+
+class MemoryLimitGrammarExtension final : public GrammarExtension {
+public:
+	MemoryLimitGrammarExtension() : GrammarExtension("memory_limit_test", "ARENA_MEMORY") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule(
+		    "ArenaMemoryStatement <- 'ARENA_MEMORY'",
+		    [this](PEGTransformer &transformer, ParseResult &) -> arena_ptr<TransformProcess> {
+			    transform_calls++;
+			    auto &buffer_manager = transformer.options.context->GetBufferManager();
+			    transformer.GetAllocator().Allocate(buffer_manager.GetMaxMemory());
+			    throw InternalException("Transform arena allocation unexpectedly exceeded the memory limit");
+		    }));
+		changes.push_back(GrammarChange::PrependChoice("Statement", "ArenaMemoryStatement"));
+		return changes;
+	}
+
+	mutable idx_t transform_calls = 0;
+};
+
+TEST_CASE("Top-level transform arenas honor the database memory limit", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto extension = make_shared_ptr<MemoryLimitGrammarExtension>();
+	GrammarExtension::Register(*db.instance, extension);
+	REQUIRE_NO_FAIL(con.Query("SET active_grammar_extensions=['memory_limit_test']"));
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit='16MB'"));
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	const auto memory_before = buffer_manager.GetUsedMemory();
+	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		auto result = con.Query("ARENA_MEMORY");
+		REQUIRE(result->HasError());
+		REQUIRE(result->GetErrorType() == ExceptionType::OUT_OF_MEMORY);
+		REQUIRE(extension->transform_calls == attempt + 1);
+		REQUIRE(buffer_manager.GetUsedMemory() == memory_before);
+		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	}
+	Parser parser(*con.context);
+	REQUIRE_THROWS_MATCHES(
+	    parser.ParseQuery("ARENA_MEMORY"), std::exception,
+	    ExceptionMatches(ExceptionType::OUT_OF_MEMORY, Catch::Contains("While parsing SQL: failed to allocate data")));
 }

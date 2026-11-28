@@ -50,7 +50,7 @@ bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr
 		return false;
 	}
 	const auto start_val = ExpressionExecutor::EvaluateScalar(client, *start_expr);
-	if (start_val.GetValue<int64_t>()) {
+	if (start_val.IsNull() || start_val.GetValue<int64_t>()) {
 		return false;
 	}
 
@@ -59,7 +59,7 @@ bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr
 		return false;
 	}
 	const auto end_val = ExpressionExecutor::EvaluateScalar(client, *end_expr);
-	if (end_val.GetValue<int64_t>()) {
+	if (end_val.IsNull() || end_val.GetValue<int64_t>()) {
 		return false;
 	}
 
@@ -204,7 +204,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	const auto bindings = child.GetColumnBindings();
 
 	op.estimated_cardinality = op.EstimateCardinality(context);
-	reference<PhysicalOperator> plan = CreatePlan(child);
+	reference<PhysicalOperator> plan = CreatePlanRecursive(child);
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {
 		D_ASSERT(expr->IsWindow());
@@ -358,18 +358,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 		// Chain the new window operator on top of the plan
 		if (i >= special_count) {
-			auto &window = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+			auto &window = Make<PhysicalWindow>(context, types, std::move(select_list), op.estimated_cardinality,
+			                                    op.partition_limit);
 			window.children.push_back(plan);
 			plan = window;
 		} else if (has_streaming) {
-			auto &window = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
+			auto &window = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality,
+			                                             op.partition_limit);
 			window.children.push_back(plan);
 			plan = window;
 		} else {
 			const auto expr_idx = matching[0];
 			auto &partitions = partitioned_columns[expr_idx];
-			auto &window =
-			    Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality, std::move(partitions));
+			auto &window = Make<PhysicalWindow>(context, types, std::move(select_list), op.estimated_cardinality,
+			                                    std::move(partitions), op.partition_limit);
 			window.children.push_back(plan);
 			plan = window;
 		}

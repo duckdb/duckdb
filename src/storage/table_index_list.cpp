@@ -3,6 +3,7 @@
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/checkpoint/pending_publication.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -20,7 +21,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include <utility>
@@ -28,14 +28,14 @@
 namespace duckdb {
 
 template <class T>
-TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list)
-    : lock(index_list.index_entries_lock), index_entries(index_list.index_entries) {
+TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list, bool skip_building_p)
+    : lock(index_list.index_entries_lock), index_entries(index_list.index_entries), skip_building(skip_building_p) {
 }
 
 template <class T>
 TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
-    optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries_p)
-    : index_entries(index_entries_p) {
+    optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries_p, bool skip_building_p)
+    : index_entries(index_entries_p), skip_building(skip_building_p) {
 	if (index_entries) {
 		if (index_entries->empty()) {
 			index_entries = nullptr;
@@ -43,11 +43,11 @@ TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
 			index = 0;
 		}
 	}
+	SkipBuilding();
 }
 
 template <class T>
-typename TableIndexIterationHelper<T>::TableIndexIterator &
-TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+void TableIndexIterationHelper<T>::TableIndexIterator::Advance() {
 	if (index_entries) {
 		auto next_index = index.GetIndex() + 1;
 		if (next_index >= index_entries->size()) {
@@ -59,6 +59,20 @@ TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
 			index = next_index;
 		}
 	}
+}
+
+template <class T>
+void TableIndexIterationHelper<T>::TableIndexIterator::SkipBuilding() {
+	while (skip_building && index_entries && index_entries->at(index.GetIndex())->IsBuilding()) {
+		Advance();
+	}
+}
+
+template <class T>
+typename TableIndexIterationHelper<T>::TableIndexIterator &
+TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+	Advance();
+	SkipBuilding();
 	return *this;
 }
 
@@ -68,7 +82,11 @@ bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableInd
 }
 
 TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries() const {
-	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
+	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this, false);
+}
+
+TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::BuiltIndexEntries() const {
+	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this, true);
 }
 
 template <>
@@ -101,6 +119,44 @@ shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t i
 	}
 	index_entries.push_back(index_entry);
 	return index_entry;
+}
+
+shared_ptr<IndexEntry> TableIndexList::AddBuildingIndex(const BoundIndex &index_template, transaction_t build_commit,
+                                                        transaction_t build_transaction) {
+	annotated_lock_guard lock(index_entries_lock);
+	auto index_entry = make_shared_ptr<IndexEntry>(index_template, build_commit, build_transaction);
+	index_entries.push_back(index_entry);
+	return index_entry;
+}
+
+shared_ptr<IndexEntry> TableIndexList::FindBuildingIndex(transaction_t build_transaction) const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		if (entry->IsBuilding() && entry->GetBuildTransaction() == build_transaction) {
+			return entry;
+		}
+	}
+	return nullptr;
+}
+
+void TableIndexList::RemoveBuildingIndex(const IndexEntry &entry) {
+	// a failed build is never published: commits that still hold it only write deltas nobody reads
+	annotated_lock_guard lock(index_entries_lock);
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		if (index_entries[i].get() == &entry && entry.IsBuilding()) {
+			index_entries.erase_at(i);
+			return;
+		}
+	}
+}
+
+idx_t TableIndexList::CountBuiltIndexes() const {
+	idx_t count = 0;
+	for (auto entry : BuiltIndexEntries()) {
+		(void)entry;
+		count++;
+	}
+	return count;
 }
 
 void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
@@ -173,9 +229,13 @@ void TableIndexList::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 }
 
 void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const IndexRemovalType removal_type,
-                                       const optional_idx active_checkpoint) {
+                                       const optional_idx active_checkpoint, const VisibilityBound bound) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
+		if (!entry->AddedBefore(bound)) {
+			// the index was added after this delete committed, so its build never inserted the deleted rows
+			continue;
+		}
 		entry->RemoveFromIndex(chunk, row_ids, removal_type, active_checkpoint);
 	}
 }
@@ -267,8 +327,7 @@ void TableIndexList::Vacuum() {
 }
 
 void TableIndexList::Rebuild(const IndexRebuildScan &scan) {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
+	for (auto entry : BuiltIndexEntries()) {
 		entry->Rebuild(scan);
 	}
 }
@@ -357,7 +416,8 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 	return nullptr;
 }
 
-void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type) {
+void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
+                          bool skip_mismatched_keys) {
 	{
 		// Early-out, if we have no unbound indexes.
 		annotated_lock_guard lock(index_entries_lock);
@@ -381,12 +441,15 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	}
 
 	annotated_unique_lock lock(index_entries_lock);
+	// Indexes left unbound because their stored keys do not match.
+	vector<shared_ptr<IndexEntry>> skipped;
 	// Busy-spin trying to bind all indexes.
 	while (true) {
 		shared_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			if (entry->GetBindState() != IndexBindState::BOUND &&
-			    (!index_type || entry->GetIndexType() == *index_type)) {
+			    (!index_type || entry->GetIndexType() == *index_type) &&
+			    std::find(skipped.begin(), skipped.end(), entry) == skipped.end()) {
 				index_entry = entry;
 				break;
 			}
@@ -429,7 +492,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			for (auto &col : table.GetColumns().Physical()) {
 				physical_column_types.push_back(col.Type());
 			}
-			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
+			bound_idx = index_entry->Bind(idx_binder, physical_column_types, skip_mismatched_keys);
 		} catch (...) {
 			// Leave the index unbound, so that a later attempt binds it instead of waiting for this one forever.
 			lock.lock();
@@ -437,8 +500,15 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			throw;
 		}
 
-		// Commit the bound index to the index entry.
 		lock.lock();
+		if (!bound_idx) {
+			// The index stays unbound, a write that has to maintain it refuses it.
+			index_entry->SetBindState(IndexBindState::UNBOUND);
+			skipped.push_back(index_entry);
+			continue;
+		}
+
+		// Commit the bound index to the index entry.
 		auto current_entry = std::find(index_entries.begin(), index_entries.end(), index_entry);
 		if (current_entry == index_entries.end()) {
 			continue;
@@ -483,34 +553,49 @@ void TableIndexList::VerifyForeignKey(optional_ptr<const TableIndexList> delete_
 	entry->VerifyForeignKey(delete_entry, chunk, conflict_manager);
 }
 
-unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
+unordered_set<column_t> TableIndexList::GetIndexedColumns(const VisibilityBound bound) const {
 	annotated_lock_guard lock(index_entries_lock);
 	unordered_set<column_t> column_ids;
 	for (const auto &entry : index_entries) {
+		if (!entry->AddedBefore(bound)) {
+			continue;
+		}
 		auto index_info = entry->GetStorageInfo();
 		column_ids.insert(index_info.column_set.begin(), index_info.column_set.end());
 	}
 	return column_ids;
 }
 
-vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
+namespace {
 
-	vector<unique_ptr<BoundIndex>> shadows;
-	vector<shared_ptr<const IndexStorageInfo>> infos;
-	shadows.reserve(index_entries.size());
-	infos.reserve(index_entries.size());
-
-	for (const auto &entry : index_entries) {
-		auto checkpoint = entry->Checkpoint(writer);
-		shadows.push_back(std::move(checkpoint.shadow_index));
-		infos.push_back(std::move(checkpoint.storage_info));
+class PendingIndexPublication final : public PendingPublication {
+public:
+	PendingIndexPublication(shared_ptr<IndexEntry> entry_p, unique_ptr<BoundIndex> shadow_index_p)
+	    : entry(std::move(entry_p)), shadow_index(std::move(shadow_index_p)) {
+		D_ASSERT(entry);
+		D_ASSERT(shadow_index);
 	}
 
-	writer.Flush();
+	void Publish() override {
+		D_ASSERT(shadow_index);
+		entry->InstallShadow(std::move(shadow_index));
+	}
 
-	for (idx_t i = 0; i < index_entries.size(); i++) {
-		index_entries[i]->InstallShadow(std::move(shadows[i]));
+private:
+	shared_ptr<IndexEntry> entry;
+	unique_ptr<BoundIndex> shadow_index;
+};
+
+} // namespace
+
+vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
+	vector<shared_ptr<const IndexStorageInfo>> infos;
+	for (auto entry : BuiltIndexEntries()) {
+		auto checkpoint = entry->Checkpoint(writer);
+		if (checkpoint.shadow_index) {
+			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
+		}
+		infos.push_back(std::move(checkpoint.storage_info));
 	}
 
 	return infos;
@@ -555,8 +640,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
+	for (auto entry : BuiltIndexEntries()) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }

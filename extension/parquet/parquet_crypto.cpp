@@ -154,7 +154,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			throw BinderException("Parquet encryption_config %s cannot be NULL", struct_key);
 		}
 		if (struct_key == "footer_key") {
-			const auto footer_key_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
+			const auto footer_key_name = StringValue::Get(children[i].CastAs(context, LogicalType::VARCHAR));
 			if (!keys.HasKey(footer_key_name)) {
 				throw BinderException(
 				    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
@@ -164,7 +164,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			const auto &keys = ParquetKeys::Get(context);
 			footer_key = keys.GetKey(footer_key_name);
 		} else if (struct_key == "footer_key_value") {
-			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
+			footer_key = StringValue::Get(children[i].CastAs(context, LogicalType::BLOB));
 		} else if (struct_key == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
@@ -284,13 +284,16 @@ public:
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
-		if (len > transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset) {
-			throw InvalidInputException("Too many bytes requested from crypto buffer");
+		// The page header and encrypted module must agree on the decrypted size before decryption.
+		const auto remaining = transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset;
+		if (len != remaining) {
+			throw DataCorruptionException("Encrypted Parquet module size mismatch (expected %u bytes, actual %u bytes)",
+			                              len, remaining);
 		}
 
 		while (len != 0) {
 			if (read_buffer_offset == read_buffer_size) {
-				ReadBlock(buf);
+				ReadBlock(buf, len);
 			}
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
 			read_buffer_offset += next;
@@ -350,20 +353,17 @@ private:
 		}
 	}
 
-	void ReadBlock(uint8_t *buf) {
+	void ReadBlock(uint8_t *buf, uint32_t buffer_size) {
 		// Read from transport into read_buffer at one AES block size offset (up to the tag)
 		read_buffer_size = MinValue(ParquetCrypto::CRYPTO_BLOCK_SIZE, transport_remaining - ParquetCrypto::TAG_BYTES);
+		if (read_buffer_size > buffer_size) {
+			throw DataCorruptionException("Encrypted Parquet block exceeds the destination buffer size");
+		}
 		transport_remaining -= trans.read(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size);
 
-		// Decrypt from read_buffer + block size into read_buffer start (decryption can trail behind in same buffer)
-#ifdef DEBUG
-		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
-		                         ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
+		// Decrypt directly into the destination only after checking that the whole block fits.
+		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf, buffer_size);
 		D_ASSERT(size == read_buffer_size);
-#else
-		aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
-		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
-#endif
 		read_buffer_offset = 0;
 	}
 
@@ -395,12 +395,12 @@ public:
 
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const auto remaining = read_buffer_size - read_buffer_offset;
-		if (len > remaining) {
-			return remaining;
+		const auto read_size = MinValue(len, remaining);
+		if (read_size > 0) {
+			memcpy(buf, read_buffer + read_buffer_offset, read_size);
+			read_buffer_offset += read_size;
 		}
-		memcpy(buf, read_buffer + read_buffer_offset, len);
-		read_buffer_offset += len;
-		return len;
+		return read_size;
 	}
 
 private:
@@ -480,24 +480,18 @@ int8_t ParquetCrypto::GetModuleHeader(const ColumnChunk &chunk, uint16_t page_or
 		// always return data page header if ordinal > 0
 		return DATA_PAGE_HEADER;
 	}
-	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
+	// There is at maximum 1 dictionary or index page header per column chunk.
+	// Bloom filters are not interleaved with the pages: they are read separately via bloom_filter_offset.
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
 		return DICTIONARY_PAGE_HEADER;
 	} else if (chunk.meta_data.__isset.index_page_offset) {
 		return OFFSET_INDEX;
-	} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-		return ParquetCrypto::BLOOM_FILTER_HEADER;
 	}
 
 	return DATA_PAGE_HEADER;
 }
 
-int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal) {
-	if (chunk.meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
-		// return bitset if it is the first page ordinal
-		return ParquetCrypto::BLOOM_FILTER_BITSET;
-	}
-
+int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type) {
 	switch (page_type) {
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2:
@@ -514,6 +508,15 @@ int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_ty
 	}
 }
 
+static int16_t CheckedPageOrdinal(uint16_t page_ordinal) {
+	if (page_ordinal > NumericCast<uint16_t>(NumericLimits<int16_t>::Maximum())) {
+		throw InvalidInputException("An encrypted column chunk has more than %d data pages, exceeding the maximum "
+		                            "page ordinal supported by Parquet modular encryption",
+		                            NumericLimits<int16_t>::Maximum() + 1);
+	}
+	return NumericCast<int16_t>(page_ordinal);
+}
+
 int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal) {
 	switch (module) {
 	case DATA_PAGE_HEADER:
@@ -521,12 +524,10 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 			page_ordinal -= 1;
 		} else if (chunk.meta_data.__isset.index_page_offset) {
 			page_ordinal -= 1;
-		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-			page_ordinal -= 1;
 		}
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	case DATA_PAGE:
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

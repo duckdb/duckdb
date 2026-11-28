@@ -17,6 +17,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -1556,8 +1557,10 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 	// Track query progress for ADBC without printing a progress bar.
 	auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
 	if (!client_config.system_progress_bar_disable_reason) {
-		client_config.enable_progress_bar = true;
-		client_config.print_progress_bar = false;
+		duckdb::Settings::Set<duckdb::EnableProgressBarSetting>(*conn->context, duckdb::SetScope::SESSION,
+		                                                        duckdb::Value::BOOLEAN(true));
+		duckdb::Settings::Set<duckdb::EnableProgressBarPrintSetting>(*conn->context, duckdb::SetScope::SESSION,
+		                                                             duckdb::Value::BOOLEAN(false));
 	}
 	// We might have options to set
 	return InternalSetOption(*conn_wrapper, error);
@@ -3036,9 +3039,9 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								WHEN base_type = 'DATE' THEN 10::INTEGER
 								WHEN data_type IN ('TIME', 'TIME WITH TIME ZONE', 'TIME_NS') THEN 15::INTEGER
 								WHEN data_type LIKE 'TIMESTAMP%%' THEN 26::INTEGER
-								ELSE numeric_precision::INTEGER
+								ELSE TRY_CAST(numeric_precision AS INTEGER)
 							END,
-							xdbc_decimal_digits: numeric_scale::SMALLINT,
+							xdbc_decimal_digits: TRY_CAST(numeric_scale AS SMALLINT),
 							xdbc_num_prec_radix: numeric_precision_radix::SMALLINT,
 							xdbc_nullable: CASE is_nullable
 								WHEN FALSE THEN 0::SMALLINT

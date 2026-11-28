@@ -8,9 +8,6 @@ require parquet
 require noforcestorage
 
 statement ok
-PRAGMA disable_verification
-
-statement ok
 PRAGMA add_parquet_key('arrow_key', '0123456789012345')
 
 statement ok
@@ -107,3 +104,42 @@ SELECT file_row_number, value FROM read_parquet('{DATA_DIR}/parquet-testing/encr
 2	11
 3	13
 4	7
+
+# PyArrow 22.0.0, AES_GCM_V1, uncompressed DataPageV1: each file contains values
+# 0..8191 in two row groups, each with 32 data pages of 128 values. The dictionary
+# variant also has a dictionary page in each column chunk.
+statement ok
+PRAGMA add_parquet_key('arrow_multipage_plain', '1O5CjhwkxCMd1XrDGlykNaoKnNeWfkmSsVs5he6USS0=')
+
+statement ok
+PRAGMA add_parquet_key('arrow_multipage_dictionary', 'gJ4taI9MMUkKGKi4Ag1HIYIM+KjSEQAWEKFsf8zveDI=')
+
+# Reuse the reader across row groups to exercise the page ordinal reset.
+statement ok
+SET threads=1
+
+foreach encoding plain dictionary
+
+# SUM requires decoding the pages; COUNT(*) could use only footer metadata.
+query II
+SELECT file_row_number // 4096 AS row_group, sum(value)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_multipage_{encoding}.parquet',
+    encryption_config={footer_key: 'arrow_multipage_{encoding}'}, file_row_number=true)
+GROUP BY row_group ORDER BY row_group;
+----
+0	8386560
+1	25163776
+
+# Filter columns need their AAD initialized before decoding, including after a row-group change.
+query I rowsort
+SELECT value
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_multipage_{encoding}.parquet',
+    encryption_config={footer_key: 'arrow_multipage_{encoding}'})
+WHERE value >= 4094 AND value < 4098;
+----
+4094
+4095
+4096
+4097
+
+endloop

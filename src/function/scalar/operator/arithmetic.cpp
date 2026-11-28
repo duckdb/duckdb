@@ -1,3 +1,4 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -17,18 +18,22 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -110,6 +115,40 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 	return Value::Numeric(type, value);
 }
 
+//! The bignum_t tier of decimals (width > 38): the operator allocates its result in the heap of the result vector
+template <class OP>
+static void BignumDecimalBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	BignumArithmeticState arithmetic_state(state.GetContext());
+	BinaryExecutor::Execute<bignum_t, bignum_t, bignum_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](bignum_t left, bignum_t right) { return OP::Operation(left, right, heap, arithmetic_state); });
+}
+
+//! Whether an operator has a kernel for the bignum_t tier of decimals
+template <class OP, class = void>
+struct HasBignumOperation : std::false_type {};
+
+template <class OP>
+struct HasBignumOperation<
+    OP, std::void_t<decltype(OP::Operation(std::declval<bignum_t>(), std::declval<bignum_t>(),
+                                           std::declval<StringHeap &>(), std::declval<BignumArithmeticState &>()))>>
+    : std::true_type {};
+
+//! The physical types of a DECIMAL: the integer tiers and, above 38 digits, bignum_t
+template <class OP>
+static scalar_function_t GetScalarDecimalFunction(PhysicalType type) {
+	if (type == PhysicalType::VARCHAR) {
+		if constexpr (HasBignumOperation<OP>::value) {
+			return &BignumDecimalBinaryFunction<OP>;
+		} else {
+			// the bignum_t tier binds exact result widths, so it has no overflow checking kernels
+			throw InternalException("The bignum_t tier of decimals has no kernel for this operator");
+		}
+	}
+	return GetScalarIntegerFunction<OP>(type);
+}
+
 static Value NumericStatsValue(const LogicalType &type, uint64_t value) {
 	D_ASSERT(type.IsNumeric());
 	return Value::Numeric(type, uhugeint_t(value));
@@ -189,6 +228,43 @@ struct SubtractPropagateStatistics {
 	}
 };
 
+//! The bounds of an operation in the bignum_t tier of decimals: the combinations of the input bounds are computed
+//! exactly (a cut input bound widens the result bounds), the result overflows when one of them does not fit the
+//! width of the result type
+template <class OP>
+static bool BignumDecimalPropagateStatistics(const LogicalType &type, const BaseStatistics &lstats,
+                                             const BaseStatistics &rstats, Value &new_min, Value &new_max) {
+	const auto width = DecimalType::GetWidth(type);
+	const string lblobs[] {BignumStats::MinBlob(lstats), BignumStats::MaxBlob(lstats)};
+	const string rblobs[] {BignumStats::MinBlob(rstats), BignumStats::MaxBlob(rstats)};
+	const string_t lvals[] {string_t(lblobs[0]), string_t(lblobs[1])};
+	const string_t rvals[] {string_t(rblobs[0]), string_t(rblobs[1])};
+	StringHeap heap;
+	BignumArithmeticState state;
+	string_t min;
+	string_t max;
+	for (idx_t l = 0; l < 2; l++) {
+		for (idx_t r = 0; r < 2; r++) {
+			// the combination of two bounds is exact in a BIGNUM
+			auto result = OP::Operation(bignum_t(lvals[l]), bignum_t(rvals[r]), heap, state).data;
+			if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(result), width)) {
+				// potential overflow
+				return true;
+			}
+			// the byte order of the BIGNUM encoding is the numeric order
+			if ((l == 0 && r == 0) || LessThan::Operation(result, min)) {
+				min = result;
+			}
+			if ((l == 0 && r == 0) || GreaterThan::Operation(result, max)) {
+				max = result;
+			}
+		}
+	}
+	new_min = Value::DECIMAL(bignum_t(min), width, DecimalType::GetScale(type));
+	new_max = Value::DECIMAL(bignum_t(max), width, DecimalType::GetScale(type));
+	return false;
+}
+
 struct DecimalArithmeticBindData : public FunctionData {
 	DecimalArithmeticBindData() : check_overflow(false) {
 	}
@@ -217,7 +293,17 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 	auto &rstats = child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
+	const bool bignum_tier = BaseStatistics::GetStatsType(expr.GetReturnType()) == StatisticsType::BIGNUM_STATS;
+	if (bignum_tier) {
+		if constexpr (HasBignumOperation<BASEOP>::value) {
+			if (lstats.GetStatsType() == StatisticsType::BIGNUM_STATS &&
+			    rstats.GetStatsType() == StatisticsType::BIGNUM_STATS && BignumStats::HasMinMax(lstats) &&
+			    BignumStats::HasMinMax(rstats)) {
+				potential_overflow =
+				    BignumDecimalPropagateStatistics<BASEOP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			}
+		}
+	} else if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
 		switch (expr.GetReturnType().InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -269,15 +355,25 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
-			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
-			bind_data.check_overflow = false;
+			input.bind_data.write().Cast<DecimalArithmeticBindData>().check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		if constexpr (HasBignumOperation<BASEOP>::value) {
+			expr.FunctionMutable().SetFunctionCallback(
+			    GetScalarDecimalFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		} else {
+			expr.FunctionMutable().SetFunctionCallback(
+			    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		}
+		expr.FunctionMutable().SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
-	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
-	NumericStats::SetMin(result, new_min);
-	NumericStats::SetMax(result, new_max);
+	auto result = BaseStatistics::CreateEmpty(expr.GetReturnType());
+	if (bignum_tier) {
+		BignumStats::SetMin(result, new_min);
+		BignumStats::SetMax(result, new_max);
+	} else {
+		NumericStats::SetMin(result, new_min);
+		NumericStats::SetMax(result, new_max);
+	}
 	result.CombineValidity(lstats, rstats);
 	return result.ToUnique();
 }
@@ -326,15 +422,16 @@ unique_ptr<BaseStatistics> PropagateFloatingStats(ClientContext &context, Functi
 
 //! Computes the result type of a decimal addition, subtraction or modulo over the given input types
 template <bool IS_MODULO>
-LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, bool &check_overflow) {
+LogicalType DecimalArithmeticResultType(const DecimalWidthLimit &decimal_width_limit,
+                                        const vector<LogicalType> &input_types, bool &check_overflow) {
 	check_overflow = false;
 	// get the max width and scale of the input arguments
-	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
+	uint32_t max_width = 0, max_scale = 0, max_width_over_scale = 0, max_decimal_width = 0;
 	for (auto &input_type : input_types) {
 		if (input_type.id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
-		uint8_t width, scale;
+		uint32_t width, scale;
 		auto can_convert = input_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
@@ -344,21 +441,27 @@ LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, 
 		if (width > max_width) {
 			max_width = width;
 		}
-		max_scale = MaxValue<uint8_t>(scale, max_scale);
-		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
+		if (input_type.id() == LogicalTypeId::DECIMAL) {
+			max_decimal_width = MaxValue<uint32_t>(width, max_decimal_width);
+		}
+		max_scale = MaxValue<uint32_t>(scale, max_scale);
+		max_width_over_scale = MaxValue<uint32_t>(width - scale, max_width_over_scale);
 	}
 	D_ASSERT(max_width > 0);
-	uint8_t required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
+	idx_t required_width = MaxValue<idx_t>(idx_t(max_scale) + max_width_over_scale, max_width);
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
-		required_width = NumericCast<uint8_t>(required_width + 1);
+		required_width++;
 	}
-	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
-		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
+	const idx_t width_limit = decimal_width_limit.ResultWidth(max_decimal_width);
+	if (required_width > width_limit && !Decimal::IsWide(width_limit)) {
+		// the result does not fit the fixed-size tiers: clamp the width and perform overflow detection
 		check_overflow = true;
-		required_width = Decimal::MAX_WIDTH_DECIMAL;
+		required_width = width_limit;
 	}
-	return LogicalType::DECIMAL(required_width, max_scale);
+	return LogicalType::DECIMAL(
+	    decimal_width_limit.CheckedWidth(required_width, max_decimal_width, IS_MODULO ? "Modulo" : "Addition"),
+	    max_scale);
 }
 
 //! Resolves the types of a decimal addition, subtraction or modulo, returns whether overflow checks are required
@@ -367,13 +470,14 @@ bool ResolveDecimalArithmeticTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	bool check_overflow;
 	auto argument_types = input.GetArgumentTypes();
-	auto result_type = DecimalArithmeticResultType<IS_MODULO>(argument_types, check_overflow);
+	auto result_type =
+	    DecimalArithmeticResultType<IS_MODULO>(input.GetDecimalWidthLimit(), argument_types, check_overflow);
 	// we cast all input types to the specified type
 	for (idx_t i = 0; i < argument_types.size(); i++) {
 		// first check if the cast is necessary
 		// if the argument has a matching scale and internal type as the output type, no casting is necessary
 		auto &argument_type = argument_types[i];
-		uint8_t width, scale;
+		uint32_t width, scale;
 		argument_type.GetDecimalProperties(width, scale);
 		if (scale == DecimalType::GetScale(result_type) && argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.GetArguments()[i] = argument_type;
@@ -389,7 +493,8 @@ bool ResolveDecimalArithmeticTypes(ResolveScalarFunctionTypesInput &input) {
 template <bool IS_MODULO = false>
 unique_ptr<FunctionData> BindDecimalArithmetic(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalArithmeticResultType<IS_MODULO>(input.GetBoundFunction().GetLogicalArguments(), bind_data->check_overflow);
+	auto &input_types = input.GetBoundFunction().GetLogicalArguments();
+	DecimalArithmeticResultType<IS_MODULO>(input.GetDecimalWidthLimit(), input_types, bind_data->check_overflow);
 	return std::move(bind_data);
 }
 
@@ -401,9 +506,11 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
 	if (check_overflow) {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
+		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
+		// the result type holds every result of the operation, so it cannot overflow
+		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OP>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	if (IS_SUBTRACT) {
 		bound_function.SetStatisticsCallback(
@@ -413,7 +520,7 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	}
 }
 
-void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
                                 const BoundScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
@@ -422,16 +529,17 @@ void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<Funct
 }
 
 // TODO this is partially duplicated from the bind
-template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
+template <class OP, class OPOVERFLOWCHECK>
 unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, BoundScalarFunction &bound_function) {
 	//	// re-change the function pointers
 	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
+		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(return_type.InternalType()));
+		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OP>(return_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
@@ -473,27 +581,18 @@ static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 
 static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	// negate a copy of the right operand - the input must not be modified, it can e.g. also be the left operand
-	vector<uint8_t> negated_rhs;
-	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
-	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
-		    const BignumIntermediate lhs(a);
-		    negated_rhs.resize(b.data.GetSize());
-		    memcpy(negated_rhs.data(), b.data.GetData(), b.data.GetSize());
-		    BignumIntermediate rhs(negated_rhs.data(), negated_rhs.size());
-		    rhs.NegateInPlace();
-		    return BignumIntermediate::Add(heap, lhs, rhs);
-	    });
-}
-
-//! The client context (if any) lets long BIGNUM multiplications and divisions check for interrupts
-static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &state) {
-	return state.HasContext() ? &state.GetContext() : nullptr;
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
+	                                                      [&](bignum_t a, bignum_t b) {
+		                                                      const BignumIntermediate lhs(a);
+		                                                      const BignumIntermediate rhs(b);
+		                                                      // the right operand is subtracted without being copied
+		                                                      return BignumIntermediate::Add(heap, lhs, rhs, true);
+	                                                      });
 }
 
 static void BignumMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BignumArithmeticState arithmetic_state(state.GetContext());
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
@@ -508,6 +607,22 @@ static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result
 		const BignumIntermediate lhs(a);
 		return lhs.Negate(heap);
 	});
+}
+
+//! TIMESTAMP[_SEC/_MS/_NS] +/- INTERVAL is not monotonic in the timestamp in general (calendar-month
+//! arithmetic clamps the day but keeps the time), but a constant interval without a month component is
+//! a fixed duration, which keeps the result strictly increasing in the timestamp argument.
+static unique_ptr<FunctionData> BindTimestampIntervalArithmetic(BindScalarFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	const idx_t interval_idx = function.GetArguments()[0].id() == LogicalTypeId::INTERVAL ? 0 : 1;
+	auto interval = input.TryGetConstant(interval_idx);
+	if (!interval || interval->IsNull() || interval->GetValue<interval_t>().months != 0) {
+		return nullptr;
+	}
+	function.SetArgProperties(1 - interval_idx, ArgProperties().StrictlyIncreasing());
+	// The smallest finite timestamp sorts below -infinity, so bounds may only be derived from finite ranges.
+	function.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
+	return nullptr;
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
@@ -625,8 +740,36 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 			function.SetFallible();
-			// not monotonic: adding months clamps the day but keeps the time, e.g.
+			// not monotonic in general: adding months clamps the day but keeps the time, e.g.
 			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_SEC) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_sec_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_MS) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_ms_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_NS) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_ns_t, timestamp_ns_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
 			return function;
 		}
 		break;
@@ -657,12 +800,46 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			return function;
 		}
 		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_sec_t, interval_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: see INTERVAL + TIMESTAMP_SEC
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_ms_t, interval_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: see INTERVAL + TIMESTAMP_MS
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
 			function.SetFallible();
-			// not monotonic: see INTERVAL + TIMESTAMP
+			// not monotonic in general: see INTERVAL + TIMESTAMP
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<timestamp_ns_t, interval_t, timestamp_ns_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic in general: see INTERVAL + TIMESTAMP
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
 			return function;
 		}
 		break;
@@ -714,8 +891,17 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME));
 
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_S, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_S));
+
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_MS, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_MS));
+
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_NS, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_NS));
 
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
@@ -754,7 +940,10 @@ static void DecimalNegateResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &decimal_type = input.GetArgumentType(0);
 	auto width = DecimalType::GetWidth(decimal_type);
-	if (width <= Decimal::MAX_WIDTH_INT16) {
+	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
+		// the bignum_t tier negates the BIGNUM blob
+		bound_function.SetFunctionCallback(BignumNegate);
+	} else if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT));
 	} else if (width <= Decimal::MAX_WIDTH_INT32) {
@@ -914,9 +1103,45 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 			function.SetFallible();
-			// not monotonic: subtracting months clamps the day but keeps the time, e.g.
+			// not monotonic in general: subtracting months clamps the day but keeps the time, e.g.
 			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
-
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_sec_t, interval_t, timestamp_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic in general: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_ms_t, interval_t, timestamp_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic in general: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<timestamp_ns_t, interval_t, timestamp_ns_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic in general: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+			function.SetBindCallback(BindTimestampIntervalArithmetic);
 			return function;
 		}
 		break;
@@ -981,6 +1206,9 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_S, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_MS, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_NS, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	// we can negate intervals
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL));
@@ -1032,50 +1260,57 @@ struct MultiplyPropagateStatistics {
 };
 
 //! Computes the result type of a decimal multiplication over the given input types
-LogicalType DecimalMultiplyResultType(const vector<LogicalType> &input_types, bool &check_overflow) {
+LogicalType DecimalMultiplyResultType(const DecimalWidthLimit &decimal_width_limit,
+                                      const vector<LogicalType> &input_types, bool &check_overflow) {
 	check_overflow = false;
-	uint8_t result_width = 0, result_scale = 0;
-	uint8_t max_width = 0;
+	idx_t result_width = 0, result_scale = 0;
+	uint32_t max_width = 0, max_decimal_width = 0;
 	for (auto &input_type : input_types) {
 		if (input_type.id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
-		uint8_t width, scale;
+		uint32_t width, scale;
 		auto can_convert = input_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
 			                      "explicit cast",
 			                      input_type.ToString());
 		}
-		max_width = MaxValue<uint8_t>(width, max_width);
+		max_width = MaxValue<uint32_t>(width, max_width);
+		if (input_type.id() == LogicalTypeId::DECIMAL) {
+			max_decimal_width = MaxValue<uint32_t>(width, max_decimal_width);
+		}
 		result_width += width;
 		result_scale += scale;
 	}
 	D_ASSERT(max_width > 0);
-	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
+	const idx_t width_limit = decimal_width_limit.ResultWidth(max_decimal_width);
+	if (result_scale > width_limit) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
 		    "DECIMAL type. Max scale is %d; could not perform an accurate multiplication. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
-		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
+		    result_scale, width_limit);
 	}
 	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
 	    result_scale < Decimal::MAX_WIDTH_INT64) {
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_INT64;
 	}
-	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (result_width > width_limit && !Decimal::IsWide(width_limit)) {
+		// the result does not fit the fixed-size tiers: clamp the width and perform overflow detection
 		check_overflow = true;
-		result_width = Decimal::MAX_WIDTH_DECIMAL;
+		result_width = width_limit;
 	}
-	return LogicalType::DECIMAL(result_width, result_scale);
+	return LogicalType::DECIMAL(decimal_width_limit.CheckedWidth(result_width, max_decimal_width, "Multiplication"),
+	                            NumericCast<uint32_t>(result_scale));
 }
 
 void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	bool check_overflow;
 	auto argument_types = input.GetArgumentTypes();
-	auto result_type = DecimalMultiplyResultType(argument_types, check_overflow);
+	auto result_type = DecimalMultiplyResultType(input.GetDecimalWidthLimit(), argument_types, check_overflow);
 	auto result_width = DecimalType::GetWidth(result_type);
 	// since our scale is the summation of our input scales, we do not need to cast to the result scale
 	// however, we might need to cast to the correct internal type
@@ -1084,7 +1319,7 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		if (argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.GetArguments()[i] = argument_type;
 		} else {
-			uint8_t width, scale;
+			uint32_t width, scale;
 			if (!argument_type.GetDecimalProperties(width, scale)) {
 				scale = 0;
 			}
@@ -1097,9 +1332,11 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	// now select the physical function to execute
 	if (check_overflow) {
 		bound_function.SetFunctionCallback(
-		    GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
+		    GetScalarDecimalFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
+		// the result type holds every product of the input types, so the operation cannot overflow
+		bound_function.SetFunctionCallback(GetScalarDecimalFunction<MultiplyOperator>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(
 	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
@@ -1108,7 +1345,8 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 //! The overflow check is derived from the types the function was called with, before they were cast
 unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalMultiplyResultType(input.GetBoundFunction().GetLogicalArguments(), bind_data->check_overflow);
+	auto &input_types = input.GetBoundFunction().GetLogicalArguments();
+	DecimalMultiplyResultType(input.GetDecimalWidthLimit(), input_types, bind_data->check_overflow);
 	return std::move(bind_data);
 }
 
@@ -1152,7 +1390,11 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	// we can multiply bignums together
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, BignumMultiply));
-	multiply.SetFallible();
+	multiply.ApplyToFunctions([](ScalarFunction &function) {
+		if (!function.GetReturnType().IsFloating()) {
+			function.SetFallible();
+		}
+	});
 
 	multiply.ApplyToFunctions(NameOperatorParameters);
 	return multiply;
@@ -1190,6 +1432,10 @@ interval_t DivideOperator::Operation(interval_t left, double right) {
 
 	return result;
 }
+
+//! The BIGNUM division and modulo kernel, also the bignum_t tier of the decimal modulo
+template <bool NULL_ON_ZERO, bool MODULO>
+static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vector &result);
 
 namespace {
 
@@ -1308,6 +1554,9 @@ scalar_function_t GetBinaryFunctionZeroCheck(PhysicalType type) {
 		return BinaryScalarFunctionZeroCheck<float, float, float, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
 	case PhysicalType::DOUBLE:
 		return BinaryScalarFunctionZeroCheck<double, double, double, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::VARCHAR:
+		// the bignum_t tier of decimals divides through the BIGNUM kernel
+		return BignumDivideOperation<NULL_ON_ZERO, std::is_same<OP, ModuloOperator>::value>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetBinaryFunctionZeroCheck");
 	}
@@ -1349,12 +1598,17 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 
-	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+	const auto ieee_ops = Settings::Get<IeeeFloatingPointOpsSetting>(context);
+	const auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
+	if (ieee_ops) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
-		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 		bound_function.SetFunctionCallback(
 		    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
+	}
+	if (std::is_same<OP, DivideOperator>::value && (ieee_ops || null_on_zero)) {
+		// a division by zero yields inf, nan or NULL instead of raising an error
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	return nullptr;
 }
@@ -1414,7 +1668,7 @@ unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, F
 template <bool NULL_ON_ZERO, bool MODULO>
 static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BignumArithmeticState arithmetic_state(state.GetContext());
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) -> optional<string_t> {
 		    const BignumIntermediate lhs(a);
@@ -1666,6 +1920,11 @@ unique_ptr<BaseStatistics> PropagateModuloStats(ClientContext &context, Function
 	D_ASSERT(child_stats.size() == 2);
 	auto &lstats = child_stats[0];
 	auto &rstats = child_stats[1];
+	if (lstats.GetStatsType() != StatisticsType::NUMERIC_STATS ||
+	    rstats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+		// the bignum_t tier of decimals has no modulo bounds
+		return nullptr;
+	}
 	if (!NumericStats::HasMinMax(rstats)) {
 		return nullptr;
 	}
@@ -1882,7 +2141,8 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 	hugeint_t delta_hugeint = hi;
 	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
 		const auto delta = Hugeint::Cast<double>(delta_hugeint);
-		return lo + Hugeint::Convert(delta * d);
+		// Rounding delta to double can carry the offset past hi, and past the HUGEINT range when hi is the minimum.
+		return Hugeint::Add(lo, Hugeint::Convert(delta * d));
 	}
 
 	// if delta overflows, we fall back to original subtraction to avoid UB

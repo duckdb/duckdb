@@ -4,8 +4,10 @@ add_library_unity(
   aggregate_export.cpp
   write_log.cpp
   current_transaction_id.cpp
+  share_transaction.cpp
   current_connection_id.cpp
   current_query_id.cpp
+  extension_repository_url.cpp
   parse_log_message.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_system>

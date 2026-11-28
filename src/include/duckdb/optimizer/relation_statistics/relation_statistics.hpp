@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/optimizer/relation_statistics/cardinality_value.hpp"
 
 namespace duckdb {
 
@@ -20,23 +22,24 @@ enum class DistinctCountSource : uint8_t { CARDINALITY, MIN_MAX, HLL, EXACT };
 
 struct DistinctCount {
 public:
-	DistinctCount(idx_t distinct_count, DistinctCountSource source);
+	DistinctCount(CardinalityValue distinct_count, DistinctCountSource source);
 
 public:
-	idx_t distinct_count;
+	CardinalityValue distinct_count;
 	DistinctCountSource source;
 };
 
 struct SemiAntiJoinDomainEvidence {
 public:
-	void TightenFilterDomainBound(idx_t bound);
+	//! A bound established by predicates or a closed input, independent of estimated row retention.
+	void TightenDomainBound(idx_t bound);
 	void MarkUnique();
 	void Invalidate();
-	optional_idx GetSupportedDomainSize(idx_t current_domain) const;
-	optional_idx GetFilterDomainBound() const;
+	optional<CardinalityValue> GetSupportedDomainSize(CardinalityValue current_domain) const;
+	optional_idx GetDomainBound() const;
 
 private:
-	optional_idx filter_domain_bound;
+	optional_idx domain_bound;
 	bool is_unique = false;
 };
 
@@ -46,7 +49,7 @@ public:
 	RelationColumnStats(ColumnBinding binding, DistinctCount total_domain, DistinctCount current_domain,
 	                    Identifier name,
 	                    SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence = SemiAntiJoinDomainEvidence());
-	optional_idx GetSupportedSemiAntiDomainSize() const;
+	optional<CardinalityValue> GetSupportedSemiAntiDomainSize() const;
 
 public:
 	ColumnBinding binding;
@@ -67,15 +70,25 @@ public:
 	optional_idx FindColumn(ColumnBinding binding) const;
 	optional_ptr<const RelationColumnStats> GetColumnStats(ColumnBinding binding) const;
 	bool MatchesBindings(const vector<ColumnBinding> &bindings) const;
+	//! Reconcile the point with its structural upper bound, then cap current column domains.
 	void CapCurrentDomainsToCardinality();
 	void Verify(const vector<ColumnBinding> &bindings) const;
+	bool IsEmpty() const;
+	//! Raw point reconciled with its independent upper bound; no cost or display floor.
+	CardinalityValue GetCardinality() const;
+	CardinalityValue GetCardinalityForCost() const;
+	idx_t GetCardinalityForPlan() const;
 
 public:
 	vector<RelationColumnStats> columns;
-	idx_t cardinality;
+	CardinalityValue cardinality;
+	//! A provider or structural upper bound, never inferred from the point estimate.
+	optional_idx max_cardinality;
 	//! Cumulative estimated fraction of rows retained from the most recent statistics source.
 	//! Aggregation and DISTINCT establish a new source.
-	double row_retention = 1;
+	CardinalityValue row_retention = 1;
+	//! Alternative unique keys from Distinctness, expressed as column indexes in this relation.
+	vector<vector<idx_t>> unique_keys;
 	bool stats_initialized = false;
 	Identifier table_name;
 };

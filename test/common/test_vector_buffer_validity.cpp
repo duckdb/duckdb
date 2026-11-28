@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "vector_buffer_lifetime.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -75,6 +76,56 @@ TEST_CASE("Constant slices keep a single physical validity entry", "[vector_buff
 			// a non-NULL constant keeps its mask unallocated
 			REQUIRE(mask.GetAllocationSize() == 0);
 			REQUIRE(sliced.GetValue(count - 1) == value);
+		}
+	}
+}
+
+TEST_CASE("Buffer slices retain their payload after the source is destroyed", "[vector_buffer][buffer_ptr]") {
+	const duckdb::vector<Value> values {
+	    Value::BIGINT(42), Value("a sliced string longer than the inline representation"),
+	    Value::LIST(LogicalType::VARCHAR,
+	                {Value("a nested string longer than the inline representation"), Value(LogicalType::VARCHAR)})};
+	for (auto &value : values) {
+		for (idx_t mode = 0; mode < 4; mode++) {
+			INFO(value.type().ToString());
+			INFO(mode);
+			Vector result(value.type());
+			duckdb::shared_ptr<bool> destroyed;
+			{
+				Vector source(value.type(), 3);
+				source.Append(Value(value.type()));
+				source.Append(value);
+				source.Append(value);
+				if (mode == 0) {
+					source.Reference(value, count_t(1));
+				}
+				destroyed = ObserveVectorBufferDestruction(source);
+				if (mode == 0) {
+					result.Slice(source, 0, 7);
+				} else if (mode == 1) {
+					result.Slice(source, 1, 3);
+				} else {
+					SelectionVector selection(3);
+					selection.set_index(0, 2);
+					selection.set_index(1, 0);
+					selection.set_index(2, 1);
+					Vector dictionary(source, selection, 3);
+					if (mode == 2) {
+						result.Reference(dictionary);
+					} else {
+						result.Slice(dictionary, 1, 3);
+					}
+				}
+			}
+			REQUIRE_FALSE(*destroyed);
+			REQUIRE(result.size() == (mode == 0 ? 7 : mode == 2 ? 3 : 2));
+			for (idx_t row = 0; row < result.size(); row++) {
+				const bool is_null = (mode == 2 && row == 1) || (mode == 3 && row == 0);
+				REQUIRE(Value::NotDistinctFrom(result.GetValue(row), is_null ? Value(value.type()) : value));
+			}
+			Vector empty(value.type());
+			result.Reference(empty);
+			REQUIRE(*destroyed);
 		}
 	}
 }

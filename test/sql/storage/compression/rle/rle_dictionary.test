@@ -1,0 +1,369 @@
+# name: test/sql/storage/compression/rle/rle_dictionary.test
+# description: RLE dictionaries preserve validity, filtering, retained results and updates
+# group: [rle]
+
+load {TEST_DIR}/rle_dictionary.db
+
+statement ok
+SET threads=1
+
+# Forced row fetching and smaller storage blocks change the observed vector layout.
+statement ok
+CREATE MACRO check_rle_representation() AS
+    NOT current_setting('debug_force_fetch_row')
+    AND current_setting('default_block_size') = 262144
+    AND current_setting('standard_vector_size') = 2048
+    AND current_setting('debug_verify_vector') = 'NONE'
+
+# Several row groups, runs crossing bitmap/vector boundaries, and a short tail.
+statement ok
+CREATE TABLE input(i INTEGER, k BIGINT USING COMPRESSION RLE, dense BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO input
+SELECT i, CASE WHEN i % 257 = 0 THEN NULL ELSE (i // 37) % 8 END,
+          CASE WHEN i % 2 = 0 THEN NULL ELSE (i // 65) % 8 END
+FROM range(262211) t(i)
+
+statement ok
+CHECKPOINT
+
+# Validity compression only supports Roaring from storage version v1.2.0.
+query TTI rowsort
+SELECT DISTINCT column_name, segment_type,
+    compression = CASE
+        WHEN segment_type = 'BIGINT' THEN 'RLE'
+        WHEN column_name = 'dense' THEN 'Uncompressed'
+        WHEN current_setting('storage_compatibility_version') = 'latest'
+            OR TRY_CAST(string_split(ltrim(current_setting('storage_compatibility_version'), 'v'), '.') AS INTEGER[]) >= [1, 2, 0]
+            THEN 'Roaring'
+        ELSE 'Uncompressed'
+    END
+FROM pragma_storage_info('input') WHERE column_name IN ('k', 'dense')
+----
+dense	BIGINT	true
+dense	VALIDITY	true
+k	BIGINT	true
+k	VALIDITY	true
+
+query I
+SELECT count(*) >= 2 FROM pragma_storage_info('input') WHERE column_name = 'k' AND compression = 'RLE'
+----
+true
+
+query II
+SELECT count(*), NOT check_rle_representation() OR
+    (list_sort(list(DISTINCT vector_type(k))) = ['DICTIONARY_VECTOR', 'FLAT_VECTOR'] AND
+     bool_and(vector_type(dense) = 'DICTIONARY_VECTOR'))
+FROM input
+----
+262211	true
+
+statement ok
+CREATE VIEW expected AS
+SELECT i::INTEGER AS i, CASE WHEN i % 257 = 0 THEN NULL ELSE (i // 37) % 8 END AS k,
+                       CASE WHEN i % 2 = 0 THEN NULL ELSE (i // 65) % 8 END AS dense
+FROM range(262211) t(i)
+
+query I
+WITH actual AS (SELECT sum(k), min(k), max(k), sum(dense), min(dense), max(dense) FROM input),
+oracle AS (SELECT sum(k), min(k), max(k), sum(dense), min(dense), max(dense) FROM expected)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+query II
+SELECT count(k), sum(k) FROM input WHERE k IS NULL
+----
+0	NULL
+
+# Compare full rows, including NULLs, across dictionary/segment changes.
+query I
+SELECT count(*) FROM (
+    (SELECT * FROM input EXCEPT ALL SELECT * FROM expected)
+    UNION ALL
+    (SELECT * FROM expected EXCEPT ALL SELECT * FROM input)
+)
+----
+0
+
+# A separate-column filter selects sparse rows before reading the RLE columns.
+query I
+SELECT count(*) FROM input
+WHERE i % 63 = 0 AND
+    (k IS DISTINCT FROM CASE WHEN i % 257 = 0 THEN NULL ELSE (i // 37) % 8 END OR
+     dense IS DISTINCT FROM CASE WHEN i % 2 = 0 THEN NULL ELSE (i // 65) % 8 END)
+----
+0
+
+# Direct NULL filters read the value and validity streams at the same row offsets.
+query I
+WITH actual AS (SELECT * FROM input WHERE k IS NULL),
+oracle AS (SELECT * FROM expected WHERE k IS NULL)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# An RLE value filter can follow an already selective filter on another column.
+query I
+WITH actual AS (SELECT * FROM input WHERE i % 63 = 0 AND k % 3 = 1),
+oracle AS (SELECT * FROM expected WHERE i % 63 = 0 AND k % 3 = 1)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# Retain selected results across later scans and consume them more than once.
+query I
+WITH saved AS MATERIALIZED (SELECT * FROM input WHERE i % 3 = 0),
+actual AS (SELECT * FROM saved UNION ALL SELECT * FROM saved),
+oracle AS (SELECT * FROM expected WHERE i % 3 = 0 UNION ALL SELECT * FROM expected WHERE i % 3 = 0)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# A duplicate build key exercises dictionary probing and duplicate output rows.
+query I
+WITH dim AS (SELECT i % 8 AS k, i AS payload FROM range(16) t(i)),
+actual AS (SELECT f.i, f.dense, d.payload FROM input f JOIN dim d USING (k) WHERE d.payload IN (3, 11)),
+oracle AS (SELECT f.i, f.dense, d.payload FROM expected f JOIN dim d USING (k) WHERE d.payload IN (3, 11))
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# Alternate sparse and dense selections within the same segment/dictionary.
+statement ok
+CREATE TABLE selection_input(i INTEGER, k BIGINT USING COMPRESSION RLE, pick BOOLEAN)
+
+statement ok
+INSERT INTO selection_input SELECT i, dense, i % 4096 < 16 OR (i % 4096 >= 2048 AND i % 3 = 0) FROM input
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+SET threads=1
+
+statement ok
+SET perfect_ht_threshold=0
+
+# Observe the scan's representation instead of wrappers from coalescing small chunks.
+statement ok
+SET debug_enable_caching_operators=false
+
+# The optimizer must push the filter into the scan to select sparse rows there.
+query I
+SELECT NOT check_rle_representation() OR current_setting('debug_disable_optimizer') OR
+    bool_and(vector_type(k) = 'FLAT_VECTOR')
+FROM selection_input WHERE pick
+----
+true
+
+query I
+WITH actual AS (
+    SELECT k, count(*) n, sum(i) s FROM selection_input WHERE pick GROUP BY k
+), oracle AS (
+    SELECT dense AS k, count(*) n, sum(i) s FROM expected
+    WHERE i % 4096 < 16 OR (i % 4096 >= 2048 AND i % 3 = 0) GROUP BY dense
+)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+statement ok
+RESET debug_enable_caching_operators
+
+# A safe unary function and single-key aggregation can reuse the dictionaries.
+query I
+WITH actual AS (SELECT hash(k) AS h, count(*) AS n, sum(i) AS s FROM input GROUP BY hash(k)),
+oracle AS (SELECT hash(k) AS h, count(*) AS n, sum(i) AS s FROM expected GROUP BY hash(k))
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# Mixed runs, a constant chunk, then mixed runs in the same segment.
+statement ok
+CREATE TABLE mixed(i INTEGER, k BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO mixed
+SELECT i, (i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END FROM range(8195) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+SELECT count(*), NOT check_rle_representation() OR
+    (count(*) FILTER (WHERE vector_type(k) = 'CONSTANT_VECTOR') = 4096
+     AND count(*) FILTER (WHERE vector_type(k) = 'DICTIONARY_VECTOR') = 4099)
+FROM mixed
+----
+8195	true
+
+query I
+WITH actual AS (SELECT k, count(*) n, sum(i) s FROM mixed WHERE k > 2 GROUP BY k),
+oracle AS (
+    SELECT k, count(*) n, sum(i) s FROM (
+        SELECT i, (i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END AS k
+        FROM range(8195) t(i)
+    ) WHERE k > 2 GROUP BY k
+)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+query I
+WITH actual AS (SELECT k, sum(i) AS s FROM mixed GROUP BY k),
+oracle AS (
+    SELECT (i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END AS k, sum(i) AS s
+    FROM range(8195) t(i) GROUP BY k
+)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+statement ok
+RESET perfect_ht_threshold
+
+# NULL and value overlays use flat scans while an older transaction keeps its snapshot.
+statement ok old
+BEGIN
+
+query I old
+SELECT count(*) FROM mixed WHERE k IS NULL
+----
+0
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE mixed SET k = NULL WHERE i % 257 = 0
+
+statement ok
+UPDATE mixed SET k = 99 WHERE i % 257 = 1
+
+query I
+SELECT count(*) FROM mixed WHERE k IS DISTINCT FROM
+CASE WHEN i % 257 = 0 THEN NULL WHEN i % 257 = 1 THEN 99
+     ELSE (i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END END
+----
+0
+
+statement ok
+COMMIT
+
+query I old
+SELECT count(*) FROM mixed WHERE k IS DISTINCT FROM
+(i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END
+----
+0
+
+statement ok old
+COMMIT
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE mixed SET k = -1
+
+statement ok
+ROLLBACK
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT count(*) FROM mixed WHERE k IS DISTINCT FROM
+CASE WHEN i % 257 = 0 THEN NULL WHEN i % 257 = 1 THEN 99
+     ELSE (i // 4096) * 2 + CASE WHEN i % 4096 < 3 THEN 1 ELSE 2 END END
+----
+0
+
+# The nullable key uses the generic table-filter route. Adaptive feedback must count rows,
+# not equally weight the alternating dictionary entries.
+statement ok
+SET threads=1
+
+statement ok
+SET disabled_optimizers='statistics_propagation,join_order,build_side_probe_side'
+
+statement ok
+SET dynamic_or_filter_threshold=0
+
+statement ok
+CREATE TABLE frequency_build AS
+SELECT 1::BIGINT AS w, 1::BIGINT AS d, k, k >= 2700 AS keep FROM range(1,3001) t(k)
+
+statement ok
+CREATE TABLE frequency_probe(w BIGINT, d BIGINT, k BIGINT USING COMPRESSION RLE, n BIGINT)
+
+statement ok
+INSERT INTO frequency_probe
+SELECT 1, 1, CASE WHEN i % 2048 = 0 THEN 1 WHEN i % 2048 = 1 THEN NULL ELSE 3000 END, 1
+FROM range(122880) t(i)
+
+statement ok
+CHECKPOINT
+
+query T
+SELECT DISTINCT compression FROM pragma_storage_info('frequency_probe')
+WHERE column_name = 'k' AND segment_type = 'BIGINT'
+----
+RLE
+
+query II
+SELECT count(*), sum(p.n)
+FROM frequency_probe p JOIN frequency_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k WHERE b.keep
+----
+122760	122760
+
+# Adaptive filter sampling depends on batch boundaries; the exact profile is for 2048-row vectors.
+require exact_vector_size 2048
+
+query TT
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*), sum(p.n)
+FROM frequency_probe p JOIN frequency_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k WHERE b.keep
+----
+analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*frequency_probe"[^}]*},\s*"intermediate_rows": 122880,.*

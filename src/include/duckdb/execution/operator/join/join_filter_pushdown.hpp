@@ -24,6 +24,9 @@ class LogicalGet;
 class JoinHashTable;
 class PhysicalOperator;
 class PhysicalComparisonJoin;
+class BloomFilter;
+class Event;
+class Pipeline;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
 
@@ -35,6 +38,23 @@ enum class JoinFilterPushdownMode : uint8_t {
 };
 
 struct JoinFilterPushdownColumn {
+	JoinFilterPushdownColumn() = default;
+	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other) = delete;
+	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) = delete;
+	JoinFilterPushdownColumn(JoinFilterPushdownColumn &&other) = default;
+	JoinFilterPushdownColumn &operator=(JoinFilterPushdownColumn &&other) = default;
+
+	//! Clone the owned expression only when changing a column or retaining it in a target.
+	JoinFilterPushdownColumn Copy() const {
+		JoinFilterPushdownColumn result;
+		result.join_filter_idx = join_filter_idx;
+		result.probe_column_index = probe_column_index;
+		result.storage_type = storage_type;
+		result.mode = mode;
+		result.input_expression = input_expression ? input_expression->Copy() : nullptr;
+		return result;
+	}
+
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;
 	//! The probe column index to which this filter should be applied
@@ -43,11 +63,13 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
-	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
-	vector<RuntimeFilterCastStep> runtime_filter_casts;
+	//! Filter input over BoundReferenceExpression(0) in the existing scan projection's type.
+	unique_ptr<Expression> input_expression;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
+
+enum class InFilterMode { PRUNING_ONLY, ADAPTIVE_ROW_FILTERING };
 
 struct DeferredRuntimeFilterPushdown {
 	DeferredRuntimeFilterType type = DeferredRuntimeFilterType::BLOOM_FILTER;
@@ -55,6 +77,8 @@ struct DeferredRuntimeFilterPushdown {
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	JoinFilterPushdownColumn column;
 	ProjectionIndex filter_col_idx;
+	//! The key column of the hash table the filter is built from
+	idx_t key_idx = 0;
 };
 
 struct JoinFilterGlobalState {
@@ -106,6 +130,15 @@ struct JoinFilterPushdownInfo {
 	bool build_side_has_filter;
 
 public:
+	//! Bound replicated prefix-range build state independently of the radix partitions.
+	static constexpr idx_t MAX_PREFIX_RANGE_BUILD_MEMORY = 16ULL * 1024ULL * 1024ULL;
+	static idx_t GetMemoryBudget(ClientContext &context);
+	static void InitializeBloomFilters(ClientContext &context, const PhysicalComparisonJoin &op, JoinHashTable &ht,
+	                                   shared_ptr<BloomFilter> recycled_filter = nullptr);
+	//! Complete optional read preparation before publishing filters and finalizing the hash table.
+	static void FinalizeRuntimeFilters(Pipeline &pipeline, Event &event, const PhysicalOperator &op, JoinHashTable &ht,
+	                                   optional_ptr<JoinFilterGlobalState> gstate, idx_t num_threads);
+
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
 
@@ -121,25 +154,24 @@ public:
 	                                      optional_ptr<JoinFilterGlobalState> gstate = nullptr) const;
 
 private:
+	struct FilterFinalizer;
+
 	bool PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
 	                  const JoinFilterPushdownColumn &column, JoinHashTable &ht, const PhysicalOperator &op,
-	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	                  idx_t filter_idx, ProjectionIndex filter_col_idx, InFilterMode mode) const;
 
 	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
 	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
-	                        ProjectionIndex filter_col_idx, JoinFilterGlobalState &gstate) const;
+	                        ProjectionIndex filter_col_idx, idx_t key_idx, JoinFilterGlobalState &gstate) const;
 	bool TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
 	                                  const PhysicalOperator &op, const JoinFilterPushdownColumn &column,
-	                                  ProjectionIndex filter_col_idx, const Value &min_val, const Value &max_val,
-	                                  idx_t max_bits, JoinFilterGlobalState &gstate) const;
+	                                  ProjectionIndex filter_col_idx, idx_t key_idx, const Value &min_val,
+	                                  const Value &max_val, idx_t max_bits, JoinFilterGlobalState &gstate) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
 	                       const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;
-	bool CanUsePrefixRangeFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
-	                             const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
-	                             const ExpressionType &cmp) const;
 };
 
 } // namespace duckdb

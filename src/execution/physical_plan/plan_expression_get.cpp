@@ -8,7 +8,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExpressionGet &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 
 	auto &expr_scan = Make<PhysicalExpressionScan>(op.types, std::move(op.expressions), op.estimated_cardinality);
 	expr_scan.children.push_back(plan);
@@ -28,12 +28,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExpressionGet &op) {
 
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);
+	DataChunk temp_chunk;
+	temp_chunk.Initialize(allocator, op.types);
 
 	ColumnDataAppendState append_state;
 	cast_chunk_scan.collection->InitializeAppend(append_state);
 	for (idx_t expression_idx = 0; expression_idx < cast_expr_scan.expressions.size(); expression_idx++) {
-		chunk.Reset();
-		cast_expr_scan.EvaluateExpression(context, expression_idx, nullptr, chunk);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			cast_chunk_scan.collection->Append(append_state, chunk);
+			chunk.Reset();
+		}
+		temp_chunk.Reset();
+		cast_expr_scan.EvaluateExpression(context, expression_idx, nullptr, chunk, temp_chunk);
+	}
+	if (chunk.size() > 0) {
 		cast_chunk_scan.collection->Append(append_state, chunk);
 	}
 	return chunk_scan;

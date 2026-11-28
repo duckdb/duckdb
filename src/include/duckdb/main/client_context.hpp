@@ -22,6 +22,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -43,12 +44,12 @@ class CatalogSearchPath;
 class ColumnDataCollection;
 class DatabaseInstance;
 class FileOpener;
+class Context;
 class LogicalOperator;
 class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
 struct PreprocessedStatement;
-class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
 class ClientContextLock;
@@ -128,12 +129,8 @@ public:
 	shared_ptr<ClientContext> base_context;
 	//! The number of internal connections between this client and its base client (0 for a base client)
 	idx_t internal_depth = 0;
-	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
-	unique_ptr<RegisteredStateManager> registered_state;
-	//! The logger to be used by this ClientContext
-	shared_ptr<Logger> logger;
-	//! The client configuration
-	ClientConfig config;
+	//! The context of this ClientContext: owns the client configuration, logger, query profiler, file system, ...
+	shared_ptr<Context> context;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
 	//! Data for the currently running transaction
@@ -169,10 +166,10 @@ public:
 	DUCKDB_API void SuppressInterrupts();
 	DUCKDB_API void CancelTransaction();
 
+	//! InterruptCheck that only reads the clock for the timeout every 256th call, for hot loops
+	DUCKDB_API void FastInterruptCheck() const;
 	//! Check for interrupt or timeout, throws InterruptException if triggered
 	DUCKDB_API void InterruptCheck() const;
-	//! InterruptCheck that reads the clock on every call, for waits that block between checks
-	DUCKDB_API void BlockingInterruptCheck() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
@@ -216,6 +213,8 @@ public:
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
+	//! Ends the active query and leaves a shared transaction with a rollback vote, if the context participates in one
+	DUCKDB_API void LeaveSharedTransaction();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
@@ -226,19 +225,6 @@ public:
 	DUCKDB_API void Append(unique_ptr<SQLStatement> stmt);
 	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
-
-	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
-	//! list with the set of returned columns
-	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Internal function for try bind relation. It does not require a client-context lock.
-	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Non-blocking. Submits a relation and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation,
-	                                          const QueryParameters &query_parameters);
-	//! Blocking. Runs a relation to completion and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query. A statement that expands into several is kept as written and expanded at each execution, so
 	//! its metadata is known only from the result
@@ -268,9 +254,6 @@ public:
 	//! invalidates the active transaction according to the transaction invalidation policy, as fits statements that are
 	//! parsed to be run; without it the transaction stays usable, as fits statements that are only inspected.
 	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
-
-	//! Extract the logical plan of a query
-	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -303,6 +286,14 @@ public:
 
 	//! Return the current logger
 	Logger &GetLogger() const;
+	const LogConfigSnapshot &GetLogConfig() const {
+		return log_config;
+	}
+
+	//! The Context (client configuration, logging, metrics, file system) owned by this client context
+	Context &GetContext() const {
+		return *context;
+	}
 
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
@@ -335,6 +326,9 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Rolls back the active transaction (if any) without throwing, while the context is still fully alive
+	void RollbackActiveTransaction();
+
 	friend class Parser;
 	friend class ParseIterator;
 	ParserOptions GetParserOptions();
@@ -421,6 +415,8 @@ private:
 	void BeginStatementInternal(ClientContextLock &lock, const string &query);
 	//! Refreshes the logger for the statement that begins
 	void RefreshLoggerInternal();
+	//! Replaces the logger with one created from the up-to-date log config
+	void ResetLoggerInternal(const LoggingContext &logging_context);
 	//! Ends the statement of a query that expands into several once it finished, and starts the next one
 	QueryResultState StartNextStatementInternal(ClientContextLock &lock);
 	//! Ends the statement that finished and starts the next one. Returns the result object a collector built for it,
@@ -429,8 +425,9 @@ private:
 	//! Whether this query or, for an internal connection, the base client's query has a deadline
 	bool HasQueryDeadline() const;
 	bool QueryDeadlinePassed() const;
-	//! Ends the statement that finished: releases its executor and plan and notifies registered state
-	void EndStatementInternal(ClientContextLock &lock, optional_ptr<ErrorData> error);
+	//! Ends the statement that finished: releases its executor and plan and notifies every registered state, also
+	//! when one of them fails. Returns the first failure
+	ErrorData EndStatementInternal(ClientContextLock &lock, optional_ptr<ErrorData> error);
 	void NotifyStatementBeginInternal(ClientContextLock &lock);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
@@ -460,9 +457,6 @@ private:
 	QueryResultState FailQueryInternal(ClientContextLock &lock, BaseQueryResult &result, ErrorData error);
 	void UpdateProgressInternal(QueryResultState state);
 
-	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
-	                                       const QueryParameters &query_parameters);
-
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
@@ -483,6 +477,9 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! The log config used to create loggers for this ClientContext and its ThreadContexts. Only refreshed (with the
+	//! logger) at query begin and end, when no tasks that could read it from other threads are running
+	LogConfigSnapshot log_config;
 	//! Type of connection (USER or INTERNAL)
 	ConnectionType connection_type = ConnectionType::USER;
 	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is

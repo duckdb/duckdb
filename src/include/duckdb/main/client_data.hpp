@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/once_flag.hpp"
 
 namespace duckdb {
 
@@ -17,12 +18,12 @@ class AttachedDatabase;
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
+class ExpressionRewriter;
 class FileOpener;
 class FileSystem;
 class QueryProfiler;
 class PreparedStatementData;
 class RandomEngine;
-class BufferManager;
 
 struct ClientData {
 public:
@@ -30,9 +31,6 @@ public:
 	~ClientData();
 
 public:
-	//! The query profiler of this client.
-	shared_ptr<QueryProfiler> profiler;
-
 	//! The set of temporary objects belonging to this client.
 	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The set of bound prepared statements belonging to this client.
@@ -48,12 +46,9 @@ public:
 	//! calls only affect new clients. Empty when there was none.
 	Identifier default_database;
 
-	//! The file opener of the client context.
-	unique_ptr<FileOpener> file_opener;
-	//! The clients' file system wrapper.
-	unique_ptr<FileSystem> client_file_system;
-	//! The clients' buffer manager wrapper.
-	unique_ptr<BufferManager> client_buffer_manager;
+	//! Owns the default expression rewrite rules, which are stateless and shared by every optimizer run of this client.
+	unique_ptr<ExpressionRewriter> default_expression_rewriter;
+	OnceFlag default_expression_rewriter_once;
 
 	//! The writer used to log queries, if logging is enabled.
 	//! DEPRECATED: Now, queries are written to the generic log.

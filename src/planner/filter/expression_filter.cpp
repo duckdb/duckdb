@@ -1,4 +1,5 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/common/in_clause.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/arg_properties.hpp"
@@ -35,6 +36,45 @@
 
 namespace duckdb {
 
+bool ExpressionFilter::IsNativeInFilter(const Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &children = expr.Cast<BoundOperatorExpression>().GetChildren();
+	if (children.size() < 2 || children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    children[0]->Cast<BoundReferenceExpression>().Index() != 0) {
+		return false;
+	}
+	const auto type = children[0]->GetReturnType().InternalType();
+	if (!TypeIsNumeric(type) && type != PhysicalType::BOOL && type != PhysicalType::VARCHAR &&
+	    type != PhysicalType::INTERVAL) {
+		return false;
+	}
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[i]->GetReturnType().InternalType() != type) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ExpressionFilter::IsSmallNativeInFilter(const Expression &expr) {
+	return expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
+	       expr.Cast<BoundOperatorExpression>().GetChildren().size() < IN_CLAUSE_REWRITE_THRESHOLD &&
+	       ExpressionFilter::IsNativeInFilter(expr);
+}
+
+bool ExpressionFilter::SupportsConstantFilterPushdown(const LogicalType &type) {
+	if (TypeIsNumeric(type.InternalType())) {
+		return true;
+	}
+	if (type.InternalType() == PhysicalType::VARCHAR || type.InternalType() == PhysicalType::BOOL) {
+		return true;
+	}
+	return false;
+}
+
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p) : ExpressionFilter(std::move(expr_p), {}) {
 }
 
@@ -60,8 +100,8 @@ ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, con
 }
 
 unique_ptr<Expression> ExpressionFilter::CreateInExpression(unique_ptr<Expression> column, vector<Value> values) {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	result->GetChildrenMutable().push_back(std::move(column));
+	auto result =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN, std::move(column));
 	for (auto &value : values) {
 		result->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(value)));
 	}
@@ -72,8 +112,7 @@ unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Ex
                                                                    ExpressionType expression_type) {
 	D_ASSERT(expression_type == ExpressionType::OPERATOR_IS_NULL ||
 	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
-	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
-	result->GetChildrenMutable().push_back(std::move(column));
+	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN, std::move(column));
 	return std::move(result);
 }
 
@@ -82,6 +121,16 @@ unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(Expression
 	auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(column),
 	                                                    make_uniq<BoundConstantExpression>(std::move(constant)));
 	return make_uniq<ExpressionFilter>(std::move(comparison));
+}
+
+unique_ptr<ExpressionFilter> ExpressionFilter::CreateSelectivityOptionalFilter(unique_ptr<Expression> child_expr,
+                                                                               const LogicalType &column_type,
+                                                                               SelectivityOptionalFilterType type) {
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
+	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
+	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
 }
 
 bool ExpressionFilter::IsSimpleFilterColumnRef(const Expression &expr) {
@@ -137,7 +186,7 @@ static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_th
 	return true;
 }
 
-static bool ContainsInternalTableFilterFunction(const Expression &expr) {
+bool ExpressionFilter::ContainsInternalTableFilterFunction(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
@@ -218,6 +267,9 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	case PhysicalType::VARCHAR:
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
 			return StringStats::CheckZonemap(stats, comparison_type, values);
+		}
+		if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+			return BignumStats::CheckZonemap(stats, comparison_type, values);
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	default:
@@ -303,7 +355,7 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-			FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+			FunctionStatisticsInput input(func_copy, func_copy.BindInfoMutable(), child_stats, &expr_copy);
 			owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
 			return owned_stats.back().get();
 		}
@@ -936,6 +988,10 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 
 bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
 	return IsOptionalExpressionInternal(expr, true, true);
+}
+
+bool ExpressionFilter::IsPruningOnlyExpression(const Expression &expr) {
+	return IsOptionalExpressionInternal(expr, true, false);
 }
 
 bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {

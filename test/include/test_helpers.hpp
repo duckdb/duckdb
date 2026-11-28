@@ -31,6 +31,12 @@
 
 namespace duckdb {
 
+class TableRef;
+struct TestHelperState;
+shared_ptr<TestHelperState> CaptureTestHelperState();
+void RestoreTestHelperState(const TestHelperState &state);
+void ResetTestHelperState();
+
 void RegisterSqllogictests();
 void RegisterSqllogictests(const vector<string> &test_paths);
 void RegisterSqllogictestStdin();
@@ -50,6 +56,8 @@ string TestNameToId(const string &name);
 
 //! Delete a database file (+ its .wal). A no-op under --database-destroy off (retain).
 void DeleteDatabase(string path);
+//! A shared local file system obtained from a DuckDB instance (for tests that have no database of their own)
+FileSystem &TestLocalFileSystem();
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);
@@ -177,16 +185,12 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &con, const string &query);
 //! Drain a stream into a retained result, so it can be checked with CHECK_COLUMN
 duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream);
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary);
+//! Plan and optimize a single statement, returning the logical plan for inspection
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
-
-#define COMPARE_CSV(result, csv, header)                                                                               \
-	{                                                                                                                  \
-		auto res = compare_csv(*result, csv, header);                                                                  \
-		if (!res.empty())                                                                                              \
-			FAIL(res);                                                                                                 \
-	}
 
 #define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
 	{                                                                                                                  \

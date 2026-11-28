@@ -48,6 +48,19 @@ struct ArrowSchema;
 struct ArrowArray;
 struct ArrowArrayStream;
 
+// <windows.h> defines DELETE and IGNORE, which StatementType and FunctionCollationHandling name: keep the macros out of
+// this header, whatever the include order.
+#ifdef DELETE
+#pragma push_macro("DELETE")
+#undef DELETE
+#define DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef IGNORE
+#pragma push_macro("IGNORE")
+#undef IGNORE
+#define DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif
+
 namespace duckdb {
 namespace cxx {
 
@@ -538,6 +551,15 @@ public:
 		return factory;
 	}
 
+	/// Opens a connection that runs in the transaction of this context, to run SQL from inside a callback, e.g. to read
+	/// a table in a bind callback. It sees the transaction's uncommitted changes and this context's temporary objects;
+	/// a failing statement invalidates the transaction as one of this context would. It starts with the search path of
+	/// this context, so unqualified names resolve as they do here. It cannot start, commit or roll
+	/// back a transaction, and destroying it does neither. Destroy it before the transaction ends, usually before the
+	/// callback returns: a commit while it is still open rolls the transaction back.
+	/// @throws Exception When the context has no active transaction or the transaction was aborted.
+	auto ConnectInTransaction() const -> Connection;
+
 	/// Writes a message to DuckDB's log, readable through `SELECT * FROM duckdb_logs`.
 	/// Whether the entry is recorded is up to the database's log configuration; a message it filters out is dropped
 	/// without error.
@@ -999,12 +1021,7 @@ public:
 	/// @param apply_invalidation_policy Whether a syntax error invalidates the active transaction, according to the
 	/// transaction invalidation policy. Pass false when the statements are only inspected, e.g. with `Bind`, instead of
 	/// run.
-	auto ParseSQL(const char *sql, bool apply_invalidation_policy = true) -> StatementIterator;
-
-	/// `std::string` overload of `ParseSQL`.
-	auto ParseSQL(const std::string &sql, bool apply_invalidation_policy = true) -> StatementIterator {
-		return ParseSQL(sql.c_str(), apply_invalidation_policy);
-	}
+	auto ParseSQL(std::string_view sql, bool apply_invalidation_policy = true) -> StatementIterator;
 
 	/// Splits a SQL string into its tokens without parsing it: no binding, no catalog access, no transaction. The
 	/// connection supplies the grammar whose keyword set decides KEYWORD versus IDENTIFIER. Offsets are byte offsets
@@ -1087,10 +1104,23 @@ public:
 	/// metrics. Unstable API.
 	auto EnableProfiling(bool enabled = true) -> void;
 
-	/// Takes a snapshot of the metrics of the last query this connection finished. What it holds is decided by the
-	/// profiling configuration, e.g. `SET enable_profiling = 'no_output'`. Unstable API.
-	/// @throws Exception While a result on this connection is still live.
+	/// Takes a snapshot of the metrics of the last query this connection profiled, which is not necessarily the last
+	/// query it ran: see GetProfilingInformation. What it holds is decided by the profiling configuration, e.g.
+	/// `SET enable_profiling = 'no_output'`. Unstable API.
+	/// @throws Exception While a result on this connection has not been drained or destroyed.
 	auto GetQueryMetrics() const -> QueryMetrics;
+
+	/// Renders the profile of the last query this connection profiled, as the text the profiler prints for it. The
+	/// profiler keeps that profile while profiling is disabled, so after profiling is enabled again it describes the
+	/// last query run while profiling was enabled until the next query finishes. What it holds is decided by the
+	/// profiling configuration, e.g. `SET enable_profiling = 'json'`; without profiling it is the profiler's note that
+	/// profiling is disabled. Unstable API.
+	/// @param format The profiler format name: "json", "text", "query_tree", "query_tree_optimizer", "html",
+	/// "graphviz", "yaml", "mermaid" or "no_output", which renders nothing. Empty selects the configured format, or a
+	/// query tree when that is "no_output".
+	/// @throws Exception For an unknown format, or while a result on this connection has not been drained or
+	/// destroyed.
+	auto GetProfilingInformation(std::string_view format = {}) const -> std::string;
 
 	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
 	/// @param statement The statement to prepare.
@@ -1195,12 +1225,24 @@ public:
 		return *this;
 	}
 
+	/// Sets any option by name, for options without a dedicated setter above, e.g. `duckdb_api` or `access_mode`.
+	/// Options are applied in the order they are set, after the dedicated setters, so a later value wins. An option
+	/// that needs a running instance (such as `allowed_directories`) makes `Instance` construction throw: write it
+	/// through `Instance::GetConfig` instead.
+	/// @param name The option's canonical name or one of its aliases.
+	/// @param value The value, in the textual form SQL `SET` accepts.
+	auto Set(std::string_view name, std::string_view value) -> StartupOptions & {
+		options.emplace_back(std::string(name), std::string(value));
+		return *this;
+	}
+
 private:
 	std::optional<bool> allow_community_extensions;
 	std::optional<bool> allow_unsigned_extensions;
 	std::optional<bool> allow_unredacted_secrets;
 	std::optional<bool> disable_database_invalidation;
 	std::optional<std::string> custom_user_agent;
+	std::vector<std::pair<std::string, std::string>> options;
 };
 
 class Instance final : public detail::Handle<Instance> {
@@ -1230,6 +1272,38 @@ public:
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param options The options that can only be chosen at startup.
 	Instance(Environment &env, const std::string &path, const StartupOptions &options = {});
+
+	/// Opens the database file `path` in an instance shared through the default environment: a new handle to the
+	/// instance that already has the file open, or else to a new instance with the file attached as its default
+	/// database. Every handle for the same file sees the same database; it is closed once the last handle and the last
+	/// connection on it are destroyed, and opening it meanwhile waits for that rather than opening it twice. See
+	/// `duckdb_v2_instance_open_shared` for the details.
+	/// @param path The database file, or ":memory:" / the empty string for a new in-memory database, which is never
+	/// shared.
+	/// @param options The options that can only be chosen at startup. An instance that is already open is shared only
+	/// when it was created with options that give the same settings: an alias counts as its option, and a value
+	/// counts as equal once converted to the option's type, text regardless of case.
+	/// @throws Exception When the file is open in an instance created with other options, or attached to an instance
+	/// that is not shared.
+	static auto OpenShared(const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// Initializes an instance that `OpenShared` has just created. The instance is borrowed for the duration of the
+	/// call, and must not be moved from: configure it, or connect to it and run SQL.
+	using InitCallback = std::function<void(Instance &instance)>;
+
+	/// `OpenShared`, calling `init` when this call creates the instance, before another call can share it: calls for
+	/// the same file wait for `init` to return. When `init` throws, the instance is destroyed and the exception
+	/// propagates; the next call for the file creates an instance again. `init` is not called when the call shares
+	/// an existing instance, and must not open the same file with `OpenShared`.
+	static auto OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+	    -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance, calling `init` when this call creates it.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+	                       const InitCallback &init) -> Instance;
 
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
@@ -1534,11 +1608,11 @@ public:
 	// kind they misread that type's parameters or throw, so check the kind first. Names and dictionary entries come
 	// back as owned strings.
 
-	/// The total number of digits a DECIMAL holds.
-	auto GetDecimalWidth() const -> uint8_t;
+	/// The total number of digits a DECIMAL holds; any `uint32_t`, widths above 38 are BIGNUM-backed.
+	auto GetDecimalWidth() const -> uint32_t;
 
 	/// The number of digits a DECIMAL keeps after the point.
-	auto GetDecimalScale() const -> uint8_t;
+	auto GetDecimalScale() const -> uint32_t;
 
 	/// How many entries an ENUM's dictionary holds.
 	auto GetEnumSize() const -> idx_t;
@@ -1584,8 +1658,8 @@ public:
 	/// @param index Member index in [0, GetUnionMemberCount()).
 	auto GetUnionMemberType(idx_t index) const -> LogicalType;
 
-	/// The integer type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the
-	/// width.
+	/// The type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the width:
+	/// SMALLINT, INTEGER, BIGINT or HUGEINT up to 38 digits, BIGNUM (`bignum_t` elements) beyond.
 	auto GetDecimalInternalTypeId() const -> LogicalTypeId;
 
 	/// The unsigned integer type an ENUM's dictionary indices are stored in, which is what its vector elements are;
@@ -1769,10 +1843,11 @@ struct list_entry_t {
 
 /// DECIMAL(WIDTH, SCALE): an exact number, kept as an integer of WIDTH digits with the point SCALE digits from the
 /// right. The width picks the storage integer, so DECIMAL(9, 2) and DECIMAL(18, 2) are different C++ types and their
-/// payloads are not interchangeable.
+/// payloads are not interchangeable. This covers the fixed-size decimals of up to 38 digits; a wider DECIMAL stores
+/// its digits as a `bignum_t`, see `LogicalType::GetDecimalInternalTypeId`.
 template <int8_t WIDTH, uint8_t SCALE>
 struct decimal_t {
-	static_assert(WIDTH >= 1 && WIDTH <= 38, "DECIMAL type width must be between 1 and 38");
+	static_assert(WIDTH >= 1 && WIDTH <= 38, "decimal_t covers fixed-size decimals, with a width between 1 and 38");
 	static_assert(SCALE <= WIDTH, "DECIMAL scale must be less than or equal to width");
 	using storage_type = std::conditional_t<
 	    (WIDTH <= 4), int16_t,
@@ -2028,6 +2103,20 @@ public:
 		}
 	}
 
+	/// A DECIMAL of a width and scale that are only known at runtime, by its backing integer.
+	struct RuntimeDecimal {
+		/// The unscaled value: the DECIMAL is `value / 10^scale`, e.g. 12345 for 123.45 at scale 2.
+		int128_t value;
+		uint32_t width;
+		uint32_t scale;
+	};
+
+	/// Reads a DECIMAL of any width and scale, for when they are not known at compile time; `Get<WIDTH, SCALE>` is the
+	/// typed alternative.
+	/// @throws Exception When the value is NULL or not a DECIMAL, or when the backing integer of a DECIMAL wider than
+	/// 38 digits does not fit in 128 bits; `Get<bignum_t>()` reads the backing integer of any wide DECIMAL exactly.
+	auto GetDecimal() const -> RuntimeDecimal;
+
 	/// A NULL of the given type.
 	/// @param factory The factory to create the value with.
 	/// @param type The type the NULL carries.
@@ -2072,6 +2161,16 @@ public:
 	static auto Create(Factory &factory, decimal_t<WIDTH, SCALE> value) -> Value {
 		return CreateDecimal(factory, WidenDecimal(value.value), WIDTH, SCALE);
 	}
+
+	/// Creates a DECIMAL of a width and scale chosen at runtime; `Create(factory, decimal_t<WIDTH, SCALE>)` is the
+	/// typed alternative.
+	/// @param factory The factory to create the value with.
+	/// @param value The unscaled value, e.g. 12345 for 123.45 at scale 2.
+	/// @param width The number of digits, at least 1 and at most the `max_decimal_width` setting of the factory's
+	/// connection (its default, 1000000, for the factory of an instance); widths above 38 are stored as BIGNUM.
+	/// @param scale The number of digits after the decimal point, at most `width`.
+	/// @throws Exception When the width or scale is out of range, or the value does not fit in `width` digits.
+	static auto CreateDecimal(Factory &factory, int128_t value, uint32_t width, uint32_t scale) -> Value;
 
 	static auto Create(Factory &factory, bit_t value) -> Value;
 	static auto Create(Factory &factory, bignum_t value) -> Value;
@@ -2140,6 +2239,13 @@ public:
 	/// @param index Child index in [0, GetChildCount()).
 	auto GetChild(idx_t index) const -> Value;
 
+	/// The value that a VARIANT value holds, with the type that it was stored with: a TINYINT, a VARCHAR, a LIST of
+	/// STRUCTs, ... A stored list gives a LIST of its elements, a stored object a STRUCT of its fields; elements that
+	/// were stored with different types stay VARIANT values (a LIST of VARIANT), convert those in turn. A NULL VARIANT
+	/// gives a NULL value. The inverse is `Cast` to the VARIANT type, `factory.ParseType("VARIANT")`.
+	/// @throws InvalidInputException When the value is not a VARIANT.
+	auto VariantToValue() const -> Value;
+
 	/// Shorthand for `GetChild`.
 	auto operator[](idx_t index) const -> Value {
 		return GetChild(index);
@@ -2147,11 +2253,7 @@ public:
 
 private:
 	/// @internal Reads the backing integer, throwing unless the value's own width and scale are the ones asked for.
-	void GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const;
-
-	/// @internal The runtime forwarder behind the templated DECIMAL constructors, so those can be defined in the header
-	/// without naming a C type.
-	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
+	void GetDecimal(int128_t &out, uint32_t width, uint32_t scale) const;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
 	/// every tier.
@@ -2412,7 +2514,7 @@ public:
 	/// Place it in the vector owning this heap with `Vector::SetString`.
 	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		ValidateUTF8(data);
@@ -2427,7 +2529,7 @@ public:
 
 	/// `AddString` for arbitrary bytes rather than text.
 	auto AddBlob(std::string_view data) -> blob_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		const auto size = static_cast<uint32_t>(data.size());
@@ -3602,6 +3704,20 @@ public:
 	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
 	auto SetCanHaveValid(bool value) -> void;
 
+	/// The statistics as a STRUCT value with one field per known statistic, the shape of the SQL function `stats()`:
+	/// `min` and `max` (values of the column's type), `has_null`, `has_no_null`, `approx_unique`, `child_stats` for
+	/// nested types, ... A field is absent when that statistic is unknown. Unstable API.
+	auto GetValue() const -> Value;
+
+	/// Narrows the statistics from a STRUCT value in the shape `GetValue` returns: a field that is set replaces that
+	/// statistic, a NULL or absent field leaves it unchanged. `{'min': 20, 'max': 30, 'has_null': false}` on an
+	/// INTEGER column reports exactly those bounds and the absence of NULLs. A bound is a value of the column's type,
+	/// or one that casts to it. Every statistic states what can occur: a bound that excludes a value the scan then
+	/// produces, or `has_null: false` for a column with NULLs, produces wrong query results. Unstable API.
+	/// @throws InvalidInputException When the value is not a STRUCT, a field does not exist for the type or does not
+	/// convert, or the statistics are read-only, such as those of an argument.
+	auto SetValue(const Value &value) -> void;
+
 private:
 	explicit Stats(void *impl);
 };
@@ -3656,6 +3772,9 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> ScalarFunction &;
+	/// Sets the schema of the system catalog the function is registered in, for example `encodings`. Without it the
+	/// function is registered in the default schema. The schema must exist when the function is registered.
+	auto SetSchema(const std::string &schema) & -> ScalarFunction &;
 	/// The documentation of this overload, borrowed for in-place mutation.
 	auto GetDocs() -> FunctionDocs;
 
@@ -4543,6 +4662,8 @@ public:
 	class ClaimBatchInput;
 	class GetBindInfoInput;
 	class StatsInput;
+	class MetricsInput;
+	class ToStringInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4589,6 +4710,36 @@ public:
 	/// Called while the query is optimized, once per declared column the query reads, to narrow that column's
 	/// statistics. Optional; without it the engine knows nothing about the columns. Unstable API.
 	using StatsCallback = void (*)(StatsInput &input);
+	/// Called when the engine collects the metrics of the scan, possibly while the scan is still running, to report
+	/// what the scan did. Optional; unstable API.
+	using MetricsCallback = void (*)(MetricsInput &input);
+	/// Called with the bind data of a bound call when the engine renders a query plan that scans the function, e.g.
+	/// for `EXPLAIN`, possibly more than once; reports the key-value pairs the plan shows for the scan. They replace
+	/// the `Function` entry the physical plan shows by default. With profiling enabled (including `EXPLAIN ANALYZE`)
+	/// it is also called while the query executes, once per worker thread and possibly concurrently, so it must not
+	/// modify shared state without synchronization, and an error it throws there fails the query. Optional; unstable
+	/// API.
+	using ToStringCallback = void (*)(ToStringInput &input);
+
+	/// A column a function can produce next to the columns it declares in bind: a query asks for it by name.
+	enum class VirtualColumn : uint8_t {
+		/// `file_row_number`, a BIGINT holding the position of the row within the file it was read from, counting
+		/// from 0. Produced by a function that reads a single file when it is wrapped in a `MultiFileFunction`.
+		FILE_ROW_NUMBER = 0,
+	};
+
+	/// The first column index that stands for a virtual column rather than a declared one. The index the inputs'
+	/// `GetColumnIndex` reports for a virtual column is this plus its value in `VirtualColumn`.
+	static constexpr idx_t VIRTUAL_COLUMN_START = static_cast<idx_t>(1) << 63;
+
+	/// Whether a column index reported by `GetColumnIndex` stands for a virtual column.
+	static auto IsVirtualColumn(idx_t column_index) -> bool {
+		return column_index >= VIRTUAL_COLUMN_START;
+	}
+
+	/// The virtual column a column index reported by `GetColumnIndex` stands for.
+	/// @throws InvalidInputException When the index stands for a declared column.
+	static auto GetVirtualColumn(idx_t column_index) -> VirtualColumn;
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -4601,6 +4752,9 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> TableFunction &;
+	/// How stable the function's results are within and across queries. Defaults to `VOLATILE`; declare
+	/// `CONSISTENT_WITHIN_QUERY` to let the optimizer share identical scans.
+	auto SetStability(FunctionStability value) & -> TableFunction &;
 	/// The documentation of this overload, borrowed for in-place mutation.
 	auto GetDocs() -> FunctionDocs;
 
@@ -4658,10 +4812,22 @@ public:
 	/// output chunk always holds every declared column, and the engine drops the unused ones itself.
 	auto SetProjectionPushdown(bool enable) & -> TableFunction &;
 
+	/// Declares that the function can produce a virtual column, which a query asks for by name. It then takes up a
+	/// vector of the exec callback's output chunk, whose column index (see `GetColumnIndex`) is
+	/// `VIRTUAL_COLUMN_START` plus the value of the column. Requires projection pushdown. Unstable API.
+	auto AddVirtualColumn(VirtualColumn column) & -> TableFunction &;
+
+	/// Lets the function report what the scan did: see `MetricsCallback`. Unstable API.
+	auto SetMetricsCallback(MetricsCallback callback) & -> TableFunction &;
+
+	/// Lets the function describe a bound call in query plans: see `ToStringCallback`. Unstable API.
+	auto SetToStringCallback(ToStringCallback callback) & -> TableFunction &;
+
 private:
 	explicit TableFunction(void *impl);
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
+	auto DataSourceHandle() -> void *;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -4676,7 +4842,11 @@ private:
 	ClaimBatchCallback claim_batch_callback = nullptr;
 	GetBindInfoCallback get_bind_info_callback = nullptr;
 	StatsCallback stats_callback = nullptr;
+	MetricsCallback metrics_callback = nullptr;
+	ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the function scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
@@ -4916,6 +5086,14 @@ public:
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
+		/// The global state set via `InitGlobalInput::SetGlobalState`, or nullptr when the scan has not been
+		/// initialized yet -- which is the case when a `MultiFileFunction` asks about a file it has not started on. The
+		/// state must be read in a thread-safe way.
+		template <class T>
+		auto TryGetGlobalState() const -> T * {
+			return static_cast<T *>(TryGetGlobalStateInternal());
+		}
+
 		/// The user data set via `TableFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -4940,6 +5118,7 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
+		void *TryGetGlobalStateInternal() const;
 		void *GetUserDataInternal() const;
 	};
 
@@ -4951,6 +5130,13 @@ public:
 	/// the engine as usual, so a callback that recognizes nothing can simply return. The optimizer may run the
 	/// callback more than once for the same query, each time with the predicates not yet accepted, and never with
 	/// none.
+	///
+	/// A function that also has projection pushdown is offered the predicates that apply to a single column of it
+	/// once more when a scan starts, just before the global init callback. That is how the callback of a function
+	/// wrapped in a `MultiFileFunction` sees them, since the optimizer only offers them to the wrapper; the bind data
+	/// is then the one of the file being scanned. The engine applies these predicates to the rows the function
+	/// produces itself, so the function may use them to skip what the query can never use (e.g. the parts of a file
+	/// whose statistics rule them out), and accepting one has no effect. Unstable API.
 	class FilterPushdownInput {
 		friend detail::HandleFactory;
 
@@ -4984,7 +5170,7 @@ public:
 		/// `Expression::GetColumnIndex` indexes.
 		auto GetColumnCount() const -> idx_t;
 		/// Resolves the index a column reference node reports to the declared column (in `BindInput::AddResultColumn`
-		/// order) it refers to.
+		/// order) it refers to, or to the index of a virtual column (see `IsVirtualColumn`).
 		/// @throws InvalidInputException When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
@@ -5280,6 +5466,91 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the metrics callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	///
+	/// The callback runs when the engine collects the metrics of the scan, which can be while the scan is still
+	/// running, and possibly more than once: it adds up what it is told.
+	class MetricsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`, or nullptr when the scan has not been
+		/// initialized or set none. The scan can be running, so the state must be read in a thread-safe way.
+		template <class T>
+		auto GetGlobalState() const -> T * {
+			return static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// Reports an operator metric of the scan by its profiler name, e.g. "operator.row_groups_scanned" or
+		/// "operator.total_row_groups_to_scan". See `duckdb_v2_data_source_metrics_set` for the accepted names.
+		/// @param name The name of the metric.
+		/// @param value The value since the metrics were last collected ("operator.total_row_groups_to_scan": in all).
+		/// @throws InvalidInputException When the name is not a metric a table function can report.
+		auto SetMetric(std::string_view name, uint64_t value) -> void;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		MetricsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the to string callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class ToStringInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData` for the bound call being described.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports a key-value pair the plan shows for the scan. The pairs are shown in the order they were first
+		/// reported; setting a key again replaces its value.
+		/// @throws InvalidInputException When the key is empty.
+		auto Set(std::string_view key, std::string_view value) -> void;
+
+	private:
+		explicit ToStringInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5491,6 +5762,8 @@ private:
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
 
+	auto DataSourceHandle() -> void *;
+
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
 	CopyToBindCallback copy_to_bind_callback = nullptr;
@@ -5506,6 +5779,8 @@ private:
 	CopyFromExecCallback copy_from_exec_callback = nullptr;
 	CopyFromProgressCallback copy_from_progress_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the COPY FROM side scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the `COPY ... TO` bind callback works with. Borrowed, valid only for the callback duration.
@@ -6480,7 +6755,7 @@ enum class LogScope : uint8_t {
 /// Code of your own that receives DuckDB's log entries. Create one through a `Factory` of the database it will be
 /// registered in, give it a name and a write callback, then register it with `Instance::Register` or
 /// `Extension::Register`, which makes it available to the logging configuration under its name; once the
-/// configuration directs entries to it (currently with `SET logging_storage = '<name>'`), the write callback receives
+/// configuration directs entries to it (currently with `SET logging_sink = '<name>'`), the write callback receives
 /// them. A log sink only receives entries: they cannot be read back through `duckdb_logs`.
 ///
 /// Which entries a sink receives, and when and on which thread its callbacks run, are up to DuckDB: the callbacks must
@@ -7462,3 +7737,12 @@ inline auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters
 
 } // namespace cxx
 } // namespace duckdb
+
+#ifdef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#pragma pop_macro("DELETE")
+#undef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#pragma pop_macro("IGNORE")
+#undef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif

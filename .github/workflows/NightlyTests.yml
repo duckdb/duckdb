@@ -12,7 +12,7 @@ on:
       - '.github/workflows/NightlyTests.yml'
       - '.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+    types: [opened, reopened, ready_for_review]
     paths:
       - '.github/workflows/NightlyTests.yml'
       - '.github/patches/duckdb-wasm/**'
@@ -36,54 +36,91 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
-  clang-tidy:
-    name: Clang-Tidy (${{ matrix.shard }}/4)
+  msvc-only-debug:
+    name: Windows MSVC-only Debug
     needs: check-draft
-    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
+    runs-on: windows-2022
+    timeout-minutes: 60
     env:
-      CC: gcc
-      CXX: g++
-      GEN: ninja
-
+      CC: cl
+      CXX: cl
+      CMAKE_GENERATOR: Visual Studio 17 2022
+      CMAKE_GENERATOR_PLATFORM: x64
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install
-        timeout-minutes: 10
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-          python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy-20
-
-      - name: Clang-Tidy
-        shell: bash
-        run: |
-          log_file=clang-tidy-shard-${{ matrix.shard }}.log
-          if make tidy-check \
-              TIDY_BINARY=clang-tidy-20 \
-              TIDY_SHARD_COUNT=4 \
-              TIDY_SHARD_INDEX=$((${{ matrix.shard }} - 1)) \
-              >"${log_file}" 2>&1; then
-            tidy_status=0
-          else
-            tidy_status=$?
-          fi
-          python3 scripts/ci/summarize_clang_tidy.py "${log_file}" --command-exit-code "${tidy_status}"
-          exit "${tidy_status}"
-
-      - name: Upload clang-tidy log
-        if: failure()
-        uses: actions/upload-artifact@v7
+      - uses: actions/setup-python@v6
         with:
-          name: clang-tidy-log-${{ matrix.shard }}
-          path: clang-tidy-shard-${{ matrix.shard }}.log
-          if-no-files-found: error
+          python-version: '3.12'
+
+      - uses: ./.github/actions/setup-msvc-env
+
+      - name: Remove LLVM tools
+        shell: pwsh
+        run: |
+          $llvmDirectories = @("$env:ProgramFiles\LLVM", "${env:ProgramFiles(x86)}\LLVM")
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          & $vswhere -all -products '*' -property installationPath | ForEach-Object {
+            $llvmDirectories += Join-Path $_ 'VC\Tools\Llvm'
+          }
+          foreach ($directory in $llvmDirectories) {
+            if (Test-Path $directory) {
+              Remove-Item $directory -Recurse -Force
+            }
+          }
+          $env:Path = ($env:Path -split ';' | Where-Object {
+            $_ -and $_ -notmatch '(?i)[\\/]LLVM(?:[\\/]|$)'
+          }) -join ';'
+          "PATH=$env:Path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          foreach ($tool in @('cl.exe', 'link.exe', 'lib.exe')) {
+            if (!(Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue)) {
+              throw "Required MSVC tool is missing: $tool"
+            }
+          }
+          foreach ($tool in @('clang-cl.exe', 'llvm-ar.exe', 'llvm-objcopy.exe')) {
+            if (Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue) {
+              throw "LLVM tool is still available: $tool"
+            }
+          }
+
+      - name: Configure without LLVM
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory build | Out-Null
+          Set-Location build
+          cmake ..
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $compiler = Get-ChildItem CMakeFiles -Recurse -Filter CMakeCXXCompiler.cmake |
+            Get-Content -Raw
+          if ($compiler -notmatch 'set\(CMAKE_CXX_COMPILER_ID "MSVC"\)') {
+            throw 'The build must use the MSVC compiler'
+          }
+          $cache = Get-Content CMakeCache.txt -Raw
+          foreach ($tool in @('LLVM_AR_EXECUTABLE', 'LLVM_OBJCOPY_EXECUTABLE')) {
+            if ($cache -notmatch "(?m)^${tool}:FILEPATH=${tool}-NOTFOUND\r?$") {
+              throw "CMake unexpectedly discovered an LLVM tool: $tool"
+            }
+          }
+          if (Get-ChildItem . -Recurse -Filter duckdb_static_no_exports.vcxproj) {
+            throw 'The filtered archive must not be built without LLVM'
+          }
+
+      - name: Build Debug
+        working-directory: build
+        shell: pwsh
+        run: cmake --build . --config Debug --parallel
+
+      - name: Test Debug CLI
+        shell: pwsh
+        run: |
+          $result = & .\build\Debug\duckdb.exe -csv -noheader -c "SELECT 42; SELECT mode(x) FROM (VALUES ('a'), ('a'), ('b')) t(x);"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (($result -join "`n") -ne "42`na") {
+            throw "Unexpected Debug CLI result: $result"
+          }
 
   codeql-analyze:
     name: Analyze (${{ matrix.language }})
@@ -647,9 +684,10 @@ jobs:
           vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           cache-suffix: nightly_force_blocking_sink_source
 
+      # Injected ThrowAsyncTask errors are only expected by the sqllogictest runner, so skip the C++ tests
       - name: Test
         shell: bash
-        run: ./build/relassert/test/run --batch-timeout 600
+        run: ./build/relassert/test/run --batch-timeout 600 "*.test"
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -773,178 +811,6 @@ jobs:
        # correctness failures and cleanup hangs still fail the job.
        run: make unittest_relassert T="--track-runtime 30 --batch-size 1 --batch-timeout 60 --timeout-policy warn --test-config=test/configs/hash_zero.json"
 
-
-  bwc-build:
-    name: Build DuckDB
-    runs-on: ubuntu-latest
-    outputs:
-      groups: ${{ steps.resolve.outputs.groups }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Resolve versions
-        id: resolve
-        run: |
-          groups_json=$(python3 test/bwc/list_versions.py --groups-json)
-          echo "groups=${groups_json}" >> "$GITHUB_OUTPUT"
-          echo "Resolved BWC version groups: ${groups_json}"
-
-      - name: Install
-        run: python3 scripts/ci/retry.py -- make toolsci
-
-      - name: Setup ccache
-        uses: ./.github/actions/ccache-action
-
-      - name: Build DuckDB
-        uses: duckdb/duckdb-ci/build-duckdb@main
-        with:
-          build-type: release
-          build: |
-            python3 scripts/ci/retry.py -- make release \
-              EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' \
-              STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils' \
-              DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
-          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-          cache-suffix: nightly_bwc_build
-
-      - name: Upload DuckDB binary
-        uses: actions/upload-artifact@v7
-        with:
-          name: duckdb-binary
-          path: build/release/duckdb
-
-  bwc-test:
-    name: BWC Test (DuckDB ${{ matrix.series.group }})
-    runs-on: ubuntu-latest
-    needs: bwc-build
-    strategy:
-      fail-fast: false
-      matrix:
-        series: ${{ fromJSON(needs.bwc-build.outputs.groups) }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Download DuckDB binary
-        uses: actions/download-artifact@v8
-        with:
-          name: duckdb-binary
-          path: build/release
-
-      - name: Make DuckDB binary executable
-        run: chmod +x build/release/duckdb
-
-      - name: Install Python dependencies
-        run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
-
-      - name: Run BWC series
-        run: |
-          versions='${{ toJson(matrix.series.versions) }}'
-          mapfile -t VERSION_LIST < <(python3 -c 'import json,sys; [print(v) for v in json.loads(sys.argv[1])]' "$versions")
-          FAILED=0
-          FAILED_VERSIONS=""
-          RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
-          mkdir -p "${RUNTIME_DIR}"
-          mkdir -p duckdb_unittest_tempdir/bwc/cache
-
-          for VERSION in "${VERSION_LIST[@]}"; do
-            echo "============================================================"
-            echo "Running BWC for ${VERSION} (group: ${{ matrix.series.group }})"
-            echo "============================================================"
-
-            if [ "${{ vars.ENABLE_BWC_CACHE_DOWNLOAD }}" = "true" ]; then
-              CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
-              DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
-              HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
-              if [ "${HTTP_CODE}" = "200" ]; then
-                tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
-                CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
-                echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
-              else
-                echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
-                FAILED=1
-                FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(cache)"
-              fi
-            fi
-
-            if ! python3.11 test/bwc/runner.py --old_duckdb_version="${VERSION}"; then
-              FAILED=1
-              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(tests)"
-            fi
-
-            if ! python3.11 test/bwc/export_cache.py --version "${VERSION}" --output-dir duckdb_unittest_tempdir/bwc/cache; then
-              FAILED=1
-              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(export)"
-            fi
-          done
-
-          if [ "$FAILED" -ne 0 ]; then
-            echo "BWC series had failures:${FAILED_VERSIONS}"
-            exit 1
-          fi
-
-      - name: Upload BWC cache
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: bwc-cache-${{ matrix.series.group }}
-          path: duckdb_unittest_tempdir/bwc/cache/runtime_*.tar.gz
-
-      - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: bwc-test-results-${{ matrix.series.group }}
-          path: |
-            duckdb_unittest_tempdir/bwc/tests_summary_*.txt
-            duckdb_unittest_tempdir/bwc/reports/test_report_*.duckdb
-
-  summary:
-    name: BWC Test Summary
-    runs-on: ubuntu-24.04
-    needs: bwc-test
-    if: always()
-    steps:
-      - name: Download all test artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: bwc-test-results-*
-          merge-multiple: true
-
-      - name: Aggregate results
-        run: |
-          echo "============================================================"
-          echo "BWC Test Summary"
-          echo "============================================================"
-          failed=0
-          for summary in tests_summary_*.txt; do
-            [ -f "$summary" ] || continue
-            version="${summary#tests_summary_}"
-            version="${version%.txt}"
-            failures=$(grep '# FAILED' "$summary" || true)
-            if [ -n "$failures" ]; then
-              echo ""
-              echo "Failed tests for DuckDB version '$version':"
-              echo "$failures" | while read -r line; do
-                echo "  $line"
-              done
-              failed=1
-            fi
-          done
-          echo "============================================================"
-          if [ "$failed" -eq 1 ]; then
-            echo "Some BWC tests failed."
-            exit 1
-          else
-            echo "All BWC tests passed."
-          fi
 
   # checks that cmake-generated project is consistent on re-configure
   cmake-reconfigure-check:

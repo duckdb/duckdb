@@ -210,7 +210,7 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType(), input.GetCollationType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -377,7 +377,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType(), input.GetCollationType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -410,6 +410,10 @@ AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_h
 	function.GetSignature().AddParameter("arg", LogicalType::ANY).AddParameter("val", LogicalType::ANY);
 	AggregateFunction::WireStructStateType<STATE>(function);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	function.GetProperties().SetProperty(BoundAggregateExpression::NON_NULL_SELECTOR_DOMAIN_PROPERTY,
+	                                     Value::BOOLEAN(true));
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
+	                                     Value::BOOLEAN(true));
 	return function;
 }
 
@@ -426,6 +430,10 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	function.GetSignature().AddParameter("arg", type).AddParameter("val", by_type);
 	AggregateFunction::WireStructStateType<STATE>(function);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	function.GetProperties().SetProperty(BoundAggregateExpression::NON_NULL_SELECTOR_DOMAIN_PROPERTY,
+	                                     Value::BOOLEAN(true));
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
+	                                     Value::BOOLEAN(true));
 	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
@@ -487,6 +495,8 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.GetSignature().GetParameter(1).SetName("val");
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	function.GetProperties().SetProperty(BoundAggregateExpression::NON_NULL_SELECTOR_DOMAIN_PROPERTY,
+	                                     Value::BOOLEAN(true));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetSignature().GetParameter(0).SetType(type);
@@ -541,6 +551,9 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type, null_handling);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type, null_handling);
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs
+		return GetArgMinMaxFunctionBy<OP, string_t>(by_type, type, null_handling);
 	default:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type, null_handling);
 	}
@@ -670,6 +683,41 @@ public:
 		heap.Initialize(allocator, nval);
 		is_initialized = true;
 	}
+
+	void ExportSlot(Vector &entries, idx_t entry_idx, idx_t slot, bool nulls_last) const {
+		auto &children = StructVector::GetEntries(entries);
+		auto &entry = heap.GetSlot(slot);
+		VAL_TYPE::Assign(children[0], entry_idx, entry.second.value, nulls_last);
+		ARG_TYPE::Assign(children[1], entry_idx, entry.first.value, nulls_last);
+	}
+
+	struct ImportData {
+		ImportData(const Vector &entries, idx_t count, bool nulls_last)
+		    : validity(entries.Validity()), val_extra_state(VAL_TYPE::CreateExtraState(count)),
+		      arg_extra_state(ARG_TYPE::CreateExtraState(count)) {
+			auto &children = StructVector::GetEntries(entries);
+			VAL_TYPE::PrepareData(children[0], val_extra_state, val_format, nulls_last);
+			ARG_TYPE::PrepareData(children[1], arg_extra_state, arg_format, nulls_last);
+		}
+
+		VectorValidityIterator validity;
+		typename VAL_TYPE::EXTRA_STATE val_extra_state;
+		typename ARG_TYPE::EXTRA_STATE arg_extra_state;
+		UnifiedVectorFormat val_format;
+		UnifiedVectorFormat arg_format;
+	};
+
+	void ImportSlot(ArenaAllocator &allocator, const ImportData &entries, idx_t entry_idx, bool reject_nulls) {
+		const auto val_idx = entries.val_format.sel->get_index(entry_idx);
+		const auto arg_idx = entries.arg_format.sel->get_index(entry_idx);
+		if (!entries.validity.IsValid(entry_idx) ||
+		    (reject_nulls &&
+		     (!entries.val_format.validity.RowIsValid(val_idx) || !entries.arg_format.validity.RowIsValid(arg_idx)))) {
+			throw InvalidInputException("Invalid arg_min/arg_max state - the entries cannot be NULL");
+		}
+		heap.AppendSlot(allocator, ARG_TYPE::Create(entries.arg_format, arg_idx),
+		                VAL_TYPE::Create(entries.val_format, val_idx));
+	}
 };
 
 //------------------------------------------------------------------------------
@@ -690,8 +738,8 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 
-	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState();
-	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState();
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(count);
+	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(count);
 
 	STATE::VAL_TYPE::PrepareData(val_vector, val_extra_state, val_format, bind_data.nulls_last);
 	STATE::ARG_TYPE::PrepareData(arg_vector, arg_extra_state, arg_format, bind_data.nulls_last);
@@ -745,15 +793,23 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 //------------------------------------------------------------------------------
 // Bind
 //------------------------------------------------------------------------------
+template <class VAL_TYPE>
+void SetArgStorageProperty(BoundAggregateFunction &function) {
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
+	                                     Value::BOOLEAN(std::is_same<VAL_TYPE, MinMaxFallbackValue>::value));
+}
+
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
 void SpecializeArgMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
+	SetArgStorageProperty<VAL_TYPE>(function);
 	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
 	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
 	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
-	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.SetExportAggregateStateCallback(MinMaxNOperation::ExportState<STATE>);
+	function.SetImportAggregateStateCallback(MinMaxNOperation::ImportState<STATE>);
 
 	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
 	function.SetStateUpdateCallback(ArgMinMaxNUpdate<STATE>);
@@ -816,10 +872,12 @@ void SpecializeArgMinMaxNullNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
+	SetArgStorageProperty<VAL_TYPE>(function);
 	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
 	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
 	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
-	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.SetExportAggregateStateCallback(MinMaxNOperation::ExportState<STATE>);
+	function.SetImportAggregateStateCallback(MinMaxNOperation::ImportState<STATE>);
 	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
 	function.SetStateUpdateCallback(ArgMinMaxNUpdate<STATE>);
 }
@@ -890,7 +948,9 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
+	ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType(), input.GetCollationType());
+	function.GetArguments()[0] = arguments[0]->GetReturnType();
+	function.GetArguments()[1] = arguments[1]->GetReturnType();
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
 	const auto arg_type = arguments[1]->GetReturnType().InternalType();
@@ -903,8 +963,22 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 	} else {
 		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
 	}
+	if (arguments[2]->HasParameter()) {
+		// n is constant per execution: bind again once its value is known
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[2]->IsFoldable()) {
+		MinMaxNOperation::BindPerRowN(function);
+	}
 
 	return unique_ptr<FunctionData>(std::move(function_data));
+}
+
+AggregateStateLayout ArgMinMaxNGetStateType(AggregateLayoutInput &input) {
+	child_list_t<LogicalType> entry_children;
+	entry_children.emplace_back("arg", input.function.GetArguments()[0]);
+	entry_children.emplace_back("val", input.function.GetArguments()[1]);
+	return MinMaxNOperation::GetStateType(input, LogicalType::STRUCT(std::move(entry_children)));
 }
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
@@ -915,6 +989,8 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	    .AddParameter("arg", LogicalTypeId::ANY)
 	    .AddParameter("val", LogicalTypeId::ANY)
 	    .AddParameter("N", LogicalType::BIGINT);
+	function.SetStructStateExport(ArgMinMaxNGetStateType);
+	function.SetCombineSourceRetention(AggregateCombineSourceRetention::NEVER_RETAINS);
 	function.SetFallible(); // the update callback rejects NULL and out-of-range n values at runtime
 
 	set.AddFunction(function);

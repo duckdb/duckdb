@@ -65,11 +65,13 @@ public:
 	optional_idx GetMaxTestThreads();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
+	bool GetKeepHome();
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
 	bool RunStorageFuzzer();
 	bool GetSummarizeFailures();
 	bool GetSkipCompiledTests();
+	bool GetWarningsAsErrors();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
 	ExtensionAutoLoadingMode GetExtensionAutoLoadingMode();
@@ -167,6 +169,24 @@ private:
 
 class FailureSummary {
 public:
+	struct State {
+		idx_t counter = 0;
+		vector<string> messages;
+		set<string> reported_files;
+	};
+
+	class Scope {
+	public:
+		Scope();
+		~Scope();
+
+		Scope(const Scope &) = delete;
+		Scope &operator=(const Scope &) = delete;
+
+	private:
+		State previous;
+	};
+
 	FailureSummary();
 
 	static void Log(string message);
@@ -180,9 +200,7 @@ private:
 
 private:
 	mutex failures_lock;
-	atomic<idx_t> failures_summary_counter;
-	vector<string> failures_summary;
-	set<string> reported_files;
+	State state;
 };
 
 } // namespace duckdb

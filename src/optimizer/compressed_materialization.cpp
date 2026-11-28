@@ -61,16 +61,16 @@ CompressExpression::CompressExpression(unique_ptr<Expression> expression_p, uniq
 struct CMHelper {
 	static bool TypeRequiresRestore(CompressedMaterializationType materialization_type);
 
-	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
+	//! Construct a projection with resolved output types over an already resolved child.
+	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, unique_ptr<LogicalOperator> child,
 	                                                      vector<unique_ptr<Expression>> projections);
-	static unique_ptr<Expression> CreateDefaultStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
+	static unique_ptr<Expression> CreateStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
+	                                                   const LogicalType &target_type,
+	                                                   const BaseStatistics &input_stats,
+	                                                   unique_ptr<BaseStatistics> &result_stats);
+	static unique_ptr<BaseStatistics> PropagateCastStatistics(ClientContext &context, const LogicalType &source_type,
 	                                                          const LogicalType &target_type,
-	                                                          const BaseStatistics &input_stats,
-	                                                          unique_ptr<BaseStatistics> &result_stats);
-	static unique_ptr<BaseStatistics> PropagateDefaultCastStatistics(ClientContext &context,
-	                                                                 const LogicalType &source_type,
-	                                                                 const LogicalType &target_type,
-	                                                                 const BaseStatistics &input_stats);
+	                                                          const BaseStatistics &input_stats);
 
 	static void RemapBindingMap(CompressedMaterializationInfo &info,
 	                            const vector<ReplacementBinding> &replacement_bindings);
@@ -84,10 +84,10 @@ struct CMHelper {
 	                                          const BaseStatistics &stats, LogicalType &offset_type, Value &min,
 	                                          Value &range_value);
 	static LogicalType GetSameWidthIntegralType(const LogicalType &type, bool use_signed);
-	static bool ValuePreservingCastFits(const Value &value, const LogicalType &source_type,
+	static bool ValuePreservingCastFits(ClientContext &context, const Value &value, const LogicalType &source_type,
 	                                    const LogicalType &target_type);
-	static LogicalType GetIntegralCastType(const LogicalType &source_type, const LogicalType &offset_type,
-	                                       const BaseStatistics &stats);
+	static LogicalType GetIntegralCastType(ClientContext &context, const LogicalType &source_type,
+	                                       const LogicalType &offset_type, const BaseStatistics &stats);
 	static unique_ptr<CompressExpression> CreateIntegralCastCompress(ClientContext &context,
 	                                                                 unique_ptr<Expression> &input,
 	                                                                 const LogicalType &target_type,
@@ -119,23 +119,24 @@ bool CMHelper::TypeRequiresRestore(CompressedMaterializationType materialization
 	return materialization_type != CompressedMaterializationType::INVALID;
 }
 
-unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
+unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimizer, unique_ptr<LogicalOperator> child,
                                                          vector<unique_ptr<Expression>> projections) {
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
-	if (source.has_estimated_cardinality) {
-		projection->SetEstimatedCardinality(source.estimated_cardinality);
+	if (child->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(child->estimated_cardinality);
 	}
+	projection->children.push_back(std::move(child));
+	projection->ResolveOperatorTypesFromChildren();
 	return projection;
 }
 
-unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
-                                                             const LogicalType &target_type,
-                                                             const BaseStatistics &input_stats,
-                                                             unique_ptr<BaseStatistics> &result_stats) {
-	auto result = BoundCastExpression::AddDefaultCastToType(std::move(input), target_type);
+unique_ptr<Expression> CMHelper::CreateStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
+                                                      const LogicalType &target_type, const BaseStatistics &input_stats,
+                                                      unique_ptr<BaseStatistics> &result_stats) {
+	auto result = BoundCastExpression::AddCastToType(context, std::move(input), target_type);
 	if (!BoundCastExpression::IsCast(*result)) { // LCOV_EXCL_START
-		throw InternalException("Expected a cast in CMHelper::CreateDefaultStatsAwareCast");
+		throw InternalException("Expected a cast in CMHelper::CreateStatsAwareCast");
 	} // LCOV_EXCL_STOP
 	auto &cast = result->Cast<BoundFunctionExpression>();
 	CMUtils::MarkCast(cast);
@@ -147,13 +148,12 @@ unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &cont
 	return result;
 }
 
-unique_ptr<BaseStatistics> CMHelper::PropagateDefaultCastStatistics(ClientContext &context,
-                                                                    const LogicalType &source_type,
-                                                                    const LogicalType &target_type,
-                                                                    const BaseStatistics &input_stats) {
-	CastFunctionSet default_casts;
+unique_ptr<BaseStatistics> CMHelper::PropagateCastStatistics(ClientContext &context, const LogicalType &source_type,
+                                                             const LogicalType &target_type,
+                                                             const BaseStatistics &input_stats) {
+	auto &cast_functions = CastFunctionSet::Get(context);
 	GetCastFunctionInput get_input(context);
-	auto bound_cast = default_casts.GetCastFunction(source_type, target_type, get_input);
+	auto bound_cast = cast_functions.GetCastFunction(source_type, target_type, get_input);
 	return bound_cast.PropagateStatistics(source_type, target_type, input_stats, context);
 }
 
@@ -263,15 +263,15 @@ LogicalType CMHelper::GetSameWidthIntegralType(const LogicalType &type, const bo
 	}
 }
 
-bool CMHelper::ValuePreservingCastFits(const Value &value, const LogicalType &source_type,
+bool CMHelper::ValuePreservingCastFits(ClientContext &context, const Value &value, const LogicalType &source_type,
                                        const LogicalType &target_type) {
 	optional<Value> roundtrip_value;
 	try {
-		auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+		auto cast_value = value.TryCastAs(context, target_type, nullptr, true);
 		if (!cast_value) {
 			return false;
 		}
-		roundtrip_value = cast_value->DefaultTryCastAs(source_type, nullptr, true);
+		roundtrip_value = cast_value->TryCastAs(context, source_type, nullptr, true);
 		if (!roundtrip_value) {
 			return false;
 		}
@@ -281,8 +281,8 @@ bool CMHelper::ValuePreservingCastFits(const Value &value, const LogicalType &so
 	return value == *roundtrip_value;
 }
 
-LogicalType CMHelper::GetIntegralCastType(const LogicalType &source_type, const LogicalType &offset_type,
-                                          const BaseStatistics &stats) {
+LogicalType CMHelper::GetIntegralCastType(ClientContext &context, const LogicalType &source_type,
+                                          const LogicalType &offset_type, const BaseStatistics &stats) {
 	if (GetTypeIdSize(source_type.InternalType()) <= GetTypeIdSize(offset_type.InternalType())) {
 		return LogicalType::INVALID;
 	}
@@ -299,12 +299,12 @@ LogicalType CMHelper::GetIntegralCastType(const LogicalType &source_type, const 
 	auto alternate_type = GetSameWidthIntegralType(offset_type, !preferred_signed);
 	const auto min = NumericStats::Min(stats);
 	const auto max = NumericStats::Max(stats);
-	if (preferred_type.IsValid() && ValuePreservingCastFits(min, source_type, preferred_type) &&
-	    ValuePreservingCastFits(max, source_type, preferred_type)) {
+	if (preferred_type.IsValid() && ValuePreservingCastFits(context, min, source_type, preferred_type) &&
+	    ValuePreservingCastFits(context, max, source_type, preferred_type)) {
 		return preferred_type;
 	}
-	if (alternate_type.IsValid() && ValuePreservingCastFits(min, source_type, alternate_type) &&
-	    ValuePreservingCastFits(max, source_type, alternate_type)) {
+	if (alternate_type.IsValid() && ValuePreservingCastFits(context, min, source_type, alternate_type) &&
+	    ValuePreservingCastFits(context, max, source_type, alternate_type)) {
 		return alternate_type;
 	}
 	return LogicalType::INVALID;
@@ -315,14 +315,14 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralCastCompress(ClientContex
                                                                     const LogicalType &target_type,
                                                                     const BaseStatistics &stats) {
 	const auto source_type = input->GetReturnType();
-	auto compress_stats = PropagateDefaultCastStatistics(context, source_type, target_type, stats);
+	auto compress_stats = PropagateCastStatistics(context, source_type, target_type, stats);
 	if (!compress_stats) {
 		return nullptr;
 	}
-	if (!PropagateDefaultCastStatistics(context, target_type, source_type, *compress_stats)) {
+	if (!PropagateCastStatistics(context, target_type, source_type, *compress_stats)) {
 		return nullptr;
 	}
-	auto compress_expr = CreateDefaultStatsAwareCast(context, std::move(input), target_type, stats, compress_stats);
+	auto compress_expr = CreateStatsAwareCast(context, std::move(input), target_type, stats, compress_stats);
 	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
 	                                     CompressedMaterializationType::CAST);
 }
@@ -448,14 +448,11 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		break;
 	default:
 		return;
 	}
-
-	op->ResolveOperatorTypes();
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -463,9 +460,6 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		CompressComparisonJoin(op);
-		break;
-	case LogicalOperatorType::LOGICAL_DISTINCT:
-		CompressDistinct(op);
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		CompressOrder(op);
@@ -536,11 +530,7 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	for (auto &compress_expr : compress_exprs) {
 		projections.emplace_back(std::move(compress_expr->expression));
 	}
-	auto compress_projection = CMHelper::CreateProjection(optimizer, *child_op, std::move(projections));
-	compress_projection->ResolveOperatorTypes();
-
-	compress_projection->children.emplace_back(std::move(child_op));
-	child_op = std::move(compress_projection);
+	child_op = CMHelper::CreateProjection(optimizer, std::move(child_op), std::move(projections));
 
 	// Get the new bindings and types
 	child_info.bindings_after = child_op->GetColumnBindings();
@@ -586,13 +576,13 @@ unique_ptr<Expression> CompressedMaterialization::CreateRestoreExpression(unique
 		return GetDecompressExpression(std::move(input), binding_info.type, stats);
 	case CompressedMaterializationType::CAST: {
 		auto source_type = input->GetReturnType();
-		auto source_stats = CMHelper::PropagateDefaultCastStatistics(context, binding_info.type, source_type, stats);
+		auto source_stats = CMHelper::PropagateCastStatistics(context, binding_info.type, source_type, stats);
 		if (!source_stats) { // LCOV_EXCL_START
 			throw InternalException("Could not obtain compressed statistics for cast restoration");
 		} // LCOV_EXCL_STOP
 		unique_ptr<BaseStatistics> result_stats;
-		return CMHelper::CreateDefaultStatsAwareCast(context, std::move(input), binding_info.type, *source_stats,
-		                                             result_stats);
+		return CMHelper::CreateStatsAwareCast(context, std::move(input), binding_info.type, *source_stats,
+		                                      result_stats);
 	}
 	default:
 		throw InternalException("Invalid compressed materialization type");
@@ -602,7 +592,7 @@ unique_ptr<Expression> CompressedMaterialization::CreateRestoreExpression(unique
 void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOperator> &op,
                                                            CompressedMaterializationInfo &info) {
 	const auto bindings = op->GetColumnBindings();
-	op->ResolveOperatorTypes();
+	op->ResolveOperatorTypesFromChildren();
 	const auto &types = op->types;
 
 	// Create decompress expressions for everything we compressed
@@ -628,10 +618,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	}
 
 	// Replace op with a projection
-	auto decompress_projection = CMHelper::CreateProjection(optimizer, *op, std::move(decompress_exprs));
-
-	decompress_projection->children.emplace_back(std::move(op));
-	op = std::move(decompress_projection);
+	op = CMHelper::CreateProjection(optimizer, std::move(op), std::move(decompress_exprs));
 
 	// Check if we're placing a projection on top of the root
 	if (RefersToSameObject(*op->children[0], *root)) {
@@ -641,7 +628,6 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 
 	// Get the new bindings and types
 	auto new_bindings = op->GetColumnBindings();
-	op->ResolveOperatorTypes();
 	auto &new_types = op->types;
 
 	// Initialize a ColumnBindingReplacer with the new bindings and types
@@ -740,7 +726,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 	}
 	D_ASSERT(GetTypeIdSize(cast_type.InternalType()) < GetTypeIdSize(type.InternalType()));
 
-	const auto value_preserving_cast_type = CMHelper::GetIntegralCastType(type, cast_type, stats);
+	const auto value_preserving_cast_type = CMHelper::GetIntegralCastType(context, type, cast_type, stats);
 	if (value_preserving_cast_type.IsValid()) {
 		auto result = CMHelper::CreateIntegralCastCompress(context, input, value_preserving_cast_type, stats);
 		if (result) {

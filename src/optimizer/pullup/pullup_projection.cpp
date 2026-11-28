@@ -1,104 +1,145 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
-static void RevertFilterPullup(LogicalProjection &proj, vector<unique_ptr<Expression>> &expressions) {
-	unique_ptr<LogicalFilter> filter = make_uniq<LogicalFilter>();
-	for (idx_t i = 0; i < expressions.size(); ++i) {
-		filter->expressions.push_back(std::move(expressions[i]));
-	}
-	expressions.clear();
-	filter->children.push_back(std::move(proj.children[0]));
-	proj.children[0] = std::move(filter);
-}
-
-static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expressions, Expression &expr,
-                                     TableIndex proj_table_idx) {
+static bool CanRewrite(const Expression &expr, const expression_map_t<ProjectionIndex> &projections,
+                       bool match_computed) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		bool found_proj_col = false;
-		BoundColumnRefExpression &colref = expr.Cast<BoundColumnRefExpression>();
-		// find the corresponding column index in the projection expressions
-		for (idx_t proj_idx = 0; proj_idx < proj_expressions.size(); proj_idx++) {
-			auto &proj_expr = *proj_expressions[proj_idx];
-			if (proj_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				if (colref.Equals(proj_expr)) {
-					colref.BindingMutable().table_index = proj_table_idx;
-					colref.BindingMutable().column_index = ProjectionIndex(proj_idx);
-					found_proj_col = true;
-					break;
-				}
-			}
-		}
-		if (!found_proj_col) {
-			// Project a new column
-			auto new_colref = colref.Copy();
-			colref.BindingMutable().table_index = proj_table_idx;
-			colref.BindingMutable().column_index =
-			    ColumnBinding::PushExpression(proj_expressions, std::move(new_colref));
-		}
+		return projections.find(expr) != projections.end();
 	}
-	ExpressionIterator::EnumerateChildren(
-	    expr, [&](Expression &child) { return ReplaceExpressionBinding(proj_expressions, child, proj_table_idx); });
+	if (match_computed && projections.find(expr) != projections.end()) {
+		return true;
+	}
+	bool can_rewrite = true;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		can_rewrite = can_rewrite && CanRewrite(child, projections, match_computed);
+	});
+	return can_rewrite;
 }
 
-void FilterPullup::ProjectSetOperation(LogicalProjection &proj) {
-	vector<unique_ptr<Expression>> copy_proj_expressions;
-	// copying the project expressions, it's useful whether we should revert the filter pullup
-	for (idx_t i = 0; i < proj.expressions.size(); ++i) {
-		copy_proj_expressions.push_back(proj.expressions[i]->Copy());
+static unique_ptr<BoundColumnRefExpression> LookupOutput(const Expression &expr, const LogicalProjection &proj,
+                                                         const expression_map_t<ProjectionIndex> &projections) {
+	auto entry = projections.find(expr);
+	if (entry == projections.end()) {
+		return nullptr;
 	}
+	const auto binding = ColumnBinding(proj.table_index, entry->second);
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		return unique_ptr_cast<Expression, BoundColumnRefExpression>(
+		    expr.Cast<BoundColumnRefExpression>().WithBinding(binding));
+	}
+	return make_uniq<BoundColumnRefExpression>(expr.GetAlias(), expr.GetReturnType(), binding);
+}
 
-	// Replace filter expression bindings, when need we add new columns into the copied projection expression
-	vector<unique_ptr<Expression>> changed_filter_expressions;
-	for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
-		auto copy_filter_expr = filters_expr_pullup[i]->Copy();
-		ReplaceExpressionBinding(copy_proj_expressions, (Expression &)*copy_filter_expr, proj.table_index);
-		changed_filter_expressions.push_back(std::move(copy_filter_expr));
-	}
-
-	/// Case new columns were added into the projection
-	// we must skip filter pullup because adding new columns to these operators will change the result
-	if (copy_proj_expressions.size() > proj.expressions.size()) {
-		RevertFilterPullup(proj, filters_expr_pullup);
-		return;
-	}
-
-	// now we must replace the filter bindings
-	D_ASSERT(filters_expr_pullup.size() == changed_filter_expressions.size());
-	for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
-		filters_expr_pullup[i] = std::move(changed_filter_expressions[i]);
-	}
+static unique_ptr<Expression> RewritePredicate(unique_ptr<Expression> expr, LogicalProjection &proj,
+                                               expression_map_t<ProjectionIndex> &projections, bool match_computed) {
+	return ExpressionIterator::PreorderReplace(std::move(expr), [&](const Expression &child) -> unique_ptr<Expression> {
+		if (!match_computed && child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return nullptr;
+		}
+		auto output = LookupOutput(child, proj, projections);
+		if (output) {
+			return std::move(output);
+		}
+		if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return nullptr;
+		}
+		D_ASSERT(!match_computed);
+		auto column_index = ColumnBinding::PushExpression(proj.expressions, child.Copy());
+		projections.emplace(*proj.expressions.back(), column_index);
+		return child.Cast<BoundColumnRefExpression>().WithBinding(ColumnBinding(proj.table_index, column_index));
+	});
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	op->children[0] = Rewrite(std::move(op->children[0]));
-	if (!filters_expr_pullup.empty()) {
-		auto &proj = op->Cast<LogicalProjection>();
-		for (auto &expr : filters_expr_pullup) {
-			if (expr->CanThrow()) {
-				// Keep fallible predicates and their guards below the projection.
-				RevertFilterPullup(proj, filters_expr_pullup);
-				return op;
-			}
-		}
-		// INTERSECT, EXCEPT, and DISTINCT
-		if (!can_add_column) {
-			// special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT
-			ProjectSetOperation(proj);
-			return op;
-		}
-
-		for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
-			auto &expr = (Expression &)*filters_expr_pullup[i];
-			ReplaceExpressionBinding(proj.expressions, expr, proj.table_index);
+	auto &proj = op->Cast<LogicalProjection>();
+	// Pulling filters above a projection can evaluate its expressions on additional rows.
+	for (auto &expr : proj.expressions) {
+		if (expr->CanThrow() || expr->IsVolatile()) {
+			return FinishPullup(std::move(op));
 		}
 	}
+
+	op->children[0] = Rewrite(std::move(op->children[0]));
+	if (filters_expr_pullup.empty()) {
+		return op;
+	}
+	for (auto &expr : filters_expr_pullup) {
+		if (expr->CanThrow() || expr->IsVolatile()) {
+			// Keep fallible or volatile predicates and their guards below the projection.
+			proj.children[0] = GeneratePullupFilter(std::move(proj.children[0]), filters_expr_pullup);
+			return op;
+		}
+	}
+
+	expression_map_t<ProjectionIndex> projections;
+	for (idx_t i = 0; i < proj.expressions.size(); i++) {
+		// Keep constants in predicates available for constant-filter inference.
+		if (!proj.expressions[i]->IsFoldable() && FilterCombiner::CanMatchExpression(*proj.expressions[i])) {
+			projections.emplace(*proj.expressions[i], ProjectionIndex(i));
+		}
+	}
+	bool can_move = can_add_column;
+	if (!can_move) {
+		can_move = true;
+		for (auto &expr : filters_expr_pullup) {
+			can_move = can_move && CanRewrite(*expr, projections, false);
+		}
+	}
+	if (can_move) {
+		// Preserve the original predicate shape and its visibility at enclosing projections.
+		for (auto &expr : filters_expr_pullup) {
+			expr = RewritePredicate(std::move(expr), proj, projections, false);
+		}
+		return op;
+	}
+
+	vector<unique_ptr<Expression>> exported;
+	auto export_filter = [&](const Expression &expr) {
+		if (!FilterCombiner::CanCopyFilter(expr)) {
+			return;
+		}
+		auto compared = FilterCombiner::GetComparedExpression(expr);
+		auto &operand = compared ? *compared : expr;
+		const bool match_computed = !CanRewrite(operand, projections, false);
+		if (!match_computed || CanRewrite(operand, projections, true)) {
+			auto copy = expr.Copy();
+			bool rewrite_children = compared;
+			if (!rewrite_children && BoundComparisonExpression::IsComparison(expr)) {
+				rewrite_children = true;
+				ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+					rewrite_children &= CanRewrite(child, projections, match_computed);
+				});
+			}
+			// Keep the comparison available for inference, even when it is also a Boolean output.
+			if (rewrite_children) {
+				ExpressionIterator::EnumerateChildren(*copy, [&](unique_ptr<Expression> &child) {
+					child = RewritePredicate(std::move(child), proj, projections, match_computed);
+				});
+			} else {
+				copy = RewritePredicate(std::move(copy), proj, projections, match_computed);
+			}
+			exported.push_back(std::move(copy));
+		}
+	};
+	for (auto &expr : filters_expr_pullup) {
+		export_filter(*expr);
+	}
+	if (context) {
+		FilterCombiner::GenerateProjectionFilters(
+		    *context, filters_expr_pullup,
+		    [&](const Expression &expr) { return LookupOutput(expr, proj, projections); }, exported);
+	}
+	// Retain the full batch: its predicates can guard fallible operators above this projection.
+	proj.children[0] = GeneratePullupFilter(std::move(proj.children[0]), filters_expr_pullup);
+	filters_expr_pullup = std::move(exported);
 	return op;
 }
 
