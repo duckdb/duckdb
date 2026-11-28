@@ -476,7 +476,7 @@ public:
 			scan_state.table_state.reorderer =
 			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 			scan_state.local_state.reorderer =
-			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
+			    make_uniq<RowGroupReorderer>(bind_data.order_options->WithoutOffsetPruning(), TransactionData(tx));
 		}
 		scan_state.Initialize(storage_ids, context, filters, sample_options, total_rows);
 		scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
@@ -841,7 +841,8 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	if (bind_data.order_options) {
 		auto transaction = TransactionData(DuckTransaction::Get(context, storage.GetAttached()));
 		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
-		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
+		g_state->state.local_state.reorderer =
+		    make_uniq<RowGroupReorderer>(bind_data.order_options->WithoutOffsetPruning(), transaction);
 	}
 	if (bind_data.partitions_to_scan) {
 		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
