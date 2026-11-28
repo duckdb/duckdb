@@ -12,6 +12,7 @@
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/type_constructor.hpp"
 
 namespace duckdb {
@@ -406,6 +407,15 @@ void RegisterGeographyConstructors(TypeConstructorSet &set) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// AGGREGATE_STATE Type
+//----------------------------------------------------------------------------------------------------------------------
+void RegisterAggregateStateType(TypeConstructorSet &set) {
+	// the parameters mirror the rendering in LogicalType::ToString - the bind function validates them itself
+	set.AddFunction(
+	    TypeConstructor::Unchecked(Identifier("aggregate_state"), ExportAggregateFunction::BindAggregateStateType));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // All Types
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -418,7 +428,7 @@ struct DefaultType {
 	constructor_registration_t register_constructors;
 };
 
-using builtin_type_array = std::array<DefaultType, 84>;
+using builtin_type_array = std::array<DefaultType, 85>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, RegisterDecimalConstructors},
                                            {"dec", LogicalTypeId::DECIMAL, RegisterDecimalConstructors},
@@ -503,6 +513,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, R
                                            {"float8", LogicalTypeId::DOUBLE, nullptr},
                                            {"geometry", LogicalTypeId::GEOMETRY, RegisterGeometryConstructors},
                                            {"geography", LogicalTypeId::GEOGRAPHY, RegisterGeographyConstructors},
+                                           {"aggregate_state", LogicalTypeId::STRUCT, RegisterAggregateStateType},
                                            {"type", LogicalTypeId::TYPE, nullptr}}};
 
 TypeConstructorSet GetConstructors(const DefaultType &entry, const Identifier &name) {

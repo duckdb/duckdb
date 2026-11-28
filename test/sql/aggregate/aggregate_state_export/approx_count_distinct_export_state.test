@@ -125,7 +125,7 @@ SELECT finalize(to_aggregate_state(s::STRUCT(precision UTINYINT, registers UTINY
                                   'approx_count_distinct', ['ANY'])),
        finalize(combine(s, to_aggregate_state(s::STRUCT(precision UTINYINT, registers UTINYINT[]),
                                             'approx_count_distinct', ['ANY']))) = finalize(s),
-       typeof(s) = 'AGGREGATE_STATE' AND typeof(finalize(s)) = 'BIGINT'
+       typeof(s) = 'AGGREGATE_STATE(''approx_count_distinct'', [''ANY''])' AND typeof(finalize(s)) = 'BIGINT'
 FROM (SELECT approx_count_distinct(v) EXPORT_STATE s FROM (VALUES (1::BIGINT),(1),(NULL),(2)) input(v));
 ----
 2	true	true
