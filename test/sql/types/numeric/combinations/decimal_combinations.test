@@ -41,11 +41,11 @@ select (typeof([(SELECT min from {type}_limits), 1.00005])::VARCHAR)[:7]
 ----
 DECIMAL
 
-# HUGEINT sets width to 38+scale, which makes the list a wide decimal
+# HUGEINT sets width to 39+scale, which makes the list a wide decimal
 query I
 select typeof([(SELECT min from hugeint_limits), 1.00005])
 ----
-DECIMAL(43,5)[]
+DECIMAL(44,5)[]
 
 query I
 select [(SELECT max from hugeint_limits), 1.00005]

@@ -1,0 +1,92 @@
+# name: test/sql/index/art/storage/test_art_uhugeint_signed_key_types.test
+# description: Index keys that combine a UHUGEINT with a signed integer are exact in every storage version
+# group: [storage]
+
+# the storage version is chosen per database below, the configs that force one cannot
+require no_force_storage
+
+# a database of a storage version before wide decimals binds its keys within 38 digits: UHUGEINT and BIGINT combine to
+# HUGEINT there, as in the engines of those versions, never to a DOUBLE, which cannot tell these keys apart
+statement ok
+ATTACH '{TEST_DIR}/uhugeint_signed_keys_v1.db' AS o (STORAGE_VERSION 'v1.0.0')
+
+statement ok
+CREATE TABLE o.t (u UHUGEINT, b BIGINT)
+
+statement ok
+CREATE UNIQUE INDEX ui ON o.t ((coalesce(u, b)))
+
+statement ok
+INSERT INTO o.t VALUES (18446744073709551616, NULL)
+
+statement ok
+INSERT INTO o.t VALUES (18446744073709551617, NULL)
+
+statement ok
+INSERT INTO o.t VALUES (9223372036854775808, NULL), (NULL, 9223372036854775807)
+
+statement error
+INSERT INTO o.t VALUES (NULL, 9223372036854775807)
+----
+<REGEX>:.*Duplicate key.*9223372036854775807.*
+
+statement error
+INSERT INTO o.t VALUES (18446744073709551617, 5)
+----
+<REGEX>:.*Duplicate key.*18446744073709551617.*
+
+# the keys are the same after reopening, in a session of either width
+statement ok
+DETACH o
+
+statement ok
+SET max_decimal_width = 38
+
+statement ok
+ATTACH '{TEST_DIR}/uhugeint_signed_keys_v1.db' AS o
+
+statement error
+INSERT INTO o.t VALUES (9223372036854775808, NULL)
+----
+<REGEX>:.*Duplicate key.*9223372036854775808.*
+
+statement ok
+INSERT INTO o.t VALUES (9223372036854775806, NULL)
+
+query I
+SELECT count(*) FROM o.t
+----
+5
+
+statement ok
+RESET max_decimal_width
+
+statement ok
+DETACH o
+
+# a database of the storage version of wide decimals binds its keys without a bound: the keys are DECIMAL(39,0), which
+# holds every value of both columns
+statement ok
+ATTACH '{TEST_DIR}/uhugeint_signed_keys_wide.db' AS w (STORAGE_VERSION 'v2.1.0')
+
+statement ok
+CREATE TABLE w.t (u UHUGEINT, b BIGINT)
+
+statement ok
+CREATE UNIQUE INDEX ui ON w.t ((coalesce(u, b)))
+
+statement ok
+INSERT INTO w.t VALUES (18446744073709551616, NULL), (18446744073709551617, NULL), (9223372036854775808, NULL), (NULL, 9223372036854775807), (340282366920938463463374607431768211455, NULL), (NULL, -9223372036854775808)
+
+statement error
+INSERT INTO w.t VALUES (NULL, 9223372036854775807)
+----
+<REGEX>:.*Duplicate key.*9223372036854775807.*
+
+statement error
+INSERT INTO w.t VALUES (340282366920938463463374607431768211455, NULL)
+----
+<REGEX>:.*Duplicate key.*340282366920938463463374607431768211455.*
+
+statement ok
+DETACH w

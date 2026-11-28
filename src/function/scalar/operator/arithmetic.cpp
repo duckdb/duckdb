@@ -427,12 +427,13 @@ LogicalType DecimalArithmeticResultType(const DecimalWidthLimit &decimal_width_l
 	check_overflow = false;
 	// get the max width and scale of the input arguments
 	uint32_t max_width = 0, max_scale = 0, max_width_over_scale = 0, max_decimal_width = 0;
+	uint32_t max_width_besides_hugeint = 0;
 	for (auto &input_type : input_types) {
 		if (input_type.id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
 		uint32_t width, scale;
-		auto can_convert = input_type.GetDecimalProperties(width, scale);
+		auto can_convert = decimal_width_limit.GetDecimalProperties(input_type, width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
 			                      "explicit cast",
@@ -440,6 +441,9 @@ LogicalType DecimalArithmeticResultType(const DecimalWidthLimit &decimal_width_l
 		}
 		if (width > max_width) {
 			max_width = width;
+		}
+		if (input_type.id() != LogicalTypeId::HUGEINT) {
+			max_width_besides_hugeint = MaxValue<uint32_t>(width, max_width_besides_hugeint);
 		}
 		if (input_type.id() == LogicalTypeId::DECIMAL) {
 			max_decimal_width = MaxValue<uint32_t>(width, max_decimal_width);
@@ -452,6 +456,11 @@ LogicalType DecimalArithmeticResultType(const DecimalWidthLimit &decimal_width_l
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 		required_width++;
+	} else if (Decimal::IsWide(required_width) && max_scale == 0 && !Decimal::IsWide(max_width_besides_hugeint)) {
+		// a modulo of a HUGEINT and a DECIMAL without fractional digits that is stored in a fixed-size integer is an
+		// integer modulo, whose result is no larger than its smaller operand: it is computed on the 128-bit integers
+		// and is a DECIMAL of their storage tier, which the HUGEINT is not cast to
+		required_width = DecimalWidth<hugeint_t>::max;
 	}
 	const idx_t width_limit = decimal_width_limit.ResultWidth(max_decimal_width);
 	if (required_width > width_limit && !Decimal::IsWide(width_limit)) {
@@ -1270,7 +1279,7 @@ LogicalType DecimalMultiplyResultType(const DecimalWidthLimit &decimal_width_lim
 			continue;
 		}
 		uint32_t width, scale;
-		auto can_convert = input_type.GetDecimalProperties(width, scale);
+		auto can_convert = decimal_width_limit.GetDecimalProperties(input_type, width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
 			                      "explicit cast",

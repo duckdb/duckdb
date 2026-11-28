@@ -101,6 +101,10 @@ public:
 	//! The widest result of combining decimals, given the widest DECIMAL among the inputs: the limit, or the input
 	//! width when that is wider
 	uint32_t ResultWidth(uint32_t max_input_width) const;
+	//! The width and scale of the DECIMAL an integer or DECIMAL type is bound as, false for other types: the DECIMAL
+	//! that holds every value of the type, 39 digits for HUGEINT and UHUGEINT. A limit within the fixed-size decimals
+	//! binds them as 38 digits instead, as they were before wide decimals, and a value of 39 digits fails its cast
+	bool GetDecimalProperties(const LogicalType &type, uint32_t &width, uint32_t &scale) const;
 	//! Narrows a computed result width, throws when the operation needs a DECIMAL beyond ResultWidth
 	uint32_t CheckedWidth(idx_t width, uint32_t max_input_width, const string &operation) const;
 

@@ -185,10 +185,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		// integral types do not fit all numbers of their decimal width, e.g. SMALLINT (width 5) does not fit 99999
 		auto source_digits = source_width - source_scale;
 		auto target_digits = target_width - target_scale;
-		if (source_type.id() == LogicalTypeId::HUGEINT || source_type.id() == LogicalTypeId::UHUGEINT) {
-			// (u)hugeint values can have up to 39 digits
-			source_digits++;
-		}
 		if (target_type.id() != LogicalTypeId::DECIMAL) {
 			target_digits--;
 		}
@@ -424,8 +420,8 @@ static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType
 }
 
 //! The decimal digits that every value of an integer type fits in, e.g. 5 for SMALLINT: no five-digit DECIMAL
-//! overflows for 32767 or -32768. 0 for other types, and for HUGEINT and UHUGEINT, whose 39-digit values no DECIMAL
-//! holds
+//! overflows for 32767 or -32768. 39 for HUGEINT and UHUGEINT, which only a DECIMAL beyond the fixed-size tiers holds,
+//! and 0 for other types
 static uint8_t IntegerTypeDecimalDigits(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -528,8 +524,8 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// Casting to DECIMAL overflows whenever the value does not fit in the width and scale, e.g. 100 -> DECIMAL(38,37),
 	// unless the target holds every value of the source type: a DECIMAL that keeps the source's integral and fractional
 	// digits, or an integer type whose digits fit before the decimal point. The max-type check below cannot decide
-	// this, since the maximum DECIMAL of two types is capped at the maximum width, e.g. HUGEINT -> DECIMAL(38,0)
-	// in databases that stay within 38 digits
+	// this, since the maximum DECIMAL of two types is capped at the maximum width: HUGEINT and DECIMAL(38,0) combine to
+	// DECIMAL(39,0), which holds every HUGEINT, but to DECIMAL(38,0) in a session that stays within 38 digits
 	if (target_type.id() == LogicalTypeId::DECIMAL) {
 		return !DecimalHoldsEveryValue(source_type, target_type);
 	}

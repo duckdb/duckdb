@@ -1,0 +1,15 @@
+# name: benchmark/micro/filter/hugeint_decimal_comparison.benchmark
+# description: Compare a HUGEINT with a DECIMAL without fractional digits in the 128-bit integers
+# group: [filter]
+
+name Hugeint decimal comparison
+group filter
+
+load
+CREATE TABLE hugeint_decimal AS SELECT i::HUGEINT h, 97::DECIMAL(18,0) d FROM range(10000000) t(i);
+
+run
+SELECT count(*) FROM hugeint_decimal WHERE h > d
+
+result I
+9999902

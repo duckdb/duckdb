@@ -1,0 +1,15 @@
+# name: benchmark/micro/arithmetic/hugeint_decimal_modulo_sum.benchmark
+# description: Sum of the modulo of a HUGEINT and a DECIMAL without fractional digits
+# group: [arithmetic]
+
+name Hugeint decimal modulo sum
+group arithmetic
+
+load
+CREATE TABLE hugeint_decimal AS SELECT i::HUGEINT h, 97::DECIMAL(18,0) d FROM range(10000000) t(i);
+
+run
+SELECT sum(h % d) FROM hugeint_decimal
+
+result I
+479999202
