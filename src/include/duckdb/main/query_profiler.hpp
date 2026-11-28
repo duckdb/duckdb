@@ -249,6 +249,8 @@ private:
 
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
+	//! The operators dropped from the tree map by collapsing a secure view
+	reference_set_t<const PhysicalOperator> collapsed_operators;
 	//! Whether or not we are running as part of a explain_analyze query
 	bool is_explain_analyze;
 	//! Whether root metrics have been finalized for output
