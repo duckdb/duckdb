@@ -55,6 +55,19 @@ RegexpBaseBindData::RegexpBaseBindData(duckdb_re2::RE2::Options options, string 
 RegexpBaseBindData::~RegexpBaseBindData() {
 }
 
+unique_ptr<RE2> RegexpBaseBindData::CompileConstantPattern() const {
+	if (!constant_pattern) {
+		return nullptr;
+	}
+	auto validation_options = options;
+	validation_options.set_log_errors(false);
+	return make_uniq<RE2>(constant_string, validation_options);
+}
+
+unique_ptr<FunctionData> RegexpBaseBindData::Copy() const {
+	return make_uniq<RegexpBaseBindData>(options, constant_string, constant_pattern);
+}
+
 bool RegexpBaseBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpBaseBindData>();
 	return constant_pattern == other.constant_pattern && constant_string == other.constant_string &&
@@ -73,18 +86,6 @@ unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const
 //===--------------------------------------------------------------------===//
 // Regexp Matches
 //===--------------------------------------------------------------------===//
-RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p,
-                                             bool constant_pattern)
-    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern) {
-	if (constant_pattern) {
-		// an invalid pattern is reported when the function state is initialized
-		auto pattern = make_uniq<RE2>(constant_string, options);
-		range_success = pattern->ok() && pattern->PossibleMatchRange(&range_min, &range_max, 1000);
-	} else {
-		range_success = false;
-	}
-}
-
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p,
                                              bool constant_pattern, string range_min_p, string range_max_p,
                                              bool range_success)
@@ -108,9 +109,18 @@ unique_ptr<FunctionData> RegexpMatchesBind(BindScalarFunctionInput &input) {
 	}
 
 	string constant_string;
-	bool constant_pattern;
-	constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
-	return make_uniq<RegexpMatchesBindData>(options, std::move(constant_string), constant_pattern);
+	const bool constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
+	string range_min;
+	string range_max;
+	bool range_success = false;
+	RegexpBaseBindData data(options, std::move(constant_string), constant_pattern);
+	auto pattern = data.CompileConstantPattern();
+	if (pattern && pattern->ok()) {
+		range_success = pattern->PossibleMatchRange(&range_min, &range_max, 1000);
+		input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+	}
+	return make_uniq<RegexpMatchesBindData>(options, std::move(data.constant_string), constant_pattern,
+	                                        std::move(range_min), std::move(range_max), range_success);
 }
 
 struct RegexPartialMatch {
@@ -182,12 +192,10 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 	data->options.set_log_errors(false);
 
 	auto replacement = input.TryGetConstant(2);
-	if (data->constant_pattern && replacement && !replacement->IsNull() &&
-	    data->constant_string.find("\\C") == string::npos) {
-		RE2 validation_re(data->constant_string, data->options);
+	auto pattern = data->CompileConstantPattern();
+	if (regexp_util::CanExtractUTF8(pattern.get()) && replacement && !replacement->IsNull()) {
 		std::string rewrite_error;
-		if (validation_re.ok() &&
-		    validation_re.CheckRewriteString(CreateStringPiece(StringValue::Get(*replacement)), &rewrite_error)) {
+		if (pattern->CheckRewriteString(CreateStringPiece(StringValue::Get(*replacement)), &rewrite_error)) {
 			// A valid pattern without byte escapes and a valid replacement cannot throw.
 			input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
 		}
@@ -397,9 +405,17 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		ParseRegexOptions(input.GetConstant(3), options, nullptr, &no_match_returns_input);
 	}
 
-	int8_t group_index = 0;
+	Value group_or_options;
 	if (arguments.size() >= 3) {
-		Value group_or_options = input.GetConstant(2);
+		group_or_options = input.GetConstant(2);
+		if (group_or_options.type() == LogicalType::VARCHAR) {
+			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
+		}
+	}
+	auto data = make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, 0,
+	                                             no_match_returns_input);
+	auto pattern = data->CompileConstantPattern();
+	if (arguments.size() >= 3) {
 		if (group_or_options.type().id() == LogicalTypeId::LIST) {
 			if (!constant_pattern) {
 				throw BinderException("%s with LIST of group names requires a constant pattern",
@@ -407,34 +423,26 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options,
-			                                constant_string, options, constant_pattern, dummy_names, struct_children);
+			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options, *pattern,
+			                                dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
-		} else if (group_or_options.type() == LogicalType::VARCHAR) {
-			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
 		} else if (group_or_options.IsNull()) {
 			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
-			group_index = -1;
-		} else {
+			data->group_index = -1;
+		} else if (group_or_options.type() != LogicalType::VARCHAR) {
 			int32_t group_idx = group_or_options.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
-			group_index = static_cast<int8_t>(group_idx);
+			data->group_index = static_cast<int8_t>(group_idx);
 		}
 	}
 
-	if (constant_pattern && constant_string.find("\\C") == string::npos) {
-		auto validation_options = options;
-		validation_options.set_log_errors(false);
-		if (RE2(constant_string, validation_options).ok()) {
-			// A valid UTF-8 pattern without byte escapes cannot return a partial character.
-			bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
-		}
+	if (regexp_util::CanExtractUTF8(pattern.get())) {
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
-	                                        no_match_returns_input);
+	return std::move(data);
 }
 
 // Constructs a regex-family ScalarFunction and names its (up to 4) parameters via the builder pattern, since these

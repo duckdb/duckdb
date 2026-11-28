@@ -1,0 +1,222 @@
+# name: test/sql/function/string/regex_dictionary_execution.test
+# description: Safe constant regex operations reuse dictionary results
+# group: [string]
+
+require vector_size 2048
+
+load {TEST_DIR}/regex_dictionary_execution.db readwrite v2.0.0
+
+statement ok
+SET force_compression = 'dict_fsst'
+
+statement ok
+CREATE TABLE strings AS
+SELECT CASE i % 4
+           WHEN 0 THEN 'GetResource'
+           WHEN 1 THEN 'ListResource'
+           WHEN 2 THEN 'Prefix GetResource'
+       END AS s,
+       CASE i % 4
+           WHEN 0 THEN 'abcdefghijklé://foo'
+           WHEN 1 THEN 'äabcdefghijk://bar'
+           WHEN 2 THEN '\Cabcdefghijklé://foo'
+       END AS u
+FROM range(2051) t(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+# Forced row fetching and VARIANT round-trip verification can flatten the vectors under test.
+query I
+WITH types AS MATERIALIZED (
+    SELECT vector_type(s) AS input_type,
+           vector_type(regexp_full_match(s, 'Get[A-Z].*')) AS full_match_type,
+           vector_type(regexp_matches(s, 'get[a-z]', 'i')) AS partial_match_type,
+           vector_type(regexp_full_match(s, '\C+')) AS byte_full_match_type,
+           vector_type(regexp_matches(s, '\C')) AS byte_partial_match_type,
+           vector_type(string_split_regex(s, '[A-Z]')) AS split_type,
+           vector_type(regexp_extract_all(s, '(G)et')) AS default_group_type,
+           vector_type(regexp_extract_all(s, '(Get)', NULL::INTEGER)) AS null_group_type,
+           vector_type(regexp_extract_all(s, '(Get)', -1)) AS negative_group_type,
+           vector_type(regexp_extract_all(s, '([A-Z][a-z]+)', 1)) AS extract_all_type,
+           vector_type(regexp_extract_all(s, '([A-Z][a-z]+)', ['word'])) AS extract_struct_type,
+           vector_type(regexp_extract_all(s, '(Get)?(Resource)', ['prefix', 'word'])) AS optional_capture_type
+    FROM strings
+)
+SELECT current_setting('debug_force_fetch_row')
+       OR lower(current_setting('debug_verify_vector')) = 'variant_vector'
+       OR (count(*) > 0 AND bool_and(full_match_type = 'DICTIONARY_VECTOR')
+           AND bool_and(partial_match_type = 'DICTIONARY_VECTOR')
+           AND bool_and(byte_full_match_type = 'DICTIONARY_VECTOR')
+           AND bool_and(byte_partial_match_type = 'DICTIONARY_VECTOR')
+           AND bool_and(split_type = 'DICTIONARY_VECTOR')
+           AND bool_and(default_group_type = 'DICTIONARY_VECTOR')
+           AND bool_and(null_group_type = 'DICTIONARY_VECTOR')
+           AND bool_and(negative_group_type = 'DICTIONARY_VECTOR')
+           AND bool_and(extract_all_type = 'DICTIONARY_VECTOR')
+           AND bool_and(extract_struct_type = 'DICTIONARY_VECTOR')
+           AND bool_and(optional_capture_type = 'DICTIONARY_VECTOR'))
+FROM types
+WHERE input_type = 'DICTIONARY_VECTOR'
+----
+true
+
+query III
+SELECT count(*) FILTER (WHERE regexp_full_match(s, 'get[a-z]+', 'i')),
+       count(*) FILTER (WHERE regexp_matches(s, 'Get[A-Z]')),
+       count(*) FILTER (WHERE regexp_full_match(s, 'Get[A-Z].*') IS NULL)
+FROM strings
+----
+513	1026	512
+
+query IIIII
+SELECT count(*) FILTER (WHERE regexp_full_match(s, '\C+')),
+       count(*) FILTER (WHERE regexp_matches(s, '\C')),
+       count(*) FILTER (WHERE string_split_regex(s, '[A-Z]') = ['', 'et', 'esource']),
+       count(*) FILTER (WHERE regexp_extract_all(s, '([A-Z][a-z]+)', 1) = ['Get', 'Resource']),
+       count(*) FILTER (WHERE regexp_extract_all(s, '([A-Z][a-z]+)', ['word'])[1].word = 'Get')
+FROM strings
+----
+1539	1539	513	513	513
+
+query III
+SELECT count(*) FILTER (WHERE regexp_extract_all(s, '(G)et') = ['Get']),
+       count(regexp_extract_all(s, '(Get)', NULL::INTEGER)),
+       count(*) FILTER (WHERE regexp_extract_all(s, '(Get)', -1) = [])
+FROM strings
+----
+1026	0	1539
+
+query II
+SELECT count(*) FILTER (
+           WHERE regexp_extract_all(s, '(Get)?(Resource)', ['prefix', 'word'])[1].prefix = 'Get'),
+       count(*) FILTER (
+           WHERE regexp_extract_all(s, '(Get)?(Resource)', ['prefix', 'word'])[1].prefix IS NULL
+             AND regexp_extract_all(s, '(Get)?(Resource)', ['prefix', 'word'])[1].word = 'Resource')
+FROM strings
+----
+1026	513
+
+# Literal and escaped backslashes are not byte-matching operators.
+query I
+WITH types AS MATERIALIZED (
+    SELECT vector_type(u) AS input_type,
+           vector_type(regexp_extract(u, '\C', 0, 'l')) AS literal_type,
+           vector_type(regexp_extract(u, '\\C')) AS escaped_type,
+           vector_type(regexp_replace(u, '\C', 'x', 'l')) AS replace_type,
+           vector_type(string_split_regex(u, '\C', 'l')) AS split_type,
+           vector_type(regexp_extract_all(u, '\C', 0, 'l')) AS extract_all_type
+    FROM strings
+)
+SELECT current_setting('debug_force_fetch_row')
+       OR lower(current_setting('debug_verify_vector')) = 'variant_vector'
+       OR (count(*) > 0 AND bool_and(literal_type = 'DICTIONARY_VECTOR')
+           AND bool_and(escaped_type = 'DICTIONARY_VECTOR')
+           AND bool_and(replace_type = 'DICTIONARY_VECTOR')
+           AND bool_and(split_type = 'DICTIONARY_VECTOR')
+           AND bool_and(extract_all_type = 'DICTIONARY_VECTOR'))
+FROM types
+WHERE input_type = 'DICTIONARY_VECTOR'
+----
+true
+
+query IIIII
+SELECT count(*) FILTER (WHERE regexp_extract(u, '\C', 0, 'l') = '\C'),
+       count(*) FILTER (WHERE regexp_extract(u, '\\C') = '\C'),
+       count(*) FILTER (WHERE regexp_replace(u, '\C', 'x', 'l') = 'xabcdefghijklé://foo'),
+       count(*) FILTER (WHERE string_split_regex(u, '\C', 'l') = ['', 'abcdefghijklé://foo']),
+       count(*) FILTER (WHERE regexp_extract_all(u, '\C', 0, 'l') = ['\C'])
+FROM strings
+----
+513	513	513	513	513
+
+# A missing capture errors only for rows with a match, including unused dictionary entries.
+query I
+SELECT count(regexp_extract_all(s, 'Get', 1)) FROM strings WHERE s LIKE 'List%'
+----
+513
+
+query I
+SELECT count(TRY(regexp_extract_all(s, 'Get', 1))) FROM strings
+----
+513
+
+query I
+SELECT count(TRY(regexp_extract_all(s, '(Get)', CASE WHEN s LIKE 'Get%' THEN 2 ELSE 1 END)))
+FROM strings
+----
+1026
+
+# String-producing operations must still reject partial UTF-8 characters.
+query II
+SELECT count(string_split_regex(u, '^\C')), count(regexp_extract_all(u, '^\C'))
+FROM strings WHERE u LIKE 'a%'
+----
+513	513
+
+query II
+SELECT count(TRY(string_split_regex(u, '^\C'))), count(TRY(regexp_extract_all(u, '^\C')))
+FROM strings
+----
+1026	1026
+
+query III
+SELECT count(TRY(regexp_extract(u, '^(\C)', 1))),
+       count(TRY(regexp_replace(u, '^(\C)', 'x'))),
+       count(TRY(regexp_extract_all(u, '^(\C)', ['byte'])))
+FROM strings
+----
+1026	1026	1026
+
+query I
+SELECT count(regexp_extract_all(u, '^(\C)', ['byte']))
+FROM strings WHERE u LIKE 'a%'
+----
+513
+
+statement ok
+PREPARE invalid_constant_pattern AS SELECT regexp_full_match(s, '[') FROM strings
+
+statement error
+EXECUTE invalid_constant_pattern
+----
+missing ]: [
+
+query II
+SELECT count(TRY(regexp_full_match(s, '['))), count(TRY(regexp_matches(s, '[')))
+FROM strings
+----
+0	0
+
+statement ok
+PREPARE invalid_split_pattern AS SELECT string_split_regex(s, '[') FROM strings
+
+statement error
+EXECUTE invalid_split_pattern
+----
+missing ]: [
+
+statement ok
+PREPARE invalid_extract_all_pattern AS SELECT regexp_extract_all(s, '[') FROM strings
+
+statement error
+EXECUTE invalid_extract_all_pattern
+----
+missing ]: [
+
+query II
+SELECT count(TRY(string_split_regex(s, '['))), count(TRY(regexp_extract_all(s, '[')))
+FROM strings
+----
+0	0
+
+query II
+SELECT count(TRY(regexp_full_match(s, p))), count(TRY(regexp_matches(s, p)))
+FROM (
+    SELECT s, CASE WHEN s LIKE 'Get%' THEN 'Get.*' ELSE '[' END AS p
+    FROM strings
+)
+----
+513	513

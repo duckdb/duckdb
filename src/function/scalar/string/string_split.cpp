@@ -131,9 +131,23 @@ void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result
 	StringSplitExecutor<RegularStringSplit>(args, state, result, [](const string_t &) -> void * { return nullptr; });
 }
 
+unique_ptr<FunctionData> StringSplitRegexBind(BindScalarFunctionInput &input) {
+	auto data = make_uniq<RegexpBaseBindData>();
+	data->constant_pattern = regexp_util::TryParseConstantPattern(input.TryGetConstant(1), data->constant_string);
+	data->options.set_log_errors(false);
+	if (input.GetArguments().size() == 3) {
+		regexp_util::ParseRegexOptions(input.GetConstant(2), data->options);
+	}
+	auto pattern = data->CompileConstantPattern();
+	if (regexp_util::CanExtractUTF8(pattern.get())) {
+		input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+	}
+	return std::move(data);
+}
+
 void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.BindInfo()->Cast<RegexpMatchesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpBaseBindData>();
 	if (info.constant_pattern) {
 		// fast path: pre-compiled regex
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
@@ -168,7 +182,7 @@ ScalarFunction StringSplitFun::GetFunction() {
 ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
-	ScalarFunction regex_fun({}, varchar_list_type, StringSplitRegexFunction, RegexpMatchesBind, nullptr,
+	ScalarFunction regex_fun({}, varchar_list_type, StringSplitRegexFunction, StringSplitRegexBind, nullptr,
 	                         RegexInitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
 	                         FunctionNullHandling::SPECIAL_HANDLING);
 	regex_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("regex", LogicalType::VARCHAR);

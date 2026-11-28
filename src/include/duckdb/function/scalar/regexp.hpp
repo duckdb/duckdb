@@ -22,9 +22,10 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
                        bool *no_match_returns_input = nullptr);
 void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace = nullptr,
                        bool *no_match_returns_input = nullptr);
-void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
-                        RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
-                        child_list_t<LogicalType> &out_struct_children);
+//! Whether the constant pattern is valid and preserves UTF-8 match boundaries.
+bool CanExtractUTF8(optional_ptr<const RE2> pattern);
+void ParseGroupNameList(const string &function_name, const Value &list_val, const RE2 &pattern,
+                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
 
 idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base);
 //! Throws if a regex result is not valid UTF-8
@@ -52,6 +53,9 @@ struct RegexpBaseBindData : public FunctionData {
 	string constant_string;
 	bool constant_pattern;
 
+	//! Returns nullptr for a nonconstant pattern; invalid patterns are returned without throwing.
+	unique_ptr<RE2> CompileConstantPattern() const;
+	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 };
 
@@ -82,7 +86,6 @@ struct RegexpExtractAllStruct {
 };
 
 struct RegexpMatchesBindData : public RegexpBaseBindData {
-	RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern);
 	RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
 	                      string range_min, string range_max, bool range_success);
 

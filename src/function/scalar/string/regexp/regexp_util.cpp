@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "re2/re2.h"
+#include "re2/regexp.h"
 #include "re2/stringpiece.h"
 #include "utf8proc_wrapper.hpp"
 
@@ -80,9 +81,27 @@ void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *glo
 	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
 }
 
-void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
-                        RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
-                        child_list_t<LogicalType> &out_struct_children) {
+bool CanExtractUTF8(optional_ptr<const RE2> pattern) {
+	if (!pattern || !pattern->ok()) {
+		return false;
+	}
+	vector<reference<duckdb_re2::Regexp>> pending;
+	pending.emplace_back(*pattern->Regexp());
+	while (!pending.empty()) {
+		auto &node = pending.back().get();
+		pending.pop_back();
+		if (node.op() == duckdb_re2::kRegexpAnyByte) {
+			return false;
+		}
+		for (idx_t i = 0; i < NumericCast<idx_t>(node.nsub()); i++) {
+			pending.emplace_back(*node.sub()[i]);
+		}
+	}
+	return true;
+}
+
+void ParseGroupNameList(const string &function_name, const Value &list_val, const RE2 &pattern,
+                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
 	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST) {
 		throw BinderException("Group specification must be a non-NULL LIST");
 	}
@@ -106,17 +125,13 @@ void ParseGroupNameList(const string &function_name, const Value &list_val, cons
 		out_names.push_back(name);
 		out_struct_children.emplace_back(make_pair(name, LogicalType::VARCHAR));
 	}
-	if (require_constant_pattern) {
-		duckdb_re2::StringPiece const_piece(pattern_string.c_str(), pattern_string.size());
-		RE2 constant_re(const_piece, options);
-		auto group_cnt = constant_re.NumberOfCapturingGroups();
-		if (group_cnt == -1) {
-			throw BinderException("Pattern failed to parse: %s", constant_re.error());
-		}
-		if ((idx_t)group_cnt < out_names.size()) {
-			throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
-			                      NumericCast<uint64_t>(out_names.size()));
-		}
+	auto group_cnt = pattern.NumberOfCapturingGroups();
+	if (group_cnt == -1) {
+		throw BinderException("Pattern failed to parse: %s", pattern.error());
+	}
+	if ((idx_t)group_cnt < out_names.size()) {
+		throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
+		                      NumericCast<uint64_t>(out_names.size()));
 	}
 }
 

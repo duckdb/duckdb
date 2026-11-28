@@ -304,10 +304,15 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(function.GetName().GetIdentifierName(), input.GetConstant(2), constant_string,
-	                                options, true, group_names, struct_children);
+	RegexpBaseBindData data(options, std::move(constant_string), constant_pattern);
+	auto pattern = data.CompileConstantPattern();
+	regexp_util::ParseGroupNameList(function.GetName().GetIdentifierName(), input.GetConstant(2), *pattern, group_names,
+	                                struct_children);
 	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
-	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
+	if (regexp_util::CanExtractUTF8(pattern.get())) {
+		function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+	}
+	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(data.constant_string), constant_pattern,
 	                                                 std::move(group_names));
 }
 
@@ -324,8 +329,15 @@ unique_ptr<FunctionData> RegexpExtractAll::Bind(BindScalarFunctionInput &input) 
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(input.GetConstant(3), options);
 	}
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                        static_cast<int8_t>(0));
+	auto data = make_uniq<RegexpBaseBindData>(options, std::move(constant_string), constant_pattern);
+	auto pattern = data->CompileConstantPattern();
+	if (regexp_util::CanExtractUTF8(pattern.get())) {
+		auto group = arguments.size() >= 3 ? input.TryGetConstant(2) : optional<Value>(Value::INTEGER(0));
+		if (group && (group->IsNull() || group->GetValue<int32_t>() <= pattern->NumberOfCapturingGroups())) {
+			input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		}
+	}
+	return std::move(data);
 }
 
 } // namespace duckdb
