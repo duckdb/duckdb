@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 
+#include "duckdb/storage/table/column_data.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -22,10 +24,18 @@ bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics ord
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
 
-idx_t GetMinimumQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type,
-                                     TransactionData transaction) {
+bool HasExactStatistics(RowGroup &row_group, const StorageIndex &column_idx, TransactionData transaction) {
+	return !row_group.GetRawColumnData(column_idx).HasUpdates() &&
+	       row_group.GetVisibleRowCount(transaction) == row_group.count;
+}
+
+idx_t GetMinimumQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const StorageIndex &column_idx,
+                                     const OrderByColumnType type, TransactionData transaction) {
 	if (!stats.CanHaveNull()) {
 		return row_group.GetVisibleRowCount(transaction);
+	}
+	if (!HasExactStatistics(row_group, column_idx, transaction)) {
+		return 0;
 	}
 
 	if (type == OrderByColumnType::NUMERIC) {
@@ -45,7 +55,8 @@ idx_t GetMinimumQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats,
 template <typename It, typename End>
 bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, const End &end,
                   vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
-                  const OrderByColumnType column_type, const OrderByStatistics stat_type, TransactionData transaction) {
+                  const OrderByColumnType column_type, const OrderByStatistics stat_type,
+                  const StorageIndex &column_idx, TransactionData transaction) {
 	const auto opposite_stat_type =
 	    stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 
@@ -57,20 +68,24 @@ bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 	idx_t qualifying_tuples = 0;
 	idx_t qualify_later = 0;
 
-	idx_t last_unresolved_row_group_sum =
-	    GetMinimumQualifyingTupleCount(it->second.row_group.get().GetNode(), *last_stats, column_type, transaction);
+	idx_t last_unresolved_row_group_sum = GetMinimumQualifyingTupleCount(
+	    it->second.row_group.get().GetNode(), *last_stats, column_idx, column_type, transaction);
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
 		auto &row_group = it->second.row_group;
 
 		while (last_unresolved_entry != it) {
 			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
+				auto &previous_row_group = std::prev(it)->second.row_group.get().GetNode();
+				auto stats_exact = HasExactStatistics(previous_row_group, column_idx, transaction);
 				if (current_key != std::prev(it)->first) {
 					// Row groups overlap: we can only guarantee one additional qualifying tuple
 					qualifying_tuples += qualify_later;
 					qualify_later = 0;
-					qualifying_tuples++;
-				} else {
+					if (stats_exact) {
+						qualifying_tuples++;
+					}
+				} else if (stats_exact) {
 					// Row groups have the same order value, we can only guarantee a qualifying tuple later
 					qualify_later++;
 				}
@@ -85,8 +100,8 @@ bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get().GetNode();
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 
-			last_unresolved_row_group_sum +=
-			    GetMinimumQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type, transaction);
+			last_unresolved_row_group_sum += GetMinimumQualifyingTupleCount(upcoming_row_group, upcoming_stats,
+			                                                                column_idx, column_type, transaction);
 			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
 		if (qualifying_tuples >= row_limit) {
@@ -115,7 +130,8 @@ void InsertAllRowGroups(It it, const End &end, vector<reference<SegmentNode<RowG
 
 bool SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
                        const idx_t row_group_offset, const OrderType order_type, const OrderByColumnType column_type,
-                       vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, TransactionData transaction) {
+                       const StorageIndex &column_idx, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups,
+                       TransactionData transaction) {
 	const auto stat_type = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	if (order_type == OrderType::ASCENDING) {
 		auto end = row_group_map.end();
@@ -125,7 +141,7 @@ bool SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
 		}
 		if (row_limit.IsValid()) {
 			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
-			                    stat_type, transaction);
+			                    stat_type, column_idx, transaction);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
 			return false;
@@ -138,7 +154,7 @@ bool SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
 		}
 		if (row_limit.IsValid()) {
 			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
-			                    stat_type, transaction);
+			                    stat_type, column_idx, transaction);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
 			return false;
@@ -405,11 +421,11 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 		AppendRowGroups(null_only_groups, options.leading_null_group_offset, ordered_row_groups);
 		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
 		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-		                  options.column_type, ordered_row_groups, transaction);
+		                  options.column_type, options.column_idx, ordered_row_groups, transaction);
 	} else {
 		auto pruned_by_limit =
 		    SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-		                      options.column_type, ordered_row_groups, transaction);
+		                      options.column_type, options.column_idx, ordered_row_groups, transaction);
 		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
 		// Once an ascending NULLS LAST limit is already satisfied by earlier non-null row groups, null-only
 		// groups cannot contribute to the ordered prefix anymore.
