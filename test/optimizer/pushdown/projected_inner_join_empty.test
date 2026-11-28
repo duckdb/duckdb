@@ -1,0 +1,49 @@
+# name: test/optimizer/pushdown/projected_inner_join_empty.test
+# description: Preserve projected inner join columns when filter pushdown proves the join empty
+# group: [pushdown]
+
+statement ok
+CREATE TABLE t0 (c0 INTEGER, c1 INTEGER);
+
+statement ok
+CREATE TABLE t1 (c0 INTEGER, c1 INTEGER, c2 INTEGER);
+
+statement ok
+CREATE TABLE t2 (c0 INTEGER, c1 INTEGER);
+
+statement ok
+CREATE TABLE t3 (c0 INTEGER, c1 INTEGER);
+
+statement ok
+INSERT INTO t0 VALUES (NULL, 0), (7, 8), (4, 2), (7, 6), (6, 1);
+
+statement ok
+INSERT INTO t1 VALUES (0, 0, 7), (5, 4, 2), (0, 7, 6);
+
+statement ok
+INSERT INTO t2 VALUES (5, 0), (0, 4);
+
+statement ok
+INSERT INTO t3 VALUES (0, 0), (0, 2);
+
+# Statistics push a bound into the projected join between a1 and a2.
+query I
+SELECT a2.c0 FROM t0 a0, t2 a1, t0 a2, t1 a3, t3 a4
+WHERE a1.c1 = 0 AND a0.c1 = a1.c1 AND a1.c0 = a2.c1 AND a2.c1 < a1.c0
+  AND a1.c0 = a3.c2 AND a3.c0 = a4.c0;
+----
+
+statement ok
+INSERT INTO t0 VALUES (42, 5);
+
+statement ok
+INSERT INTO t1 VALUES (0, 0, 5);
+
+# When equality is allowed, the projected value survives once for each matching a4 row.
+query I
+SELECT a2.c0 FROM t0 a0, t2 a1, t0 a2, t1 a3, t3 a4
+WHERE a1.c1 = 0 AND a0.c1 = a1.c1 AND a1.c0 = a2.c1 AND a2.c1 <= a1.c0
+  AND a1.c0 = a3.c2 AND a3.c0 = a4.c0;
+----
+42
+42

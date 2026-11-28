@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 
 namespace duckdb {
 
@@ -54,7 +55,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	// then push down cross product
 	auto result = PushdownCrossProduct(std::move(cross_product));
 
-	// the join is re-created from the cross product with the same children: carry over its projection maps
+	// Carry the projection maps over when the join is re-created.
 	switch (result->type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
@@ -65,12 +66,29 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		                                           result_join.children[0]->GetColumnBindings());
 		LogicalOperatorVisitor::RemapProjectionMap(result_join.right_projection_map, right_bindings_before,
 		                                           result_join.children[1]->GetColumnBindings());
-		break;
+		return result;
 	}
 	default:
 		break;
 	}
-	return result;
+	if (!join.HasProjectionMap()) {
+		return result;
+	}
+	// Other replacements must expose the same columns in the same order as the original join.
+	auto projected_bindings = LogicalOperator::MapBindings(left_bindings_before, join.left_projection_map);
+	auto projected_right = LogicalOperator::MapBindings(right_bindings_before, join.right_projection_map);
+	projected_bindings.insert(projected_bindings.end(), projected_right.begin(), projected_right.end());
+	auto result_bindings = result->GetColumnBindings();
+	if (result_bindings == projected_bindings) {
+		return result;
+	}
+	auto projection_map = ColumnBindingLayout(std::move(result_bindings)).CreateProjectionMap(projected_bindings);
+	if (result->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+		auto &empty = result->Cast<LogicalEmptyResult>();
+		return make_uniq<LogicalEmptyResult>(LogicalOperator::MapTypes(empty.return_types, projection_map),
+		                                     std::move(projected_bindings));
+	}
+	return LogicalJoin::PromoteJoinSide(std::move(result), std::move(projection_map));
 }
 
 } // namespace duckdb

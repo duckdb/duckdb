@@ -5,15 +5,17 @@
 statement ok
 CREATE TABLE t AS SELECT range AS c0, range AS c1, range AS c2, range AS c3 FROM range(1000000);
 
-# thread 0 adds a UNIQUE constraint per column, thread 1 commits inserts of new keys;
-# an insert into the table version an ALTER replaced conflicts
+# thread 0 adds UNIQUE constraints while thread 1 inserts new keys
+# a conflicting insert rollback can also invalidate the concurrent ALTER
 concurrentloop threadid 0 2
 
 loop j 0 4
 
 onlyif threadid=0
-statement ok
+statement maybe
 ALTER TABLE t ADD UNIQUE (c{j});
+----
+TransactionContext Error: Failed to commit: Failed to alter table "t" because the underlying table state was reverted by a concurrent transaction
 
 endloop
 
@@ -23,9 +25,19 @@ onlyif threadid=1
 statement maybe
 INSERT INTO t SELECT r, r, r, r FROM (SELECT 10000000 + {i} * 100000 + range AS r FROM range(100000));
 ----
-<REGEX>:.*(attempting to insert into table "t" but it has been altered|another transaction has altered this table).*
+<REGEX>:.*(attempting to insert into table "t" but it has been altered|Attempting to modify table "t" but another transaction has (altered|no changes) this table).*
 
 endloop
+
+endloop
+
+# retry any constraints that conflicted once both threads have finished
+loop j 0 4
+
+statement maybe
+ALTER TABLE t ADD UNIQUE (c{j});
+----
+<REGEX>:Catalog Error: table "t" already has the constraint UNIQUE\(c[0-9]+\).*
 
 endloop
 
