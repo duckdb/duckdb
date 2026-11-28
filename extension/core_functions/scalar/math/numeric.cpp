@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -702,6 +703,50 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 	OP::template Operation<T>(input, state, result);
 }
 
+//! Rounds a decimal whose result has one more digit, for the carry of the top digit, and is stored in the next physical
+//! type. The argument keeps its type, so that binding the function again (when a plan is deserialized) resolves the
+//! same types, and its values are widened here
+template <class SOURCE, class TARGET, class OP>
+void WidenedRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
+	Vector widened(result.GetType(), input.size());
+	if constexpr (std::is_same<TARGET, bignum_t>::value) {
+		auto &heap = StringVector::GetStringHeap(widened);
+		UnaryExecutor::Execute<SOURCE, string_t>(input.data[0], widened, input.size(), [&](SOURCE value) {
+			return HugeintCastToBignum::Operation<hugeint_t>(hugeint_t(value), heap).data;
+		});
+	} else {
+		UnaryExecutor::Execute<SOURCE, TARGET>(input.data[0], widened, input.size(),
+		                                       [&](SOURCE value) { return TARGET(value); });
+	}
+	OP::template RoundVector<TARGET>(widened, input.size(), state, result);
+}
+
+//! The function of a round to a negative precision, given the physical types of the argument and of the result: the
+//! same type, or the next one when the digit of the carry does not fit the type of the argument
+template <class OP>
+scalar_function_t GetRoundNegativePrecisionFunction(PhysicalType source, PhysicalType target) {
+	const bool widen = source != target;
+	switch (target) {
+	case PhysicalType::INT16:
+		D_ASSERT(!widen);
+		return GenericRoundPrecisionDecimal<int16_t, OP>;
+	case PhysicalType::INT32:
+		D_ASSERT(!widen || source == PhysicalType::INT16);
+		return widen ? WidenedRoundPrecisionDecimal<int16_t, int32_t, OP> : GenericRoundPrecisionDecimal<int32_t, OP>;
+	case PhysicalType::INT64:
+		D_ASSERT(!widen || source == PhysicalType::INT32);
+		return widen ? WidenedRoundPrecisionDecimal<int32_t, int64_t, OP> : GenericRoundPrecisionDecimal<int64_t, OP>;
+	case PhysicalType::INT128:
+		D_ASSERT(!widen || source == PhysicalType::INT64);
+		return widen ? WidenedRoundPrecisionDecimal<int64_t, hugeint_t, OP>
+		             : GenericRoundPrecisionDecimal<hugeint_t, OP>;
+	default:
+		D_ASSERT(!widen || source == PhysicalType::INT128);
+		return widen ? WidenedRoundPrecisionDecimal<hugeint_t, bignum_t, OP>
+		             : GenericRoundPrecisionDecimal<bignum_t, OP>;
+	}
+}
+
 //! Resolves the types and the function of a decimal round with a precision, given the original decimal type
 template <typename NEGOP, typename POSOP, bool CAN_CARRY>
 unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &decimal_width_limit,
@@ -716,39 +761,22 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &d
 	auto width = DecimalType::GetWidth(decimal_type);
 	auto scale = DecimalType::GetScale(decimal_type);
 	auto result_width = width;
-	auto argument_type = decimal_type;
 	if (round_value < 0) {
 		target_scale = 0;
 		if (CAN_CARRY && scale == 0 && int64_t(round_value) >= -int64_t(width)) {
-			// a fixed-size decimal stays in the fixed-size tiers (a carry out of 38 digits overflows), a wide decimal
-			// grows by the carry digit
-			if (Decimal::IsWide(width)) {
-				result_width = decimal_width_limit.CheckedWidth(idx_t(result_width) + 1, width, "Rounding");
-			} else if (result_width < Decimal::MAX_WIDTH_INT128) {
-				result_width++;
+			// the top digit can carry into one more digit: the result is bound like the result of an addition, within
+			// the widest DECIMAL the session binds - when that is a fixed-size decimal the width is clamped to it and a
+			// carry out of it overflows
+			idx_t required_width = idx_t(width) + 1;
+			const idx_t width_limit = decimal_width_limit.ResultWidth(width);
+			if (required_width > width_limit && !Decimal::IsWide(width_limit)) {
+				required_width = width_limit;
 			}
+			result_width = decimal_width_limit.CheckedWidth(required_width, width, "Rounding");
 		}
 		auto result_type = LogicalType::DECIMAL(result_width, target_scale);
-		switch (result_type.InternalType()) {
-		case PhysicalType::INT16:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int16_t, NEGOP>);
-			break;
-		case PhysicalType::INT32:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int32_t, NEGOP>);
-			break;
-		case PhysicalType::INT64:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NEGOP>);
-			break;
-		case PhysicalType::INT128:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, NEGOP>);
-			break;
-		default:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<bignum_t, NEGOP>);
-			break;
-		}
-		if (result_type.InternalType() != decimal_type.InternalType()) {
-			argument_type = LogicalType::DECIMAL(result_width, scale);
-		}
+		bound_function.SetFunctionCallback(
+		    GetRoundNegativePrecisionFunction<NEGOP>(decimal_type.InternalType(), result_type.InternalType()));
 	} else {
 		if (NumericCast<uint32_t>(round_value) >= scale) {
 			// if round_value is bigger than or equal to scale we do nothing
@@ -775,7 +803,7 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &d
 			}
 		}
 	}
-	bound_function.GetArguments()[0] = argument_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, target_scale));
 	return make_uniq<RoundPrecisionFunctionData>(round_value, width);
 }
@@ -833,6 +861,11 @@ struct DecimalRoundNegativePrecisionOperator {
 
 	template <class T>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		RoundVector<T>(input.data[0], input.size(), state, result);
+	}
+
+	template <class T>
+	static void RoundVector(Vector &source, idx_t count, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
@@ -841,10 +874,10 @@ struct DecimalRoundNegativePrecisionOperator {
 		if (drop_digits > info.source_width) {
 			// more digits than the values hold are dropped, which leaves less than a tenth: every value rounds to zero
 			const auto zero = DecimalHelper<T>::Store(result, DecimalHelper<T>::FromInteger(hugeint_t(0)));
-			UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T) { return zero; });
+			UnaryExecutor::Execute<T, T>(source, result, count, [&](T) { return zero; });
 			return;
 		}
-		RoundDecimalVector<T, ROUNDING>(input.data[0], result, input.size(), drop_digits, restore_digits, NAME, state);
+		RoundDecimalVector<T, ROUNDING>(source, result, count, drop_digits, restore_digits, NAME, state);
 	}
 };
 
