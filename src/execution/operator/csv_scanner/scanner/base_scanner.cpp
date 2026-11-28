@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -35,6 +36,11 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 		buffer_handle_ptr = nullptr;
 	} else {
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
+		// Skip the UTF-8 BOM before any scanner processes the first CSV field.
+		// Dialect detection and header/row skipping use this base scanner too.
+		if (iterator.pos.buffer_idx == 0) {
+			StringUtil::SkipBOM(buffer_handle_ptr, cur_buffer_handle->actual_size, iterator.pos.buffer_pos);
+		}
 	}
 }
 
