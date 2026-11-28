@@ -194,6 +194,35 @@ JOIN nn ON ids.id = nn.k;
 ----
 logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
 
+# A bare EXISTS filter drops rows with a NULL or a FALSE marker alike.
+query II
+SELECT ids.id, nn.wh
+FROM ids
+LEFT JOIN nn ON ids.id = nn.k
+WHERE EXISTS (
+    SELECT 1
+    FROM ev
+    WHERE ev.id = ids.id
+      AND nn.wh <> ev.wh
+)
+ORDER BY ids.id;
+----
+1	5
+
+query II
+SELECT ids.id, nn.wh
+FROM ids
+LEFT JOIN nn ON ids.id = nn.k
+WHERE nn.wh IS NULL
+  AND EXISTS (
+    SELECT 1
+    FROM ev
+    WHERE ev.id = ids.id
+      AND nn.wh <> ev.wh
+)
+ORDER BY ids.id;
+----
+
 # Nested equality follows PostgreSQL composite semantics: NULL children compare equal.
 # Delimiter join elimination must preserve those semantics.
 query I
@@ -266,3 +295,21 @@ SELECT k, b FROM lateral_nested, LATERAL (SELECT lateral_nested.a) t2(b) WHERE b
 4	{'x': 5, 'y': 5}
 
 endloop
+
+# Under a bare EXISTS filter, the CTE deliminator removes the domain join even with a nullable <>.
+statement ok
+SET delim_join_as_cte=true;
+
+query II
+EXPLAIN
+SELECT ids.id, nn.wh
+FROM ids
+LEFT JOIN nn ON ids.id = nn.k
+WHERE EXISTS (
+    SELECT 1
+    FROM ev
+    WHERE ev.id = ids.id
+      AND nn.wh <> ev.wh
+);
+----
+logical_opt	<!REGEX>:(.*DELIM_JOIN.*)|(.*CTE Name:.*__duckdb_delim.*)

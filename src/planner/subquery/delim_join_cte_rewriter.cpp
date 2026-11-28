@@ -209,6 +209,18 @@ static bool ExpressionIsMarkerRef(Expression &expr, TableIndex mark_index) {
 	return colref.Depth() == 0 && colref.Binding().table_index == mark_index;
 }
 
+static bool FilterSelectsDelimJoinMarker(LogicalFilter &filter, LogicalComparisonJoin &delim_join) {
+	if (filter.HasProjectionMap() || delim_join.join_type != JoinType::MARK) {
+		return false;
+	}
+	for (auto &expr : filter.expressions) {
+		if (ExpressionIsMarkerRef(*expr, delim_join.mark_index)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool FilterNegatesDelimJoinMarker(LogicalFilter &filter, LogicalComparisonJoin &delim_join) {
 	if (filter.HasProjectionMap() || delim_join.join_type != JoinType::MARK) {
 		return false;
@@ -1294,7 +1306,7 @@ class GeneratedDedupRefEliminator {
 public:
 	GeneratedDedupRefEliminator(Binder &binder, unique_ptr<LogicalOperator> &delim_join_op, TableIndex dedup_cte_index,
 	                            idx_t dedup_ref_count, LogicalOperator &rewrite_root, bool preserve_evidence_side,
-	                            bool preserve_nested_evidence_side);
+	                            bool preserve_nested_evidence_side, bool selected_marker_filter_above);
 
 	idx_t Remove();
 
@@ -1319,16 +1331,19 @@ private:
 	LogicalOperator &rewrite_root;
 	bool preserve_evidence_side;
 	bool preserve_nested_evidence_side;
+	bool selected_marker_filter_above;
 	vector<pair<reference<LogicalOperator>, idx_t>> consumer_path;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(Binder &binder, unique_ptr<LogicalOperator> &delim_join_op,
                                                          TableIndex dedup_cte_index, idx_t dedup_ref_count,
                                                          LogicalOperator &rewrite_root, bool preserve_evidence_side,
-                                                         bool preserve_nested_evidence_side)
+                                                         bool preserve_nested_evidence_side,
+                                                         bool selected_marker_filter_above)
     : binder(binder), delim_join_op(delim_join_op), delim_join(delim_join_op->Cast<LogicalComparisonJoin>()),
       dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count), rewrite_root(rewrite_root),
-      preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side) {
+      preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side),
+      selected_marker_filter_above(selected_marker_filter_above) {
 	consumer_path.emplace_back(delim_join, 1);
 }
 
@@ -1551,7 +1566,7 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 				auto join_comparison = join_condition.GetComparisonType();
 				auto original_join_comparison = join_condition.GetComparisonType();
 				// DISTINCT FROM changes regular inequality semantics when the MARK probe key can be NULL.
-				if (delim_join.join_type == JoinType::MARK &&
+				if (delim_join.join_type == JoinType::MARK && !selected_marker_filter_above &&
 				    original_join_comparison == ExpressionType::COMPARE_NOTEQUAL) {
 					if (!nullability.IsNotNull(*delim_join.children[0], delim_condition.GetLHS())) {
 						return false;
@@ -1574,7 +1589,7 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 
 				rewritten_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
 				                                               FlipComparisonExpression(join_comparison));
-				if (delim_join.join_type != JoinType::MARK &&
+				if ((delim_join.join_type != JoinType::MARK || selected_marker_filter_above) &&
 				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
 				    original_join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					auto final_comparison = rewritten_conditions[cond_idx].GetComparisonType();
@@ -2153,11 +2168,10 @@ DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	                          !config.IsOptimizerDisabled(OptimizerType::DELIMINATOR);
 }
 
-BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan,
-                                                                        LogicalOperator &rewrite_root,
-                                                                        bool null_rejecting_filter_above,
-                                                                        bool preserve_evidence_side,
-                                                                        bool preserve_nested_evidence_side) {
+BindingReplacementGraph
+DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+                                                bool null_rejecting_filter_above, bool preserve_evidence_side,
+                                                bool preserve_nested_evidence_side, bool selected_marker_filter_above) {
 	BindingReplacementGraph output_replacements;
 	{
 		auto &join = plan->Cast<LogicalComparisonJoin>();
@@ -2174,7 +2188,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(binder, plan, dedup_cte_index, dedup_ref_count, rewrite_root,
-		                                       preserve_evidence_side, preserve_nested_evidence_side);
+		                                       preserve_evidence_side, preserve_nested_evidence_side,
+		                                       selected_marker_filter_above);
 		dedup_ref_count = eliminator.Remove();
 		auto &join = plan->Cast<LogicalComparisonJoin>();
 		if (SingleJoinRHSIsDeduplicated(join)) {
@@ -2307,7 +2322,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan,
                                                                       LogicalOperator &rewrite_root,
                                                                       bool null_rejecting_filter_above,
-                                                                      bool preserve_evidence_side) {
+                                                                      bool preserve_evidence_side,
+                                                                      bool selected_marker_filter_above) {
 	BindingReplacementGraph output_replacements;
 	bool preserve_nested_evidence_side = false;
 	bool has_non_subquery_selection = false;
@@ -2323,15 +2339,18 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		auto old_child_bindings = child->GetColumnBindings();
 		bool child_null_rejecting_filter_above = false;
 		bool child_preserve_evidence_side = false;
+		bool child_selected_marker_filter_above = false;
 		if (plan->type == LogicalOperatorType::LOGICAL_FILTER &&
 		    child->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			auto &filter = plan->Cast<LogicalFilter>();
 			auto &delim_join = child->Cast<LogicalComparisonJoin>();
 			child_null_rejecting_filter_above = FilterNullRejectsDelimJoinRHS(filter, delim_join);
 			child_preserve_evidence_side = FilterNegatesDelimJoinMarker(filter, delim_join);
+			child_selected_marker_filter_above = FilterSelectsDelimJoinMarker(filter, delim_join);
 		}
-		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
-		                                                  child_preserve_evidence_side);
+		auto child_replacements =
+		    RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
+		                            child_preserve_evidence_side, child_selected_marker_filter_above);
 		ColumnBindingRewrite::ApplyToChild(plan, child_idx, std::move(old_child_bindings), child_replacements);
 		// Scope to the child's output boundary: operators above cannot see bindings that no longer resolve into it
 		output_replacements.Merge(child_replacements.ScopedToBoundary(plan->children[child_idx]->GetColumnBindings()));
@@ -2345,8 +2364,9 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 			    preserve_nested_evidence_side || has_non_subquery_selection ||
 			    preserve_nested_marker_indexes.find(join.mark_index) != preserve_nested_marker_indexes.end();
 		}
-		auto materialize_replacements = MaterializeDelimJoinAsCTE(
-		    plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side, preserve_nested_evidence_side);
+		auto materialize_replacements =
+		    MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side,
+		                              preserve_nested_evidence_side, selected_marker_filter_above);
 		output_replacements.Merge(materialize_replacements.ScopedToBoundary(plan->GetColumnBindings()));
 	}
 	return output_replacements;

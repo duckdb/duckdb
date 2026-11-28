@@ -25,10 +25,12 @@ private:
 	void Rewrite(unique_ptr<LogicalOperator> &plan);
 	BindingReplacementGraph RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
 	                                                bool null_rejecting_filter_above = false,
-	                                                bool preserve_evidence_side = false);
+	                                                bool preserve_evidence_side = false,
+	                                                bool selected_marker_filter_above = false);
 	BindingReplacementGraph MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
 	                                                  bool null_rejecting_filter_above, bool preserve_evidence_side,
-	                                                  bool preserve_nested_evidence_side);
+	                                                  bool preserve_nested_evidence_side,
+	                                                  bool selected_marker_filter_above);
 
 private:
 	Binder &binder;
