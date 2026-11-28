@@ -1141,6 +1141,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	}
 
 	if (should_checkpoint) {
+		options.force_full_metadata_write = Settings::Get<MetadataCompactionSetting>(config) &&
+		                                    block_manager->GetMetadataManager().ShouldCompactAllMetadata();
 		try {
 			// Start timing the checkpoint.
 			auto profiler = Context::TryGetQueryProfiler(context.GetContext());

@@ -1414,6 +1414,13 @@
         "default_value": "1000"
     },
     {
+        "name": "metadata_compaction",
+        "description": "Rewrite all metadata chains in a checkpoint when the existing metadata blocks are mostly free, so they can be freed.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "nested_loop_join_threshold",
         "description": "The maximum number of rows on either table to choose a nested loop join.",
         "type": "UBIGINT",

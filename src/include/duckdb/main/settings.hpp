@@ -2366,6 +2366,19 @@ struct MergeJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct MetadataCompactionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "metadata_compaction";
+	static constexpr const char *Description = "Rewrite all metadata chains in a checkpoint when the existing metadata "
+	                                           "blocks are mostly free, so they can be freed.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct NestedLoopJoinThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "nested_loop_join_threshold";

@@ -4,9 +4,6 @@
 
 load {TEST_DIR}/test_reclaim_space.db
 
-statement ok
-PRAGMA force_checkpoint;
-
 # Force overflow blocks instead of compressing the repeated string into a single segment.
 statement ok
 SET force_compression = 'uncompressed';

@@ -1644,6 +1644,10 @@ bool RowGroup::CanReuseMetadata(RowGroupWriter &writer) const {
 		// disabled by configuration
 		return false;
 	}
+	if (writer.GetCheckpointOptions().force_full_metadata_write) {
+		// the metadata blocks are mostly free: rewrite every chain so they can be freed
+		return false;
+	}
 	if (column_pointers.empty()) {
 		// no existing metadata on disk - cannot re-use
 		return false;
@@ -2013,7 +2017,8 @@ void RowGroup::CompressVersionInfo(VisibilityBound lowest_visibility_bound) {
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
-	if (HasUnloadedDeletes()) {
+	bool force_rewrite = writer.GetCheckpointOptions().force_full_metadata_write;
+	if (HasUnloadedDeletes() && !force_rewrite) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
 		auto &manager = *writer.GetMetadataManager();
@@ -2021,12 +2026,13 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
+	// GetVersionInfo loads unloaded deletes when a rewrite is forced
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return vinfo->Checkpoint(writer, count);
+	return vinfo->Checkpoint(writer, count, force_rewrite);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes) {

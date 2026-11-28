@@ -30,6 +30,8 @@ struct CheckpointOptions {
 	VisibilityBound visibility_bound;
 	//! The commit lock, when the committing transaction holds it for the whole checkpoint (checkpoint instead of WAL)
 	optional_ptr<unique_lock<mutex>> commit_lock;
+	//! Rewrite every metadata chain instead of reusing unchanged ones, so mostly-free blocks are freed
+	bool force_full_metadata_write = false;
 };
 
 } // namespace duckdb

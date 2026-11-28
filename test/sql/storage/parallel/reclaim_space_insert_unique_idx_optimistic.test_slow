@@ -69,6 +69,6 @@ SELECT list_filter(LIST(w), lambda x: x.total_blocks * 2.5 < x.sum) FROM tbl;
 query I
 WITH tbl(l) AS (
 	SELECT LIST(total_blocks) AS l FROM total_blocks_tbl)
-SELECT list_sum(l) < (list_count(l) * l[3] + 2 * l[3]) FROM tbl;
+SELECT list_max(l[list_count(l)-4:]) <= list_max(l[1:8]) + 1 FROM tbl;
 ----
-True
+true

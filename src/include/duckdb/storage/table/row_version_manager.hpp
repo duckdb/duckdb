@@ -54,7 +54,7 @@ public:
 	void CompressVersionIds(VisibilityBound lowest_visibility_bound, idx_t row_count);
 
 	//! Writes the deletes of the first row_count rows of the row group
-	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer, idx_t row_count);
+	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer, idx_t row_count, bool force_rewrite = false);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges(VisibilityBound bound);

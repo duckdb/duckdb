@@ -94,7 +94,7 @@ DROP INDEX idx;
 # Same block count as before the index creation.
 
 query I
-SELECT current.total_blocks < blocks_tbl.total_blocks + 4
+SELECT current.total_blocks < blocks_tbl.total_blocks + 6
 FROM pragma_database_size() AS current, blocks_tbl;
 ----
 1

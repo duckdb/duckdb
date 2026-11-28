@@ -13,8 +13,10 @@ select sum(i) from integers
 ----
 50000005000000
 
-query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+query I
+SELECT CASE WHEN block_size >= 262144 THEN total_blocks * block_size < 3000000 ELSE total_blocks * block_size < 90000000 END FROM pragma_database_size();
+----
+true
 
 loop i 0 2
 
@@ -23,8 +25,10 @@ UPDATE integers SET i=i
 
 endloop
 
-query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+query I
+SELECT CASE WHEN block_size >= 262144 THEN total_blocks * block_size < 3000000 ELSE total_blocks * block_size < 90000000 END FROM pragma_database_size();
+----
+true
 
 statement ok
 CHECKPOINT

@@ -84,7 +84,8 @@ public:
 
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
-
+	//! Whether the next checkpoint should rewrite all metadata chains to compact mostly-free blocks
+	bool ShouldCompactAllMetadata();
 	//! Frees the blocks the checkpoint no longer uses. With readers, returns them instead, for ReuseFreedBlocks
 	unordered_map<block_id_t, idx_t> MarkBlocksAsModified(bool has_readers);
 	//! Lets blocks that MarkBlocksAsModified returned be reused
@@ -116,12 +117,10 @@ protected:
 
 protected:
 	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
-	block_id_t PeekNextBlockId() const;
 	block_id_t GetNextBlockId() const;
 
 	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
 	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
-	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
 	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 

@@ -1,0 +1,34 @@
+# name: test/sql/storage/metadata/metadata_compaction_recreate.test
+# description: Recreating tables across sessions must not accumulate metadata blocks
+# group: [metadata]
+
+require block_size 262144
+
+load {TEST_DIR}/metadata_compaction_recreate.db
+
+loop i 0 20
+
+statement ok
+CREATE OR REPLACE TABLE t{i} AS SELECT range a, range::VARCHAR b FROM range(1000);
+
+endloop
+
+statement ok
+CHECKPOINT;
+
+loop i 0 20
+
+restart
+
+statement ok
+CREATE OR REPLACE TABLE t{i} AS SELECT range a, range::VARCHAR b FROM range(1000);
+
+statement ok
+CHECKPOINT;
+
+endloop
+
+query I
+SELECT count(*) <= 4 FROM pragma_metadata_info();
+----
+true

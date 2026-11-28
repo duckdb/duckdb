@@ -5,6 +5,9 @@
 load {TEST_DIR}/multi_table_metadata_reuse.db
 
 statement ok
+SET GLOBAL metadata_compaction = false;
+
+statement ok
 SET experimental_metadata_reuse=true;
 
 statement ok
