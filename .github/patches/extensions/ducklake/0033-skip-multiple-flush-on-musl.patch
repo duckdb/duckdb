@@ -1,0 +1,12 @@
+--- a/test/sql/metadata/sqlite_metadata_multiple_flush.test
++++ b/test/sql/metadata/sqlite_metadata_multiple_flush.test
+@@ -8,6 +8,9 @@
+ 
+ require sqlite_scanner
+ 
++# exceeds the 300-second extension CI timeout with the musl allocator
++require notmusl
++
+ statement ok
+ ATTACH 'ducklake:sqlite:{TEST_DIR}/sqlite_multiple_flush.db' AS lake (DATA_PATH '{TEST_DIR}/sqlite_multiple_flush_files', DATA_INLINING_ROW_LIMIT 0)
+ 
