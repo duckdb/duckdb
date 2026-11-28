@@ -509,7 +509,8 @@ int64_t BaseFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 timestamp_t BaseFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
+	// file systems without modification times report the unknown time
+	return timestamp_t::ninfinity();
 }
 
 string BaseFileSystem::GetVersionTag(FileHandle &handle) {
