@@ -47,6 +47,10 @@ public:
 		copy->streaming_input = streaming_input;
 		return std::move(copy);
 	}
+	//! A function of the C API is bound from its call only: its arguments and the context
+	auto IsIdentifiedByCall() const -> bool override {
+		return true;
+	}
 };
 
 class CV2TableBindInfo {

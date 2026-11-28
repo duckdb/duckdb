@@ -9,24 +9,18 @@
 
 #pragma once
 
-#include "duckdb.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb_cpp.hpp"
 
-namespace duckdb {
-class ClientContext;
-}
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
 
 namespace tpcds {
 
 struct DSDGenWrapper {
-	//! Create the TPC-DS tables in the given schema with the given suffix
-	static void CreateTPCDSSchema(duckdb::ClientContext &context, const duckdb::Identifier &catalog,
-	                              const duckdb::vector<duckdb::Identifier> &schema, std::string suffix, bool keys,
-	                              bool overwrite);
-	//! Generate the TPC-DS data of the given scale factor
-	static void DSDGen(double scale, duckdb::ClientContext &context, const duckdb::Identifier &catalog,
-	                   const duckdb::vector<duckdb::Identifier> &schema, std::string suffix);
+	//! Throws when dsdgen cannot generate the given scale factor
+	static void ValidateScaleFactor(double scale);
 
 	static uint32_t QueriesCount();
 	//! Gets the specified TPC-DS Query number as a string
@@ -37,21 +31,31 @@ struct DSDGenWrapper {
 	static std::string GetAnswer(double sf, int query);
 };
 
+struct DSDGenOptions {
+	double sf = 0;
+	//! Where to create the tables; the current catalog and schema when not given
+	std::optional<std::string> catalog;
+	std::optional<std::string> schema;
+	std::string suffix;
+	bool overwrite = false;
+	bool keys = false;
+};
+
+//! Creates the TPC-DS tables in the transaction of a context, and fills them from every thread scanning dsdgen
 class DSDGenGenerator {
 public:
 	virtual ~DSDGenGenerator();
 
-	//! Generate the next batch of data, returning true when generation is complete
-	virtual bool GenerateNext() = 0;
-	//! Returns the progress percentage in [0, 100]
-	virtual double Progress() const = 0;
-	//! Returns whether generation can safely be resumed by a different async task
-	virtual bool CanYield() const = 0;
-};
+	//! Creates the tables, and plans the generation of their rows
+	static std::unique_ptr<DSDGenGenerator> Create(duckdb::cxx::Context &context, const DSDGenOptions &options);
 
-duckdb::unique_ptr<DSDGenGenerator> CreateDSDGenGenerator(duckdb::ClientContext &context, double sf,
-                                                          const duckdb::Identifier &catalog,
-                                                          const duckdb::vector<duckdb::Identifier> &schema,
-                                                          std::string suffix);
+	//! How many threads can generate rows at the same time
+	virtual duckdb::cxx::idx_t MaxThreads() const = 0;
+	//! Takes the next step of generating and inserting rows, returning false when the calling thread has no work left.
+	//! Called by every thread scanning dsdgen.
+	virtual bool Generate(duckdb::cxx::Context &context) = 0;
+	//! Returns the progress as a fraction in [0, 1]
+	virtual double Progress() const = 0;
+};
 
 } // namespace tpcds

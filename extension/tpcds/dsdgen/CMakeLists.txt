@@ -2,7 +2,8 @@ include_directories(include)
 include_directories(include/dsdgen-c)
 add_subdirectory(dsdgen-c)
 
-add_library(dsdgen OBJECT dsdgen.cpp append_info-c.cpp dsdgen_helpers.cpp)
+add_library(dsdgen OBJECT dsdgen.cpp append_info-c.cpp dsdgen_helpers.cpp
+                          tpcds_errors.cpp)
 
 set(DSDGEN_OBJECT_FILES
     ${DSDGEN_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen>

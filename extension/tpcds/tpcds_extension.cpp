@@ -1,381 +1,303 @@
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/optional.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/storage/statistics/node_statistics.hpp"
+// The tpcds extension, written against DuckDB's stable C++ API.
+
+// the CMake build sets the name, package builds do not
+#ifndef DUCKDB_EXTENSION_NAME
+#define DUCKDB_EXTENSION_NAME tpcds
+#endif
+#include "duckdb_cpp_extension.hpp"
 #include "dsdgen.hpp"
-#include "tpcds_extension.hpp"
 
-#include <atomic>
-#include <mutex>
+#include <algorithm>
+#include <cctype>
+#include <memory>
+#include <optional>
+#include <string>
 
-namespace duckdb {
+using namespace duckdb::cxx;
 
-struct DSDGenFunctionData : public TableFunctionData {
-	DSDGenFunctionData() {
+namespace {
+
+std::string Lower(std::string value) {
+	std::transform(value.begin(), value.end(), value.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return value;
+}
+
+Value CastArgument(Factory &factory, const Value &value, const char *type) {
+	return value.Cast(factory, factory.ParseType(type));
+}
+
+std::string StringArgument(Factory &factory, const Value &value) {
+	auto text = CastArgument(factory, value, "VARCHAR").Get<varchar_t>();
+	return std::string(text.data(), text.size());
+}
+
+//! The `**kwargs` arguments of a call, the only ones a caller can omit without a default value
+template <class F>
+void ForEachNamedArgument(FunctionBindInput &input, const char *function_name, F &&handle) {
+	auto counts = input.GetArgumentCounts();
+	for (idx_t i = counts.NamedOffset(); i < counts.Total(); i++) {
+		auto name = Lower(input.GetArgName(i));
+		if (!handle(name, input.GetConstantArgument(i))) {
+			throw InvalidInputException("Invalid named parameter \"" + name + "\" for function " + function_name);
+		}
 	}
+}
 
-	double sf = 0;
-	Identifier catalog = INVALID_CATALOG;
-	vector<Identifier> schema {DEFAULT_SCHEMA};
-	string suffix;
-	bool overwrite = false;
-	bool keys = false;
+//===--------------------------------------------------------------------===//
+// dsdgen
+//===--------------------------------------------------------------------===//
+struct DSDGenGlobalState {
+	std::unique_ptr<tpcds::DSDGenGenerator> generator;
 };
 
-struct DSDGenGlobalState : public GlobalTableFunctionState {
-	bool schema_created = false;
-	atomic<bool> finished {false};
-	// Progress polling can run while dsdgen is being resumed by the table function.
-	mutable mutex generator_lock;
-	unique_ptr<tpcds::DSDGenGenerator> generator;
-};
-
-class DSDGenYieldTask : public AsyncTask {
-public:
-	void Execute() override {
-	}
-};
-
-static AsyncResult DSDGenYield() {
-	vector<unique_ptr<AsyncTask>> tasks;
-	tasks.push_back(make_uniq<DSDGenYieldTask>());
-	return AsyncResult(std::move(tasks));
+void DsdgenBind(TableFunction::BindInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	tpcds::DSDGenOptions options;
+	ForEachNamedArgument(input, "dsdgen", [&](const std::string &name, const Value &value) {
+		if (value.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as function argument");
+		}
+		if (name == "sf") {
+			options.sf = CastArgument(factory, value, "DOUBLE").Get<double>();
+		} else if (name == "catalog") {
+			options.catalog = StringArgument(factory, value);
+		} else if (name == "schema") {
+			options.schema = StringArgument(factory, value);
+		} else if (name == "suffix") {
+			options.suffix = StringArgument(factory, value);
+		} else if (name == "overwrite") {
+			options.overwrite = CastArgument(factory, value, "BOOLEAN").Get<bool>();
+		} else if (name == "keys") {
+			options.keys = CastArgument(factory, value, "BOOLEAN").Get<bool>();
+		} else {
+			return false;
+		}
+		return true;
+	});
+	tpcds::DSDGenWrapper::ValidateScaleFactor(options.sf);
+	input.AddResultColumn("Success", factory.ParseType("BOOLEAN"));
+	// The result is empty, but the scan does the real work.
+	input.SetCardinality(1000, false);
+	// with no rows to keep in order, the threads scanning dsdgen generate in parallel
+	input.SetOrderPreservation(OrderPreservation::NO_ORDER);
+	input.SetBindData<tpcds::DSDGenOptions>(std::move(options));
 }
 
-static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto result = make_uniq<DSDGenFunctionData>();
-
-	result->catalog = DatabaseManager::GetDefaultDatabase(context);
-	result->schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchemaPath();
-	optional<string> schema_arg;
-
-	for (auto &kv : input.named_parameters) {
-		if (kv.second.IsNull()) {
-			throw BinderException("Cannot use NULL as function argument");
-		}
-		if (kv.first == "sf") {
-			result->sf = kv.second.GetValue<double>();
-		} else if (kv.first == "catalog") {
-			result->catalog = Identifier(StringValue::Get(kv.second));
-		} else if (kv.first == "schema") {
-			schema_arg = StringValue::Get(kv.second);
-		} else if (kv.first == "suffix") {
-			result->suffix = StringValue::Get(kv.second);
-		} else if (kv.first == "overwrite") {
-			result->overwrite = kv.second.GetValue<bool>();
-		} else if (kv.first == "keys") {
-			result->keys = kv.second.GetValue<bool>();
-		}
-	}
-	if (schema_arg) {
-		auto &catalog = Catalog::GetCatalog(context, result->catalog);
-		result->schema = catalog.ResolveSchema(context, *schema_arg).GetSchemaPath();
-	}
-	if (input.binder) {
-		auto &catalog = Catalog::GetCatalog(context, result->catalog);
-		auto &properties = input.binder->GetStatementProperties();
-		DatabaseModificationType modification;
-		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
-		modification |= DatabaseModificationType::INSERT_DATA;
-		properties.RegisterDBModify(catalog, context, modification);
-	}
-	return_types.emplace_back(LogicalType::BOOLEAN);
-	names.emplace_back("Success");
-	return std::move(result);
+void DsdgenInitGlobal(TableFunction::InitGlobalInput &input) {
+	auto &options = input.GetBindData<tpcds::DSDGenOptions>();
+	DSDGenGlobalState state;
+	state.generator = tpcds::DSDGenGenerator::Create(input.GetContext(), options);
+	auto max_threads = state.generator->MaxThreads();
+	input.SetGlobalState<DSDGenGlobalState>(std::move(state));
+	input.SetMaxThreads(max_threads);
 }
 
-unique_ptr<GlobalTableFunctionState> DsdgenInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<DSDGenGlobalState>();
-}
-
-static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->Cast<DSDGenFunctionData>();
-	auto &state = data_p.global_state->Cast<DSDGenGlobalState>();
-	if (state.finished.load()) {
-		data_p.async_result = AsyncResultType::FINISHED;
-		return;
-	}
-	if (!state.schema_created) {
-		tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys,
-		                                        data.overwrite);
-		auto generator = tpcds::CreateDSDGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix);
-		{
-			lock_guard<mutex> guard(state.generator_lock);
-			state.generator = std::move(generator);
-		}
-		state.schema_created = true;
-	}
-
-	while (true) {
-		bool finished = false;
-		bool can_yield = false;
-		{
-			lock_guard<mutex> guard(state.generator_lock);
-			finished = !state.generator || state.generator->GenerateNext();
-			can_yield = state.generator && state.generator->CanYield();
-		}
-		if (finished) {
-			state.finished.store(true);
-			data_p.async_result = AsyncResultType::FINISHED;
-			return;
-		}
-		if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR && can_yield) {
-			data_p.async_result = DSDGenYield();
-			return;
-		}
+void DsdgenExec(TableFunction::ExecInput &input) {
+	auto &state = input.GetGlobalState<DSDGenGlobalState>();
+	input.GetOutputChunk().GetVector(0).SetSize(0);
+	// hand the thread back between steps, which keeps the progress observable
+	if (state.generator->Generate(input.GetContext())) {
+		input.Yield();
 	}
 }
 
-static double DsdgenProgress(ClientContext &context, const FunctionData *bind_data,
-                             const GlobalTableFunctionState *global_state) {
-	if (!global_state) {
-		return 0.0;
-	}
-	auto &state = global_state->Cast<DSDGenGlobalState>();
-	{
-		lock_guard<mutex> guard(state.generator_lock);
-		if (state.generator) {
-			return state.generator->Progress();
-		}
-	}
-	return state.finished.load() ? 100.0 : 0.0;
+void DsdgenProgress(TableFunction::ProgressInput &input) {
+	auto state = input.TryGetGlobalState<DSDGenGlobalState>();
+	input.SetProgress(state && state->generator ? state->generator->Progress() : 0.0);
 }
 
-static unique_ptr<NodeStatistics> DsdgenCardinality(ClientContext &, const FunctionData *) {
-	// The result is a single status row, but the side-effecting scan does the real work.
-	return make_uniq<NodeStatistics>(1000);
-}
-
-struct TPCDSData : public GlobalTableFunctionState {
-	TPCDSData() : offset(0) {
-	}
-	idx_t offset;
-};
-
-unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_uniq<TPCDSData>();
-	return std::move(result);
-}
-
-struct TPCDSQueriesBindData : public TableFunctionData {
+//===--------------------------------------------------------------------===//
+// tpcds_queries and tpcds_answers
+//===--------------------------------------------------------------------===//
+struct TPCDSQueriesBindData {
 	//! Without a scale factor the stored queries are returned unchanged
-	bool has_sf = false;
-	double sf = 1;
+	std::optional<double> sf;
 
-	string GetQuery(int query) const {
-		return has_sf ? tpcds::DSDGenWrapper::GetQuery(query, sf) : tpcds::DSDGenWrapper::GetQuery(query);
+	std::string GetQuery(int query) const {
+		return sf ? tpcds::DSDGenWrapper::GetQuery(query, *sf) : tpcds::DSDGenWrapper::GetQuery(query);
+	}
+	//! Equal bind data lets the optimizer share identical scans
+	bool operator==(const TPCDSQueriesBindData &other) const {
+		return sf == other.sf;
 	}
 };
+
+struct TPCDSScanState {
+	idx_t offset = 0;
+};
+
+void TPCDSScanInit(TableFunction::InitGlobalInput &input) {
+	input.SetGlobalState<TPCDSScanState>();
+}
 
 //! The scale factor is either the positional argument or the named "sf" parameter
-static void BindQueryScaleFactor(TableFunctionBindInput &input, const char *function_name,
-                                 TPCDSQueriesBindData &bind_data) {
-	Value sf;
-	if (!input.inputs.empty()) {
-		sf = input.inputs[0];
-		bind_data.has_sf = true;
+void TPCDSQueryBind(TableFunction::BindInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	TPCDSQueriesBindData bind_data;
+	auto counts = input.GetArgumentCounts();
+	if (counts.positional_variadic > 1) {
+		throw InvalidInputException("tpcds_queries: takes at most one positional argument, the scale factor");
 	}
-	auto entry = input.named_parameters.find("sf");
-	if (entry != input.named_parameters.end()) {
-		if (bind_data.has_sf) {
-			throw BinderException("%s: the scale factor can be given as a positional argument or as \"sf\", not both",
-			                      function_name);
+	auto set_scale_factor = [&](const Value &value) {
+		if (bind_data.sf) {
+			throw InvalidInputException(
+			    "tpcds_queries: the scale factor can be given as a positional argument or as \"sf\", not both");
 		}
-		sf = entry->second;
-		bind_data.has_sf = true;
+		if (value.IsNull()) {
+			throw InvalidInputException("tpcds_queries: cannot use NULL as scale factor");
+		}
+		bind_data.sf = CastArgument(factory, value, "DOUBLE").Get<double>();
+		// validates the scale factor
+		bind_data.GetQuery(1);
+	};
+	if (counts.positional_variadic == 1) {
+		set_scale_factor(input.GetConstantArgument(0));
 	}
-	if (!bind_data.has_sf) {
-		return;
-	}
-	if (sf.IsNull()) {
-		throw BinderException("%s: cannot use NULL as scale factor", function_name);
-	}
-	bind_data.sf = sf.GetValue<double>();
+	ForEachNamedArgument(input, "tpcds_queries", [&](const std::string &name, const Value &value) {
+		if (name != "sf") {
+			return false;
+		}
+		set_scale_factor(value);
+		return true;
+	});
+	input.AddResultColumn("query_nr", factory.ParseType("INTEGER"));
+	input.AddResultColumn("query", factory.ParseType("VARCHAR"));
+	input.SetCardinality(tpcds::DSDGenWrapper::QueriesCount(), true);
+	input.SetBindData<TPCDSQueriesBindData>(std::move(bind_data));
 }
 
-static duckdb::unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto result = make_uniq<TPCDSQueriesBindData>();
-	BindQueryScaleFactor(input, "tpcds_queries", *result);
-
-	names.emplace_back("query_nr");
-	return_types.emplace_back(LogicalType::INTEGER);
-
-	names.emplace_back("query");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	return std::move(result);
+void TPCDSQueryExec(TableFunction::ExecInput &input) {
+	auto &bind_data = input.GetBindData<TPCDSQueriesBindData>();
+	auto &state = input.GetGlobalState<TPCDSScanState>();
+	auto chunk = input.GetOutputChunk();
+	auto query_nr = chunk.GetVector(0);
+	auto query = chunk.GetVector(1);
+	auto count = std::min<idx_t>(tpcds::DSDGenWrapper::QueriesCount() - state.offset, chunk.GetCapacity());
+	query_nr.SetSize(count);
+	query.SetSize(count);
+	auto query_nr_data = query_nr.GetDataMutable<int32_t>();
+	for (idx_t row = 0; row < count; row++) {
+		auto nr = static_cast<int32_t>(state.offset + row + 1);
+		query_nr_data[row] = nr;
+		query.AssignString(row, bind_data.GetQuery(nr));
+	}
+	state.offset += count;
 }
 
-static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = data_p.bind_data->Cast<TPCDSQueriesBindData>();
-	auto &data = data_p.global_state->Cast<TPCDSData>();
-	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
-	if (data.offset >= tpcds_queries) {
-		// finished returning values
-		return;
-	}
-	idx_t chunk_count = 0;
+static const double TPCDS_ANSWER_SCALE_FACTORS[] = {0.01, 1};
 
-	// query_nr, INTEGER
-	auto &query_nr = output.data[0];
-	// query, VARCHAR
-	auto &query_col = output.data[1];
-
-	while (data.offset < tpcds_queries && chunk_count < STANDARD_VECTOR_SIZE) {
-		auto query = bind_data.GetQuery(data.offset + 1);
-		query_nr.Append(Value::INTEGER((int32_t)data.offset + 1));
-		query_col.Append(Value(query));
-		data.offset++;
-		chunk_count++;
-	}
+void TPCDSQueryAnswerBind(TableFunction::BindInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	input.AddResultColumn("query_nr", factory.ParseType("INTEGER"));
+	input.AddResultColumn("scale_factor", factory.ParseType("DOUBLE"));
+	input.AddResultColumn("answer", factory.ParseType("VARCHAR"));
+	input.SetCardinality(tpcds::DSDGenWrapper::QueriesCount() * 2, true);
 }
 
-static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                             vector<LogicalType> &return_types,
-                                                             vector<Identifier> &names) {
-	names.emplace_back("query_nr");
-	return_types.emplace_back(LogicalType::INTEGER);
-
-	names.emplace_back("scale_factor");
-	return_types.emplace_back(LogicalType::DOUBLE);
-
-	names.emplace_back("answer");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	return nullptr;
+void TPCDSQueryAnswerExec(TableFunction::ExecInput &input) {
+	auto &state = input.GetGlobalState<TPCDSScanState>();
+	idx_t queries = tpcds::DSDGenWrapper::QueriesCount();
+	idx_t total_answers = queries * (sizeof(TPCDS_ANSWER_SCALE_FACTORS) / sizeof(double));
+	auto chunk = input.GetOutputChunk();
+	auto query_nr = chunk.GetVector(0);
+	auto scale_factor = chunk.GetVector(1);
+	auto answer = chunk.GetVector(2);
+	auto count = std::min<idx_t>(total_answers - state.offset, chunk.GetCapacity());
+	query_nr.SetSize(count);
+	scale_factor.SetSize(count);
+	answer.SetSize(count);
+	auto query_nr_data = query_nr.GetDataMutable<int32_t>();
+	auto scale_factor_data = scale_factor.GetDataMutable<double>();
+	for (idx_t row = 0; row < count; row++) {
+		auto offset = state.offset + row;
+		auto query = static_cast<int32_t>(offset % queries + 1);
+		auto sf = TPCDS_ANSWER_SCALE_FACTORS[offset / queries];
+		query_nr_data[row] = query;
+		scale_factor_data[row] = sf;
+		answer.AssignString(row, tpcds::DSDGenWrapper::GetAnswer(sf, query));
+	}
+	state.offset += count;
 }
 
-static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.global_state->Cast<TPCDSData>();
-	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
-	vector<double> scale_factors {0.01, 1};
-	idx_t total_answers = tpcds_queries * scale_factors.size();
-	if (data.offset >= total_answers) {
-		// finished returning values
-		return;
-	}
-	idx_t chunk_count = 0;
-
-	// query_nr, INTEGER
-	auto &query_nr = output.data[0];
-	// scale_factor, DOUBLE
-	auto &scale_factor = output.data[1];
-	// answer, VARCHAR
-	auto &answer_col = output.data[2];
-
-	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
-		idx_t cur_query = data.offset % tpcds_queries;
-		idx_t cur_sf = data.offset / tpcds_queries;
-		auto answer = TpcdsExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
-		query_nr.Append(Value::INTEGER((int32_t)cur_query + 1));
-		scale_factor.Append(Value::DOUBLE(scale_factors[cur_sf]));
-		answer_col.Append(Value(answer));
-		data.offset++;
-		chunk_count++;
-	}
-}
-
-static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
-	if (parameters.values[0].IsNull()) {
+//===--------------------------------------------------------------------===//
+// PRAGMA tpcds
+//===--------------------------------------------------------------------===//
+std::string PragmaTpcdsQuery(PragmaFunction::QueryInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	auto query_nr = input.GetConstantArgument(0);
+	if (query_nr.IsNull()) {
 		throw InvalidInputException("Cannot use NULL as argument for the TPC-DS query number");
 	}
-	auto index = parameters.values[0].GetValue<int32_t>();
-	auto sf_entry = parameters.named_parameters.find("sf");
-	if (sf_entry == parameters.named_parameters.end()) {
-		return tpcds::DSDGenWrapper::GetQuery(index);
+	auto index = CastArgument(factory, query_nr, "BIGINT").Get<int64_t>();
+	if (index <= 0 || index > static_cast<int64_t>(tpcds::DSDGenWrapper::QueriesCount())) {
+		throw InvalidInputException("Out of range TPC-DS query number " + std::to_string(index));
 	}
-	if (sf_entry->second.IsNull()) {
-		throw InvalidInputException("Cannot use NULL as scale factor for the TPC-DS query");
-	}
-	return tpcds::DSDGenWrapper::GetQuery(index, sf_entry->second.GetValue<double>());
-}
-
-static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
-	dsdgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
-		options.Add("sf", LogicalType::DOUBLE)
-		    .Add("overwrite", LogicalType::BOOLEAN)
-		    .Add("keys", LogicalType::BOOLEAN)
-		    .Add("catalog", LogicalType::VARCHAR)
-		    .Add("schema", LogicalType::VARCHAR)
-		    .Add("suffix", LogicalType::VARCHAR);
+	std::optional<double> sf;
+	ForEachNamedArgument(input, "tpcds", [&](const std::string &name, const Value &value) {
+		if (name != "sf") {
+			return false;
+		}
+		if (value.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as scale factor for the TPC-DS query");
+		}
+		sf = CastArgument(factory, value, "DOUBLE").Get<double>();
+		return true;
 	});
-	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
+	auto query = static_cast<int>(index);
+	return sf ? tpcds::DSDGenWrapper::GetQuery(query, *sf) : tpcds::DSDGenWrapper::GetQuery(query);
+}
+
+} // namespace
+
+DUCKDB_CPP_EXTENSION_ENTRYPOINT(Extension &extension, Context &context) {
+	auto &factory = context.GetFactory();
+	auto any = factory.CreateType(LogicalTypeId::ANY);
+
+	auto dsdgen = TableFunction::Create(factory);
 	// creates and fills tables per execution
-	dsdgen_func.stability = FunctionStability::VOLATILE;
-	dsdgen_func.table_scan_progress = DsdgenProgress;
-	dsdgen_func.cardinality = DsdgenCardinality;
+	dsdgen.SetName("dsdgen")
+	    .SetStability(FunctionStability::VOLATILE)
+	    .WithSignature([&](FunctionSignature &sig) { sig.AddKwargs("options", any); })
+	    .WithDocs([](FunctionDocs &docs) {
+		    docs.SetDescription("Creates the TPC-DS tables and fills them with the data of a scale factor. Options: "
+		                        "sf, catalog, schema, suffix, overwrite and keys");
+	    })
+	    .SetBindCallback(DsdgenBind)
+	    .SetInitGlobalCallback(DsdgenInitGlobal)
+	    .SetExecCallback(DsdgenExec)
+	    .SetProgressCallback(DsdgenProgress);
+	extension.Register(dsdgen);
 
-	loader.RegisterFunction(dsdgen_func);
+	// the TPC-DS queries, optionally parameterized for a scale factor
+	auto queries = TableFunction::Create(factory);
+	queries.SetName("tpcds_queries")
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY)
+	    .WithSignature([&](FunctionSignature &sig) {
+		    sig.AddArgs("sf", factory.ParseType("DOUBLE"));
+		    sig.AddKwargs("options", any);
+	    })
+	    .SetBindCallback(TPCDSQueryBind)
+	    .SetInitGlobalCallback(TPCDSScanInit)
+	    .SetExecCallback(TPCDSQueryExec);
+	extension.Register(queries);
 
-	// create the TPCDS pragma that allows us to run the query
-	auto tpcds_func = PragmaFunction::PragmaCall(
-	    "tpcds", PragmaTpcdsQuery, FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
-	tpcds_func.GetSignature().WithTypedKwargs("options",
-	                                          [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
-	loader.RegisterFunction(tpcds_func);
+	// the answers of the TPC-DS queries
+	auto answers = TableFunction::Create(factory);
+	answers.SetName("tpcds_answers")
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY)
+	    .SetBindCallback(TPCDSQueryAnswerBind)
+	    .SetInitGlobalCallback(TPCDSScanInit)
+	    .SetExecCallback(TPCDSQueryAnswerExec);
+	extension.Register(answers);
 
-	// create the TPCDS_QUERIES function that returns the queries, optionally parameterized for a scale factor
-	TableFunctionSet tpcds_queries_set("tpcds_queries");
-	for (auto &arguments : vector<vector<LogicalType>> {{}, {LogicalType::DOUBLE}}) {
-		TableFunction tpcds_query_func(arguments, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-		tpcds_query_func.GetSignature().WithTypedKwargs(
-		    "options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
-		tpcds_queries_set.AddFunction(tpcds_query_func);
-	}
-	loader.RegisterFunction(tpcds_queries_set);
-
-	// create the TPCDS_ANSWERS that returns the query result
-	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
-	                                      TPCDSInit);
-
-	loader.RegisterFunction(tpcds_query_answer_func);
-}
-
-// LCOV_EXCL_START
-void TpcdsExtension::Load(ExtensionLoader &loader) {
-	LoadInternal(loader);
-}
-// LCOV_EXCL_STOP
-
-std::string TpcdsExtension::GetQuery(int query) {
-	return tpcds::DSDGenWrapper::GetQuery(query);
-}
-
-std::string TpcdsExtension::GetQuery(int query, double sf) {
-	return tpcds::DSDGenWrapper::GetQuery(query, sf);
-}
-
-std::string TpcdsExtension::GetAnswer(double sf, int query) {
-	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
-}
-
-// LCOV_EXCL_START
-std::string TpcdsExtension::Name() {
-	return "tpcds";
-}
-
-std::string TpcdsExtension::Version() const {
-#ifdef EXT_VERSION_TPCDS
-	return EXT_VERSION_TPCDS;
-#else
-	return "";
-#endif
-}
-// LCOV_EXCL_STOP
-
-} // namespace duckdb
-
-extern "C" {
-DUCKDB_CPP_EXTENSION_ENTRY(tpcds, loader) {
-	duckdb::LoadInternal(loader);
-}
+	// PRAGMA tpcds(n) runs TPC-DS query n
+	auto pragma = PragmaFunction::Create(factory);
+	pragma.SetName("tpcds")
+	    .WithSignature([&](FunctionSignature &sig) {
+		    sig.AddParameter("query_nr", factory.ParseType("BIGINT"), FunctionParameterKind::POSITIONAL_ONLY);
+		    sig.AddKwargs("options", any);
+	    })
+	    .SetQueryCallback(PragmaTpcdsQuery);
+	extension.Register(pragma);
 }

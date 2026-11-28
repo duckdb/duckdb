@@ -38,8 +38,9 @@
 #include <stdio.h>
 #include "error_msg.h"
 #include "grammar_support.h"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "tpcds_errors.hpp"
+
+#include <string>
 static thread_local int *LN;
 static thread_local char *FN;
 
@@ -185,13 +186,16 @@ int ReportErrorNoLine(int nError, const char *msg, int bExit) {
 		case EFLG_NO_ARG:
 			e_msg = Errors[-nError].prompt;
 			break;
-		case EFLG_STR_ARG:
-			e_msg = duckdb::StringUtil::Format(Errors[-nError].prompt, msg ? msg : "");
+		case EFLG_STR_ARG: {
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), Errors[-nError].prompt, msg ? msg : "");
+			e_msg = buffer;
 			break;
+		}
 		}
 	}
 	if (bExit) {
-		throw duckdb::InvalidInputException("dsdgen: %s", e_msg);
+		tpcds::ThrowInvalidInputError("dsdgen: " + e_msg);
 	}
 	return (nError);
 }

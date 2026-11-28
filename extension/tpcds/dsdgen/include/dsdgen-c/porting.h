@@ -121,12 +121,14 @@ char *strdup(const char *);
 #define MAXINT INT_MAX
 #endif /* MACOS */
 
-#include "duckdb/common/exception.hpp"
+#include "tpcds_errors.hpp"
 
-#define INTERNAL(m) throw duckdb::InternalException("dsdgen: %s (%s:%d)", m, __FILE__, __LINE__)
+#define INTERNAL(m)                                                                                                    \
+	tpcds::ThrowInternalError(std::string("dsdgen: ") + (m) + " (" + __FILE__ + ":" + std::to_string(__LINE__) + ")")
 
 #define MALLOC_CHECK(v)                                                                                                \
 	if (v == NULL) {                                                                                                   \
-		throw duckdb::OutOfMemoryException("dsdgen: malloc failed at %s:%d", __FILE__, __LINE__);                      \
+		tpcds::ThrowOutOfMemoryError(std::string("dsdgen: malloc failed at ") + __FILE__ + ":" +                       \
+		                             std::to_string(__LINE__));                                                        \
 	}
 #endif

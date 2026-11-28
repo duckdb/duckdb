@@ -697,7 +697,8 @@ private:
 			if (ClassifyLogicalOperatorRepeatability(get) != LogicalOperatorRepeatability::REPEATABLE) {
 				return false;
 			}
-			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty()) {
+			if (get.bind_data && !get.bind_data->IsIdentifiedByCall() && !get.function.HasSerializationCallbacks() &&
+			    get.parameters.empty()) {
 				// Without serialization callbacks, the serialized form carries only the call parameters
 				// (see LogicalGet::Serialize). A scan without positional parameters - e.g., one created through
 				// an attached catalog - keeps its identity solely in the bind data, and its options do not

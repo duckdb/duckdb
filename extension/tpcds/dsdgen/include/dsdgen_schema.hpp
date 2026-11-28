@@ -1,32 +1,20 @@
-
 #pragma once
 
-#include "duckdb.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/constraints/not_null_constraint.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/planner/binder.hpp"
+#include <cstdint>
 
 namespace tpcds {
 
-using duckdb::idx_t;
-using duckdb::LogicalType;
+//! The column types are SQL type names, the tables are created through SQL
 
 //===--------------------------------------------------------------------===//
 // call_center
 //===--------------------------------------------------------------------===//
 struct CallCenterInfo {
-	static constexpr char *Name = "call_center";
+	static constexpr const char *Name = "call_center";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 31;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 31;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -40,15 +28,15 @@ const char *CallCenterInfo::Columns[] = {
     "cc_city",           "cc_county",         "cc_state",          "cc_zip",
     "cc_country",        "cc_gmt_offset",     "cc_tax_percentage"};
 
-const LogicalType CallCenterInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR,       LogicalType::DATE,         LogicalType::DATE,
-    LogicalType::BIGINT,  LogicalType::BIGINT,        LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::BIGINT,  LogicalType::BIGINT,        LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::BIGINT,  LogicalType::VARCHAR,       LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::BIGINT,  LogicalType::VARCHAR,       LogicalType::BIGINT,       LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR,       LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR,       LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::DECIMAL(5, 2), LogicalType::DECIMAL(5, 2)};
+const char *CallCenterInfo::Types[] = {
+    "BIGINT",  "VARCHAR",       "DATE",         "DATE",
+    "BIGINT",  "BIGINT",        "VARCHAR",      "VARCHAR",
+    "BIGINT",  "BIGINT",        "VARCHAR",      "VARCHAR",
+    "BIGINT",  "VARCHAR",       "VARCHAR",      "VARCHAR",
+    "BIGINT",  "VARCHAR",       "BIGINT",       "VARCHAR",
+    "VARCHAR", "VARCHAR",       "VARCHAR",      "VARCHAR",
+    "VARCHAR", "VARCHAR",       "VARCHAR",      "VARCHAR",
+    "VARCHAR", "DECIMAL(5, 2)", "DECIMAL(5, 2)"};
 
 const char *CallCenterInfo::PrimaryKeyColumns[] = {"cc_call_center_sk"};
 
@@ -56,11 +44,11 @@ const char *CallCenterInfo::PrimaryKeyColumns[] = {"cc_call_center_sk"};
 // catalog_page
 //===--------------------------------------------------------------------===//
 struct CatalogPageInfo {
-	static constexpr char *Name = "catalog_page";
+	static constexpr const char *Name = "catalog_page";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 9;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 9;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -68,9 +56,9 @@ const char *CatalogPageInfo::Columns[] = {"cp_catalog_page_sk",     "cp_catalog_
                                           "cp_end_date_sk",         "cp_department",      "cp_catalog_number",
                                           "cp_catalog_page_number", "cp_description",     "cp_type"};
 
-const LogicalType CatalogPageInfo::Types[] = {LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,
-                                              LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,
-                                              LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *CatalogPageInfo::Types[] = {"BIGINT",  "VARCHAR", "BIGINT",
+                                              "BIGINT",  "VARCHAR", "BIGINT",
+                                              "BIGINT",  "VARCHAR", "VARCHAR"};
 
 const char *CatalogPageInfo::PrimaryKeyColumns[] = {"cp_catalog_page_sk"};
 
@@ -78,11 +66,11 @@ const char *CatalogPageInfo::PrimaryKeyColumns[] = {"cp_catalog_page_sk"};
 // catalog_returns
 //===--------------------------------------------------------------------===//
 struct CatalogReturnsInfo {
-	static constexpr char *Name = "catalog_returns";
+	static constexpr const char *Name = "catalog_returns";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 27;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 27;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -114,14 +102,14 @@ const char *CatalogReturnsInfo::Columns[] = {"cr_returned_date_sk",
                                              "cr_store_credit",
                                              "cr_net_loss"};
 
-const LogicalType CatalogReturnsInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *CatalogReturnsInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *CatalogReturnsInfo::PrimaryKeyColumns[] = {"cr_item_sk", "cr_order_number"};
 
@@ -129,11 +117,11 @@ const char *CatalogReturnsInfo::PrimaryKeyColumns[] = {"cr_item_sk", "cr_order_n
 // catalog_sales
 //===--------------------------------------------------------------------===//
 struct CatalogSalesInfo {
-	static constexpr char *Name = "catalog_sales";
+	static constexpr const char *Name = "catalog_sales";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 34;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 34;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -172,16 +160,16 @@ const char *CatalogSalesInfo::Columns[] = {"cs_sold_date_sk",
                                            "cs_net_paid_inc_ship_tax",
                                            "cs_net_profit"};
 
-const LogicalType CatalogSalesInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *CatalogSalesInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *CatalogSalesInfo::PrimaryKeyColumns[] = {"cs_item_sk", "cs_order_number"};
 
@@ -189,11 +177,11 @@ const char *CatalogSalesInfo::PrimaryKeyColumns[] = {"cs_item_sk", "cs_order_num
 // customer
 //===--------------------------------------------------------------------===//
 struct CustomerInfo {
-	static constexpr char *Name = "customer";
+	static constexpr const char *Name = "customer";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 18;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 18;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -207,11 +195,11 @@ const char *CustomerInfo::Columns[] = {"c_customer_sk",         "c_customer_id",
                                        "c_birth_country",       "c_login",
                                        "c_email_address",       "c_last_review_date_sk"};
 
-const LogicalType CustomerInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER};
+const char *CustomerInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "BIGINT",  "BIGINT",  "BIGINT",
+    "BIGINT",  "BIGINT",  "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR", "BIGINT",  "BIGINT",  "BIGINT",  "VARCHAR",
+    "VARCHAR", "VARCHAR", "INTEGER"};
 
 const char *CustomerInfo::PrimaryKeyColumns[] = {"c_customer_sk"};
 
@@ -219,11 +207,11 @@ const char *CustomerInfo::PrimaryKeyColumns[] = {"c_customer_sk"};
 // customer_address
 //===--------------------------------------------------------------------===//
 struct CustomerAddressInfo {
-	static constexpr char *Name = "customer_address";
+	static constexpr const char *Name = "customer_address";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 13;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 13;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -232,10 +220,10 @@ const char *CustomerAddressInfo::Columns[] = {
     "ca_suite_number", "ca_city",       "ca_county",        "ca_state",       "ca_zip",
     "ca_country",      "ca_gmt_offset", "ca_location_type"};
 
-const LogicalType CustomerAddressInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR,       LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR,       LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::DECIMAL(5, 2), LogicalType::VARCHAR};
+const char *CustomerAddressInfo::Types[] = {
+    "BIGINT",  "VARCHAR",       "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR", "VARCHAR",       "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR", "DECIMAL(5, 2)", "VARCHAR"};
 
 const char *CustomerAddressInfo::PrimaryKeyColumns[] = {"ca_address_sk"};
 
@@ -243,11 +231,11 @@ const char *CustomerAddressInfo::PrimaryKeyColumns[] = {"ca_address_sk"};
 // customer_demographics
 //===--------------------------------------------------------------------===//
 struct CustomerDemographicsInfo {
-	static constexpr char *Name = "customer_demographics";
+	static constexpr const char *Name = "customer_demographics";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 9;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 9;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -255,9 +243,9 @@ const char *CustomerDemographicsInfo::Columns[] = {
     "cd_demo_sk",       "cd_gender",    "cd_marital_status",     "cd_education_status", "cd_purchase_estimate",
     "cd_credit_rating", "cd_dep_count", "cd_dep_employed_count", "cd_dep_college_count"};
 
-const LogicalType CustomerDemographicsInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,
-    LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::INTEGER};
+const char *CustomerDemographicsInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "VARCHAR", "VARCHAR", "BIGINT",
+    "VARCHAR", "BIGINT",  "BIGINT",  "INTEGER"};
 
 const char *CustomerDemographicsInfo::PrimaryKeyColumns[] = {"cd_demo_sk"};
 
@@ -265,11 +253,11 @@ const char *CustomerDemographicsInfo::PrimaryKeyColumns[] = {"cd_demo_sk"};
 // date_dim
 //===--------------------------------------------------------------------===//
 struct DateDimInfo {
-	static constexpr char *Name = "date_dim";
+	static constexpr const char *Name = "date_dim";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 28;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 28;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -302,13 +290,13 @@ const char *DateDimInfo::Columns[] = {"d_date_sk",
                                       "d_current_quarter",
                                       "d_current_year"};
 
-const LogicalType DateDimInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::DATE,    LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *DateDimInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "DATE",    "BIGINT",  "BIGINT",
+    "BIGINT",  "BIGINT",  "BIGINT",  "BIGINT",  "BIGINT",
+    "BIGINT",  "BIGINT",  "BIGINT",  "BIGINT",  "VARCHAR",
+    "VARCHAR", "VARCHAR", "VARCHAR", "VARCHAR", "BIGINT",
+    "BIGINT",  "BIGINT",  "BIGINT",  "VARCHAR", "VARCHAR",
+    "VARCHAR", "VARCHAR", "VARCHAR"};
 
 const char *DateDimInfo::PrimaryKeyColumns[] = {"d_date_sk"};
 
@@ -316,19 +304,19 @@ const char *DateDimInfo::PrimaryKeyColumns[] = {"d_date_sk"};
 // household_demographics
 //===--------------------------------------------------------------------===//
 struct HouseholdDemographicsInfo {
-	static constexpr char *Name = "household_demographics";
+	static constexpr const char *Name = "household_demographics";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 5;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 5;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *HouseholdDemographicsInfo::Columns[] = {"hd_demo_sk", "hd_income_band_sk", "hd_buy_potential",
                                                     "hd_dep_count", "hd_vehicle_count"};
 
-const LogicalType HouseholdDemographicsInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::INTEGER};
+const char *HouseholdDemographicsInfo::Types[] = {
+    "BIGINT",  "BIGINT",  "VARCHAR", "BIGINT",  "INTEGER"};
 
 const char *HouseholdDemographicsInfo::PrimaryKeyColumns[] = {"hd_demo_sk"};
 
@@ -336,17 +324,17 @@ const char *HouseholdDemographicsInfo::PrimaryKeyColumns[] = {"hd_demo_sk"};
 // income_band
 //===--------------------------------------------------------------------===//
 struct IncomeBandInfo {
-	static constexpr char *Name = "income_band";
+	static constexpr const char *Name = "income_band";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 3;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 3;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *IncomeBandInfo::Columns[] = {"ib_income_band_sk", "ib_lower_bound", "ib_upper_bound"};
 
-const LogicalType IncomeBandInfo::Types[] = {LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::INTEGER};
+const char *IncomeBandInfo::Types[] = {"BIGINT",  "BIGINT",  "INTEGER"};
 
 const char *IncomeBandInfo::PrimaryKeyColumns[] = {"ib_income_band_sk"};
 
@@ -354,18 +342,18 @@ const char *IncomeBandInfo::PrimaryKeyColumns[] = {"ib_income_band_sk"};
 // inventory
 //===--------------------------------------------------------------------===//
 struct InventoryInfo {
-	static constexpr char *Name = "inventory";
+	static constexpr const char *Name = "inventory";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 4;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 3;
+	static constexpr uint64_t ColumnCount = 4;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 3;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *InventoryInfo::Columns[] = {"inv_date_sk", "inv_item_sk", "inv_warehouse_sk", "inv_quantity_on_hand"};
 
-const LogicalType InventoryInfo::Types[] = {LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
-                                            LogicalType::INTEGER};
+const char *InventoryInfo::Types[] = {"BIGINT",  "BIGINT",  "BIGINT",
+                                            "INTEGER"};
 
 const char *InventoryInfo::PrimaryKeyColumns[] = {"inv_date_sk", "inv_item_sk", "inv_warehouse_sk"};
 
@@ -373,11 +361,11 @@ const char *InventoryInfo::PrimaryKeyColumns[] = {"inv_date_sk", "inv_item_sk", 
 // item
 //===--------------------------------------------------------------------===//
 struct ItemInfo {
-	static constexpr char *Name = "item";
+	static constexpr const char *Name = "item";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 22;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 22;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -387,13 +375,13 @@ const char *ItemInfo::Columns[] = {
     "i_category",       "i_manufact_id", "i_manufact",       "i_size",         "i_formulation", "i_color",
     "i_units",          "i_container",   "i_manager_id",     "i_product_name"};
 
-const LogicalType ItemInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR,       LogicalType::DATE,          LogicalType::DATE,
-    LogicalType::VARCHAR, LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::BIGINT,
-    LogicalType::VARCHAR, LogicalType::BIGINT,        LogicalType::VARCHAR,       LogicalType::BIGINT,
-    LogicalType::VARCHAR, LogicalType::BIGINT,        LogicalType::VARCHAR,       LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR,       LogicalType::VARCHAR,       LogicalType::VARCHAR,
-    LogicalType::BIGINT,  LogicalType::VARCHAR};
+const char *ItemInfo::Types[] = {
+    "BIGINT",  "VARCHAR",       "DATE",          "DATE",
+    "VARCHAR", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "BIGINT",
+    "VARCHAR", "BIGINT",        "VARCHAR",       "BIGINT",
+    "VARCHAR", "BIGINT",        "VARCHAR",       "VARCHAR",
+    "VARCHAR", "VARCHAR",       "VARCHAR",       "VARCHAR",
+    "BIGINT",  "VARCHAR"};
 
 const char *ItemInfo::PrimaryKeyColumns[] = {"i_item_sk"};
 
@@ -401,11 +389,11 @@ const char *ItemInfo::PrimaryKeyColumns[] = {"i_item_sk"};
 // promotion
 //===--------------------------------------------------------------------===//
 struct PromotionInfo {
-	static constexpr char *Name = "promotion";
+	static constexpr const char *Name = "promotion";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 19;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 19;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -415,11 +403,11 @@ const char *PromotionInfo::Columns[] = {"p_promo_sk",        "p_promo_id",      
                                         "p_channel_radio",   "p_channel_press", "p_channel_event",   "p_channel_demo",
                                         "p_channel_details", "p_purpose",       "p_discount_active"};
 
-const LogicalType PromotionInfo::Types[] = {
-    LogicalType::BIGINT,         LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::DECIMAL(15, 2), LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,        LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,        LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *PromotionInfo::Types[] = {
+    "BIGINT",         "VARCHAR", "BIGINT",  "BIGINT",  "BIGINT",
+    "DECIMAL(15, 2)", "BIGINT",  "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR",        "VARCHAR", "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR",        "VARCHAR", "VARCHAR", "VARCHAR"};
 
 const char *PromotionInfo::PrimaryKeyColumns[] = {"p_promo_sk"};
 
@@ -427,17 +415,17 @@ const char *PromotionInfo::PrimaryKeyColumns[] = {"p_promo_sk"};
 // reason
 //===--------------------------------------------------------------------===//
 struct ReasonInfo {
-	static constexpr char *Name = "reason";
+	static constexpr const char *Name = "reason";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 3;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 3;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *ReasonInfo::Columns[] = {"r_reason_sk", "r_reason_id", "r_reason_desc"};
 
-const LogicalType ReasonInfo::Types[] = {LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *ReasonInfo::Types[] = {"BIGINT",  "VARCHAR", "VARCHAR"};
 
 const char *ReasonInfo::PrimaryKeyColumns[] = {"r_reason_sk"};
 
@@ -445,19 +433,19 @@ const char *ReasonInfo::PrimaryKeyColumns[] = {"r_reason_sk"};
 // ship_mode
 //===--------------------------------------------------------------------===//
 struct ShipModeInfo {
-	static constexpr char *Name = "ship_mode";
+	static constexpr const char *Name = "ship_mode";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 6;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 6;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *ShipModeInfo::Columns[] = {"sm_ship_mode_sk", "sm_ship_mode_id", "sm_type",
                                        "sm_code",         "sm_carrier",      "sm_contract"};
 
-const LogicalType ShipModeInfo::Types[] = {LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR,
-                                           LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *ShipModeInfo::Types[] = {"BIGINT",  "VARCHAR", "VARCHAR",
+                                           "VARCHAR", "VARCHAR", "VARCHAR"};
 
 const char *ShipModeInfo::PrimaryKeyColumns[] = {"sm_ship_mode_sk"};
 
@@ -465,11 +453,11 @@ const char *ShipModeInfo::PrimaryKeyColumns[] = {"sm_ship_mode_sk"};
 // store
 //===--------------------------------------------------------------------===//
 struct StoreInfo {
-	static constexpr char *Name = "store";
+	static constexpr const char *Name = "store";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 29;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 29;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -481,15 +469,15 @@ const char *StoreInfo::Columns[] = {
     "s_street_type",   "s_suite_number",     "s_city",           "s_county",         "s_state",
     "s_zip",           "s_country",          "s_gmt_offset",     "s_tax_percentage"};
 
-const LogicalType StoreInfo::Types[] = {
-    LogicalType::BIGINT,       LogicalType::VARCHAR, LogicalType::DATE,    LogicalType::DATE,
-    LogicalType::BIGINT,       LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::VARCHAR,
-    LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::VARCHAR,
-    LogicalType::BIGINT,       LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::DECIMAL(5, 2),
-    LogicalType::DECIMAL(5, 2)};
+const char *StoreInfo::Types[] = {
+    "BIGINT",       "VARCHAR", "DATE",    "DATE",
+    "BIGINT",       "VARCHAR", "BIGINT",  "BIGINT",
+    "VARCHAR",      "VARCHAR", "BIGINT",  "VARCHAR",
+    "VARCHAR",      "VARCHAR", "BIGINT",  "VARCHAR",
+    "BIGINT",       "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR",      "VARCHAR", "VARCHAR", "VARCHAR",
+    "VARCHAR",      "VARCHAR", "VARCHAR", "DECIMAL(5, 2)",
+    "DECIMAL(5, 2)"};
 
 const char *StoreInfo::PrimaryKeyColumns[] = {"s_store_sk"};
 
@@ -497,11 +485,11 @@ const char *StoreInfo::PrimaryKeyColumns[] = {"s_store_sk"};
 // store_returns
 //===--------------------------------------------------------------------===//
 struct StoreReturnsInfo {
-	static constexpr char *Name = "store_returns";
+	static constexpr const char *Name = "store_returns";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 20;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 20;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -511,12 +499,12 @@ const char *StoreReturnsInfo::Columns[] = {
     "sr_return_quantity",  "sr_return_amt",     "sr_return_tax",      "sr_return_amt_inc_tax", "sr_fee",
     "sr_return_ship_cost", "sr_refunded_cash",  "sr_reversed_charge", "sr_store_credit",       "sr_net_loss"};
 
-const LogicalType StoreReturnsInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *StoreReturnsInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *StoreReturnsInfo::PrimaryKeyColumns[] = {"sr_item_sk", "sr_ticket_number"};
 
@@ -524,11 +512,11 @@ const char *StoreReturnsInfo::PrimaryKeyColumns[] = {"sr_item_sk", "sr_ticket_nu
 // store_sales
 //===--------------------------------------------------------------------===//
 struct StoreSalesInfo {
-	static constexpr char *Name = "store_sales";
+	static constexpr const char *Name = "store_sales";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 23;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 23;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -540,13 +528,13 @@ const char *StoreSalesInfo::Columns[] = {
     "ss_ext_wholesale_cost", "ss_ext_list_price",   "ss_ext_tax",          "ss_coupon_amt",
     "ss_net_paid",           "ss_net_paid_inc_tax", "ss_net_profit"};
 
-const LogicalType StoreSalesInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *StoreSalesInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *StoreSalesInfo::PrimaryKeyColumns[] = {"ss_item_sk", "ss_ticket_number"};
 
@@ -554,20 +542,20 @@ const char *StoreSalesInfo::PrimaryKeyColumns[] = {"ss_item_sk", "ss_ticket_numb
 // time_dim
 //===--------------------------------------------------------------------===//
 struct TimeDimInfo {
-	static constexpr char *Name = "time_dim";
+	static constexpr const char *Name = "time_dim";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 10;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 10;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
 const char *TimeDimInfo::Columns[] = {"t_time_sk", "t_time_id", "t_time",  "t_hour",      "t_minute",
                                       "t_second",  "t_am_pm",   "t_shift", "t_sub_shift", "t_meal_time"};
 
-const LogicalType TimeDimInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+const char *TimeDimInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "BIGINT",  "BIGINT",  "BIGINT",
+    "BIGINT",  "VARCHAR", "VARCHAR", "VARCHAR", "VARCHAR"};
 
 const char *TimeDimInfo::PrimaryKeyColumns[] = {"t_time_sk"};
 
@@ -575,11 +563,11 @@ const char *TimeDimInfo::PrimaryKeyColumns[] = {"t_time_sk"};
 // warehouse
 //===--------------------------------------------------------------------===//
 struct WarehouseInfo {
-	static constexpr char *Name = "warehouse";
+	static constexpr const char *Name = "warehouse";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 14;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 14;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -588,10 +576,10 @@ const char *WarehouseInfo::Columns[] = {"w_warehouse_sk",  "w_warehouse_id", "w_
                                         "w_city",          "w_county",       "w_state",          "w_zip",
                                         "w_country",       "w_gmt_offset"};
 
-const LogicalType WarehouseInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,       LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,      LogicalType::VARCHAR,
-    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::DECIMAL(5, 2)};
+const char *WarehouseInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "VARCHAR", "BIGINT",       "VARCHAR",
+    "VARCHAR", "VARCHAR", "VARCHAR", "VARCHAR",      "VARCHAR",
+    "VARCHAR", "VARCHAR", "VARCHAR", "DECIMAL(5, 2)"};
 
 const char *WarehouseInfo::PrimaryKeyColumns[] = {"w_warehouse_sk"};
 
@@ -599,11 +587,11 @@ const char *WarehouseInfo::PrimaryKeyColumns[] = {"w_warehouse_sk"};
 // web_page
 //===--------------------------------------------------------------------===//
 struct WebPageInfo {
-	static constexpr char *Name = "web_page";
+	static constexpr const char *Name = "web_page";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 14;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 14;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -612,10 +600,10 @@ const char *WebPageInfo::Columns[] = {
     "wp_access_date_sk", "wp_autogen_flag", "wp_customer_sk",    "wp_url",          "wp_type",
     "wp_char_count",     "wp_link_count",   "wp_image_count",    "wp_max_ad_count"};
 
-const LogicalType WebPageInfo::Types[] = {
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::DATE,    LogicalType::DATE,    LogicalType::BIGINT,
-    LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::INTEGER};
+const char *WebPageInfo::Types[] = {
+    "BIGINT",  "VARCHAR", "DATE",    "DATE",    "BIGINT",
+    "BIGINT",  "VARCHAR", "BIGINT",  "VARCHAR", "VARCHAR",
+    "BIGINT",  "BIGINT",  "BIGINT",  "INTEGER"};
 
 const char *WebPageInfo::PrimaryKeyColumns[] = {"wp_web_page_sk"};
 
@@ -623,11 +611,11 @@ const char *WebPageInfo::PrimaryKeyColumns[] = {"wp_web_page_sk"};
 // web_returns
 //===--------------------------------------------------------------------===//
 struct WebReturnsInfo {
-	static constexpr char *Name = "web_returns";
+	static constexpr const char *Name = "web_returns";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 24;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 24;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -656,13 +644,13 @@ const char *WebReturnsInfo::Columns[] = {"wr_returned_date_sk",
                                          "wr_account_credit",
                                          "wr_net_loss"};
 
-const LogicalType WebReturnsInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *WebReturnsInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *WebReturnsInfo::PrimaryKeyColumns[] = {"wr_item_sk", "wr_order_number"};
 
@@ -670,11 +658,11 @@ const char *WebReturnsInfo::PrimaryKeyColumns[] = {"wr_item_sk", "wr_order_numbe
 // web_sales
 //===--------------------------------------------------------------------===//
 struct WebSalesInfo {
-	static constexpr char *Name = "web_sales";
+	static constexpr const char *Name = "web_sales";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 34;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 2;
+	static constexpr uint64_t ColumnCount = 34;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 2;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -713,16 +701,16 @@ const char *WebSalesInfo::Columns[] = {"ws_sold_date_sk",
                                        "ws_net_paid_inc_ship_tax",
                                        "ws_net_profit"};
 
-const LogicalType WebSalesInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,
-    LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::BIGINT,        LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2),
-    LogicalType::DECIMAL(7, 2), LogicalType::DECIMAL(7, 2)};
+const char *WebSalesInfo::Types[] = {
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "BIGINT",
+    "BIGINT",        "BIGINT",        "BIGINT",        "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)", "DECIMAL(7, 2)",
+    "DECIMAL(7, 2)", "DECIMAL(7, 2)"};
 
 const char *WebSalesInfo::PrimaryKeyColumns[] = {"ws_item_sk", "ws_order_number"};
 
@@ -730,11 +718,11 @@ const char *WebSalesInfo::PrimaryKeyColumns[] = {"ws_item_sk", "ws_order_number"
 // web_site
 //===--------------------------------------------------------------------===//
 struct WebSiteInfo {
-	static constexpr char *Name = "web_site";
+	static constexpr const char *Name = "web_site";
 	static const char *Columns[];
-	static constexpr idx_t ColumnCount = 26;
-	static const LogicalType Types[];
-	static constexpr idx_t PrimaryKeyCount = 1;
+	static constexpr uint64_t ColumnCount = 26;
+	static const char *Types[];
+	static constexpr uint64_t PrimaryKeyCount = 1;
 	static const char *PrimaryKeyColumns[];
 };
 
@@ -748,14 +736,14 @@ const char *WebSiteInfo::Columns[] = {"web_site_sk",        "web_site_id",      
                                       "web_state",          "web_zip",           "web_country",
                                       "web_gmt_offset",     "web_tax_percentage"};
 
-const LogicalType WebSiteInfo::Types[] = {
-    LogicalType::BIGINT,        LogicalType::VARCHAR,      LogicalType::DATE,    LogicalType::DATE,
-    LogicalType::VARCHAR,       LogicalType::BIGINT,       LogicalType::BIGINT,  LogicalType::VARCHAR,
-    LogicalType::VARCHAR,       LogicalType::BIGINT,       LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,       LogicalType::BIGINT,       LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,       LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::VARCHAR,       LogicalType::VARCHAR,      LogicalType::VARCHAR, LogicalType::VARCHAR,
-    LogicalType::DECIMAL(5, 2), LogicalType::DECIMAL(5, 2)};
+const char *WebSiteInfo::Types[] = {
+    "BIGINT",        "VARCHAR",      "DATE",    "DATE",
+    "VARCHAR",       "BIGINT",       "BIGINT",  "VARCHAR",
+    "VARCHAR",       "BIGINT",       "VARCHAR", "VARCHAR",
+    "VARCHAR",       "BIGINT",       "VARCHAR", "VARCHAR",
+    "VARCHAR",       "VARCHAR",      "VARCHAR", "VARCHAR",
+    "VARCHAR",       "VARCHAR",      "VARCHAR", "VARCHAR",
+    "DECIMAL(5, 2)", "DECIMAL(5, 2)"};
 
 const char *WebSiteInfo::PrimaryKeyColumns[] = {"web_site_sk"};
 
