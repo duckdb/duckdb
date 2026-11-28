@@ -1,0 +1,22 @@
+# name: test/sql/topn/test_top_n_payload_compaction.test
+# description: Top-N releases string payloads for discarded rows during compaction
+# group: [topn]
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET memory_limit = '40MiB';
+
+# Ascending input replaces the winners throughout the descending Top-N scan.
+query II
+SELECT list(i) = range(249999, 249898, -1),
+       count_if(payload = repeat('x', 100) || i)
+FROM (
+    SELECT i, repeat('x', 100) || i AS payload
+    FROM range(250000) r(i)
+    ORDER BY i DESC
+    LIMIT 101
+) winners;
+----
+true	101

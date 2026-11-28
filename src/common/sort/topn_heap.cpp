@@ -572,9 +572,8 @@ void TopNHeap::Reduce() {
 		entry.index = i;
 	}
 
-	// copy over the data from the current payload chunk to the new payload chunk
-	new_heap_data.Slice(heap_data, new_payload_sel, heap.size());
-	new_heap_data.Flatten();
+	// Copy the survivors so the old payload's string heaps can be released.
+	heap_data.Copy(new_heap_data, new_payload_sel, heap.size());
 
 	sort_key_heap.Destroy();
 	sort_key_heap.Move(new_sort_heap);
