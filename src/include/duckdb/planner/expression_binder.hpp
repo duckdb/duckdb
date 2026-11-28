@@ -23,6 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/enums/collation_type.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,8 @@ class LogicalAggregate;
 
 struct TrySubqueryPlanIndexes;
 struct DummyBinding;
+struct LanguageCallArgument;
+struct LanguageArgumentState;
 struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
@@ -249,6 +252,8 @@ public:
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
+	//! Replace the parameters of a macro body with the arguments the binding carries
+	void SubstituteMacroParameters(unique_ptr<ParsedExpression> &expr, DummyBinding &binding);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -348,6 +353,18 @@ protected:
 	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
 	MacroFunction &UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
 	                                     unique_ptr<ParsedExpression> &expr, idx_t depth);
+	//! Bind a call of a language member: the language replaces the call with an expression bound like a macro body
+	BindResult BindLanguageMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+	                             unique_ptr<ParsedExpression> &expr, optional_ptr<MacroFunction> &member);
+	//! Bind a language replacement whose errors get the language's note appended
+	BindResult BindLanguageReplacement(unique_ptr<ParsedExpression> &expr, idx_t depth, const string &error_note);
+	//! Replace a call of a language member with the language's expression. Returns before it binds, like
+	//! UnfoldMacroExpression, so its locals stay off the stack of nested expansions
+	MacroFunction &UnfoldLanguageMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+	                                   unique_ptr<ParsedExpression> &expr, idx_t depth, string &error_note);
+	//! Bind a language member call's argument on its own, for its callback inputs
+	void ProbeLanguageArgument(ParsedExpression &argument, const LogicalType &parameter_type, idx_t depth,
+	                           LanguageArgumentState &state);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();

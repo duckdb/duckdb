@@ -1,0 +1,85 @@
+# name: test/sql/function/language_function/language_function_replace_cte.test
+# description: A language callback observes call-site CTEs only through the arguments it reads
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+# the replacement binds in the caller's scope, so it sees the call-site CTEs
+statement ok
+CREATE FUNCTION f_from_c() LANGUAGE testlang AS 'sql:(SELECT a FROM c)';
+
+query II
+WITH c AS (SELECT 42 AS a) SELECT f_from_c(), (SELECT a FROM c);
+----
+42	42
+
+# an argument the callback reads is bound in the caller's scope, so it can bind a CTE. A failure of that bind
+# propagates: it has already changed binder state no probe can undo
+statement ok
+CREATE FUNCTION inspect_arg(x) LANGUAGE testlang AS 'props';
+
+statement error
+WITH c AS MATERIALIZED (SELECT * FROM no_such_table) SELECT inspect_arg((SELECT * FROM c));
+----
+<REGEX>:.*no_such_table.*
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement error
+WITH c AS MATERIALIZED (SELECT * FROM no_such_table) SELECT inspect_arg((SELECT * FROM c));
+----
+<REGEX>:.*no_such_table.*
+
+statement ok
+PRAGMA enable_optimizer;
+
+# ... while a CTE that only an unread argument references is never bound, like for a macro
+statement ok
+CREATE MACRO m_drop(x) AS 1;
+
+statement ok
+CREATE FUNCTION f_drop(x) LANGUAGE testlang AS 'sql:1';
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM no_such_table) SELECT m_drop((SELECT * FROM c)), f_drop((SELECT * FROM c));
+----
+1	1
+
+# a soft bind error of a read argument is still reported to the callback
+query T
+SELECT inspect_arg(no_such_column);
+----
+e
+
+# a read argument that references a CTE gives the callback its type, whatever the select list order
+statement ok
+CREATE FUNCTION f_types(x) LANGUAGE testlang AS 'types';
+
+query TI
+WITH c AS (SELECT 1 AS a) SELECT f_types((SELECT a FROM c)), (SELECT a FROM c);
+----
+INTEGER|UNKNOWN|UNKNOWN	1
+
+query IT
+WITH c AS (SELECT 1 AS a) SELECT (SELECT a FROM c), f_types((SELECT a FROM c));
+----
+1	INTEGER|UNKNOWN|UNKNOWN
+
+query T
+WITH c AS (SELECT 'x' AS a) SELECT f_types((SELECT a FROM c));
+----
+VARCHAR|UNKNOWN|UNKNOWN

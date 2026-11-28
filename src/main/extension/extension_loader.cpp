@@ -132,12 +132,58 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 	RegisterFunction(std::move(info));
 }
 
+//! The scalar function entry of that name in a schema of the system catalog, if there is one
+static optional_ptr<ScalarFunctionCatalogEntry>
+TryGetScalarFunction(DatabaseInstance &db, const Identifier &schema_name, const Identifier &name) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	// UseDefaultSchema does not create the schema, so it may not exist yet
+	auto schema = system_catalog.GetSchema(data, schema_name, OnEntryNotFound::RETURN_NULL);
+	if (!schema) {
+		return nullptr;
+	}
+	auto entry = schema->GetEntry(data, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+	if (!entry || entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		return nullptr;
+	}
+	return &entry->Cast<ScalarFunctionCatalogEntry>();
+}
+
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	function.extension_name = GetRegisteredExtensionName();
-	if (function.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
-		function.SetQualifiedName(QualifiedName(function.GetQualifiedName().Catalog(), loader_info.extension_schema,
-		                                        function.GetQualifiedName().Name()));
+	auto &extension_name = GetRegisteredExtensionName();
+	function.extension_name = extension_name;
+	auto name = function.GetQualifiedName().Name();
+	auto schema = function.GetQualifiedName().Schema();
+	// only a registration in the extension's default schema is placed by the loader: an explicit other schema is
+	// the caller's choice, which the catalog accepts or rejects
+	const bool default_schema = schema == DEFAULT_SCHEMA || schema == loader_info.extension_schema;
+	bool to_main = false;
+	if (default_schema && function.functions.IsLanguage()) {
+		// overloads this extension registered before the declaration are in its own schema, where member calls never
+		// select them
+		if (loader_info.extension_schema != DEFAULT_SCHEMA) {
+			auto earlier = TryGetScalarFunction(db, loader_info.extension_schema, name);
+			if (earlier && earlier->extension_name == extension_name) {
+				throw InvalidInputException("Extension %s registered overloads of %s before declaring it a function "
+				                            "language: declare the language %s before registering its overloads",
+				                            extension_name, name, name);
+			}
+		}
+		to_main = true;
+	} else if (default_schema) {
+		// an overload added without the declaration joins the language this extension declared instead of shadowing
+		// it. Another extension's function of that name stays in that extension's schema
+		auto language = TryGetScalarFunction(db, Identifier::DefaultSchema(), name);
+		to_main = language && language->functions.IsLanguage() && language->extension_name == extension_name;
+	}
+	if (to_main) {
+		// calls of a language's members look it up in the main schema, whatever the extension's own schema is
+		function.SetQualifiedName(
+		    QualifiedName(function.GetQualifiedName().Catalog(), Identifier::DefaultSchema(), name));
+	} else if (schema == DEFAULT_SCHEMA) {
+		function.SetQualifiedName(
+		    QualifiedName(function.GetQualifiedName().Catalog(), loader_info.extension_schema, name));
 	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -294,6 +340,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 	for (auto &function : functions.functions) {
 		scalar_function.functions.AddFunction(std::move(function));
 	}
+	scalar_function.functions.MergeLanguageDeclaration(scalar_function.functions, functions);
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT

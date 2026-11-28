@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -331,7 +332,49 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction tran
 //===--------------------------------------------------------------------===//
 // Function
 //===--------------------------------------------------------------------===//
+//! The scalar function entry of that name in a schema of a catalog, if the schema and the entry exist
+static optional_ptr<ScalarFunctionCatalogEntry> TryGetScalarFunction(CatalogTransaction transaction, Catalog &catalog,
+                                                                     const vector<Identifier> &schema_path,
+                                                                     const Identifier &name) {
+	auto schema = catalog.GetSchema(transaction, schema_path, OnEntryNotFound::RETURN_NULL);
+	if (!schema) {
+		return nullptr;
+	}
+	auto entry = schema->GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+	if (!entry || entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		return nullptr;
+	}
+	return &entry->Cast<ScalarFunctionCatalogEntry>();
+}
+
+//! The rules every registration of a scalar function in the system catalog follows, whatever the registration path:
+//! a function language lives in the top-level main schema, where calls of its members look it up, and a declared
+//! language for another schema is rejected rather than moved. The incoming set takes the declaration of the function
+//! it joins
+static void ApplyFunctionLanguageRules(CatalogTransaction transaction, Catalog &catalog, CreateFunctionInfo &info) {
+	if (info.type != CatalogType::SCALAR_FUNCTION_ENTRY || !catalog.IsSystemCatalog()) {
+		return;
+	}
+	auto &set = info.Cast<CreateScalarFunctionInfo>().functions;
+	auto name = info.GetQualifiedName().Name();
+	auto schema_path = info.GetQualifiedName().SchemaPath();
+	const vector<Identifier> main_path {Identifier::DefaultSchema()};
+	if (schema_path.empty()) {
+		schema_path = main_path;
+	}
+	auto existing = TryGetScalarFunction(transaction, catalog, schema_path, name);
+	if (existing) {
+		set.MergeLanguageDeclaration(existing->functions, set);
+	}
+	if (set.IsLanguage() && schema_path != main_path) {
+		throw InvalidInputException("Function language %s must be registered in the main schema of the system catalog, "
+		                            "where calls of its members look it up",
+		                            name);
+	}
+}
+
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
+	ApplyFunctionLanguageRules(transaction, *this, info);
 	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateFunction(transaction, schema, info);
 }

@@ -127,8 +127,8 @@ bool CTEBindState::IsBound() const {
 void CTEBindState::Bind(CTEBinding &binding) {
 	// we are lazily binding the CTE
 	// we need to bind it as if we were binding it during PrepareCTE
-	query_binder = Binder::CreateBinder(parent_binder.context, parent_binder);
-	query_binder->SetCanContainNulls(true);
+	auto cte_binder = Binder::CreateBinder(parent_binder.context, parent_binder);
+	cte_binder->SetCanContainNulls(true);
 
 	// we clear any expression binders that were added in the mean-time, to ensure we are not binding to any newly added
 	// correlated columns
@@ -138,11 +138,20 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// ourselves
 	auto self_type = cte_def.type == QueryNodeType::RECURSIVE_CTE_NODE ? CTEType::CANNOT_BE_REFERENCED_RECURSIVE
 	                                                                   : CTEType::CANNOT_BE_REFERENCED;
-	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<Identifier>(),
-	                                         vector<LogicalType>(), self_type);
+	cte_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<Identifier>(),
+	                                       vector<LogicalType>(), self_type);
 
-	// bind the actual CTE
-	query = query_binder->Bind(cte_def);
+	// bind the actual CTE. The bind state only counts as bound once binding succeeded: a failed bind leaves no
+	// half-bound state behind for IsBound and FinishCTE to build a plan from
+	BoundStatement bound_query;
+	try {
+		bound_query = cte_binder->Bind(cte_def);
+	} catch (...) {
+		parent_binder.RestoreScopes(stored_binders);
+		throw;
+	}
+	query_binder = std::move(cte_binder);
+	query = std::move(bound_query);
 
 	// after binding - we add the active binders we removed back so we can leave the binder in its original state
 	parent_binder.RestoreScopes(stored_binders);

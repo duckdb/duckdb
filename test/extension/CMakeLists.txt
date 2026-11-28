@@ -49,6 +49,33 @@ build_loadable_extension_directory(
   loadable_dialect_extension_demo.cpp)
 
 build_loadable_extension_directory(
+  language_function_demo
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  language_function_demo.cpp)
+
+build_loadable_extension_directory(
+  language_declaration_order
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  language_declaration_order.cpp)
+
+build_loadable_extension_directory(
+  language_missing_schema
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  language_missing_schema.cpp)
+
+build_loadable_extension_directory(
   explicit_extension_schema
   "CPP"
   test/extension

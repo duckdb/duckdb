@@ -1,3 +1,6 @@
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/alter_macro_info.hpp"
+#include "duckdb/planner/operator/logical_alter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -5,7 +8,11 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/function/function_language.hpp"
+#include "duckdb/function/language_macro_function.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -409,14 +416,14 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 }
 
 void Binder::CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info) {
-	bool uses_returns = false;
+	bool uses_gated_features = false;
 	for (auto &member : info.macros) {
-		if (member->return_type.id() != LogicalTypeId::UNKNOWN) {
-			uses_returns = true;
+		if (member->type == MacroType::LANGUAGE_MACRO || member->return_type.id() != LogicalTypeId::UNKNOWN) {
+			uses_gated_features = true;
 			break;
 		}
 	}
-	if (!uses_returns) {
+	if (!uses_gated_features) {
 		return;
 	}
 	auto &attached = catalog.GetAttached();
@@ -427,9 +434,50 @@ void Binder::CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &i
 	const auto since = StorageCompatibility::FromString("v2.1.0").storage_version;
 	if (!info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
 	    storage_manager.GetStorageVersion() < since) {
-		string msg = "Macros with a declared RETURNS type are only supported for storage versions v2.1.0 and higher.\n";
-		msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP macro";
+		string msg =
+		    "Language functions and RETURNS types are only supported for storage versions v2.1.0 and higher.\n";
+		msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP function";
 		throw BinderException(msg);
+	}
+}
+
+//! Run a language's CREATE-time validation on read-only views of the members, and copy its outputs back
+static void ValidateLanguageMembers(ClientContext &context, scalar_function_create_validate_t validate,
+                                    CreateMacroInfo &info) {
+	vector<LanguageMemberView> members;
+	vector<vector<LogicalType>> description_types;
+	for (auto &function : info.macros) {
+		auto &member = function->Cast<LanguageMacroFunction>();
+		LanguageMemberView view;
+		view.language = member.language;
+		view.source = member.source;
+		vector<LogicalType> documented;
+		for (idx_t param_idx = 0; param_idx < member.parameters.size(); param_idx++) {
+			auto &param_name = member.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+			view.parameter_names.push_back(param_name);
+			auto type = param_idx < member.types.size() ? member.types[param_idx] : LogicalType::UNKNOWN;
+			documented.push_back(type.id() == LogicalTypeId::UNKNOWN ? LogicalType::ANY : type);
+			view.parameter_types.emplace_back(std::move(type));
+			auto default_it = member.default_parameters.find(param_name);
+			view.parameter_defaults.push_back(
+			    default_it == member.default_parameters.end() ? string() : default_it->second->ToString());
+		}
+		view.return_type = LanguageTypeView(member.return_type);
+		description_types.push_back(std::move(documented));
+		members.push_back(std::move(view));
+	}
+	auto function_name = info.GetQualifiedName();
+	ScalarFunctionCreateValidateInput input(context, function_name, info.sql, std::move(members),
+	                                        std::move(description_types));
+	validate(input);
+	for (idx_t member_idx = 0; member_idx < info.macros.size(); member_idx++) {
+		auto source = input.GetMemberSource(member_idx);
+		if (source) {
+			info.macros[member_idx]->Cast<LanguageMacroFunction>().source = *source;
+		}
+	}
+	for (auto &description : input.TakeDescriptions()) {
+		info.descriptions.push_back(std::move(description));
 	}
 }
 
@@ -480,6 +528,28 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
 	CheckMacroStorageVersion(catalog, base);
+	// a function entry holds either plain macro members or language members of a single language
+	string entry_language;
+	bool has_language_members = false;
+	bool has_plain_members = false;
+	for (auto &function : base.macros) {
+		if (function->type != MacroType::LANGUAGE_MACRO) {
+			has_plain_members = true;
+			continue;
+		}
+		auto &language_member = function->Cast<LanguageMacroFunction>();
+		if (has_language_members && !StringUtil::CIEquals(language_member.language, entry_language)) {
+			throw BinderException("Macro %s() cannot mix members of languages \"%s\" and \"%s\"",
+			                      base.GetFunctionName(), entry_language, language_member.language);
+		}
+		entry_language = language_member.language;
+		has_language_members = true;
+	}
+	if (has_language_members && has_plain_members) {
+		throw BinderException("Macro %s() cannot mix language function members and plain macro members",
+		                      base.GetFunctionName());
+	}
+
 	for (auto &function : base.macros) {
 		if (!store_types) {
 			for (const auto &type : function->types) {
@@ -490,8 +560,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				}
 			}
 		}
-
-		if (info.type == CatalogType::MACRO_ENTRY) {
+		if (function->type == MacroType::LANGUAGE_MACRO) {
+			// the source is stored verbatim, there is no expression to verify here
+		} else if (info.type == CatalogType::MACRO_ENTRY) {
 			auto &scalar_function = function->Cast<ScalarMacroFunction>();
 			if (scalar_function.expression->HasParameter()) {
 				throw BinderException("Parameter expressions within macro's are not supported!");
@@ -541,20 +612,21 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			default_values[param_name] = std::move(default_val);
 		}
 
-		// Resolve a user type in the declared return type
-		if (function->return_type.id() == LogicalTypeId::UNBOUND) {
+		// Resolve a user type in the declared return type. BindLogicalType resolves recursively: a
+		// dialect may nest an unresolved type inside a concrete container
+		if (function->return_type.id() != LogicalTypeId::UNKNOWN) {
 			BindLogicalType(function->return_type);
 		}
 
-		// Resolve any user type arguments
+		// Resolve any user type arguments. BindLogicalType resolves recursively: a dialect may nest
+		// an unresolved type inside a concrete container, unlike the stock grammar's top-level
+		// UNBOUND wrapping
 		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
 			auto &type = function->types[param_idx];
 			if (type.id() == LogicalTypeId::UNKNOWN) {
 				continue;
 			}
-			if (type.id() == LogicalTypeId::UNBOUND) {
-				BindLogicalType(type);
-			}
+			BindLogicalType(type);
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = default_values.find(param_name);
 			if (it != default_values.end()) {
@@ -585,7 +657,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			for (auto &default_parameter : function->default_parameters) {
 				storage_manager.CheckExpressionDecimalsAreSupported(*default_parameter.second);
 			}
-			if (info.type == CatalogType::MACRO_ENTRY) {
+			if (function->type == MacroType::LANGUAGE_MACRO) {
+				// the source is stored as text, its types and defaults are checked above
+			} else if (info.type == CatalogType::MACRO_ENTRY) {
 				storage_manager.CheckExpressionDecimalsAreSupported(*function->Cast<ScalarMacroFunction>().expression);
 			} else {
 				storage_manager.CheckQueryDecimalsAreSupported(*function->Cast<TableMacroFunction>().query_node);
@@ -623,7 +697,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 		// bind it to verify the function was defined correctly
 		ErrorData error;
-		if (info.type == CatalogType::MACRO_ENTRY) {
+		if (function->type == MacroType::LANGUAGE_MACRO) {
+			// language sources are validated by the language's create_validate below, when the language is loaded
+		} else if (info.type == CatalogType::MACRO_ENTRY) {
 			BoundSelectNode sel_node;
 			SelectBinder binder(*this, context, sel_node);
 			if (should_create_dependencies) {
@@ -668,7 +744,55 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 	}
 
+	if (has_language_members) {
+		// a batch create follows the same overload identity as incremental creation, compared on
+		// the resolved signatures, so a stored set is always one EXPORT can re-create member by
+		// member
+		for (idx_t member_idx = 0; member_idx < base.macros.size(); member_idx++) {
+			for (idx_t other_idx = member_idx + 1; other_idx < base.macros.size(); other_idx++) {
+				if (base.macros[member_idx]->ConflictsWith(*base.macros[other_idx])) {
+					throw BinderException("Macro %s() has conflicting overload members %s and %s",
+					                      base.GetFunctionName(), base.macros[member_idx]->SignatureToString(),
+					                      base.macros[other_idx]->SignatureToString());
+				}
+			}
+		}
+	}
+
+	if (has_language_members) {
+		// hand the definition to the language for validation, when the language function is available. Without it
+		// the definition is stored unvalidated, so replay and IMPORT work without the extension
+		auto language_entry = TryGetLanguageFunction(context, entry_language);
+		auto validate = language_entry ? language_entry->functions.GetCreateValidateCallback() : nullptr;
+		if (validate) {
+			ValidateLanguageMembers(context, validate, base);
+		}
+	}
+
 	return BindCreateSchema(info);
+}
+
+//! A single language member for an existing language entry of that name binds to an overload alter of the entry
+static unique_ptr<AlterInfo> TryBindLanguageOverloadAdd(ClientContext &context, SchemaCatalogEntry &schema,
+                                                        CreateMacroInfo &info) {
+	if (info.macros.size() != 1 || info.macros[0]->type != MacroType::LANGUAGE_MACRO) {
+		return nullptr;
+	}
+	auto &name = info.GetQualifiedName().Name();
+	auto existing = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::MACRO_ENTRY, name);
+	if (!existing || existing->type != CatalogType::MACRO_ENTRY) {
+		return nullptr;
+	}
+	auto &existing_macro = existing->Cast<MacroCatalogEntry>();
+	if (existing_macro.macros.empty() || existing_macro.macros[0]->type != MacroType::LANGUAGE_MACRO) {
+		return nullptr;
+	}
+	// the alter keeps the entry's dependencies: a language member records none at CREATE
+	D_ASSERT(info.dependencies.Set().empty());
+	AlterEntryData data(schema.GetQualifiedName(name), OnEntryNotFound::THROW_EXCEPTION);
+	auto result = make_uniq<AddMacroOverloadInfo>(data, std::move(info.macros[0]), info.on_conflict);
+	result->descriptions = std::move(info.descriptions);
+	return std::move(result);
 }
 
 LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
@@ -703,9 +827,10 @@ void Binder::BindLogicalType(LogicalType &type) {
 		return;
 	}
 
-	// Replace all unbound types within the type
-	//   Normally, the unbound type is the root type, but it can also be nested within other types if we e.g.
-	//   alter-table and change a struct field.
+	// Replace all unbound types within the type. The unbound type is normally the root type, but
+	// it can also be nested inside a concrete container, e.g. when an ALTER changes a struct field
+	// or a dialect emits a container of an unresolved user type. Untouched subtrees keep their
+	// identity (alias, extension metadata), containers on the changed path are rebuilt without it.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
@@ -983,6 +1108,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto &schema = BindCreateFunctionInfo(*stmt.info);
+		auto overload_add = TryBindLanguageOverloadAdd(context, schema, stmt.info->Cast<CreateMacroInfo>());
+		if (overload_add) {
+			result.plan = make_uniq<LogicalAlter>(std::move(overload_add));
+			break;
+		}
 		auto logical_create =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		result.plan = std::move(logical_create);
