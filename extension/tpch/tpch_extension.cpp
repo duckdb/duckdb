@@ -1,378 +1,713 @@
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/optional.hpp"
-#include "duckdb/planner/binder.hpp"
+// The TPC-H extension, written against the stable C++ API (duckdb_cpp.hpp) only.
+//
+// dbgen runs SQL in the transaction of the statement calling it, through a connection that inherits it: it creates
+// the tables, and inserts the generated rows by work item, in a deterministic order.
+
+#ifndef DUCKDB_EXTENSION_NAME
+#define DUCKDB_EXTENSION_NAME tpch
+#endif
+
+#include "duckdb_cpp_extension.hpp"
 
 #include "dbgen/dbgen.hpp"
-#include "tpch_extension.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <limits>
+#include <map>
+#include <memory>
 #include <mutex>
+#include <optional>
+#include <string>
+#include <vector>
 
-namespace duckdb {
+using namespace duckdb::cxx;
 
-struct DBGenFunctionData : public TableFunctionData {
-	DBGenFunctionData() {
+namespace {
+
+constexpr int TPCH_QUERY_COUNT = 22;
+
+//===--------------------------------------------------------------------===//
+// Helpers
+//===--------------------------------------------------------------------===//
+
+std::string SQLString(std::string_view text) {
+	std::string result = "'";
+	for (auto c : text) {
+		if (c == '\'') {
+			result += '\'';
+		}
+		result += c;
 	}
+	return result + "'";
+}
 
+std::string Lower(std::string text) {
+	std::transform(text.begin(), text.end(), text.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return text;
+}
+
+//! The first value of the first row of a query, as text
+std::string QueryText(Connection &conn, const std::string &sql) {
+	auto result = conn.Execute(sql);
+	std::string value;
+	bool found = false;
+	while (auto chunk = result.FetchChunk()) {
+		if (!found && chunk.GetRowCount() > 0) {
+			value = chunk.GetVector(0).GetValue(0).ToText();
+			found = true;
+		}
+	}
+	if (!found) {
+		throw InvalidInputException("query returned no rows: " + sql);
+	}
+	return value;
+}
+
+//! Splits a schema path into its components as the engine does: dots separate components, a double-quoted component
+//! may contain dots and doubled quotes. Returns false when the text does not parse.
+bool TryParseSchemaPath(const std::string &input, std::vector<std::string> &result) {
+	result.clear();
+	idx_t idx = 0;
+	while (idx < input.size()) {
+		std::string entry;
+		if (input[idx] == '"') {
+			bool terminated = false;
+			for (idx++; idx < input.size(); idx++) {
+				if (input[idx] != '"') {
+					entry += input[idx];
+				} else if (idx + 1 < input.size() && input[idx + 1] == '"') {
+					entry += '"';
+					idx++;
+				} else {
+					idx++;
+					terminated = true;
+					break;
+				}
+			}
+			if (!terminated || entry.empty() || (idx < input.size() && input[idx] != '.')) {
+				return false;
+			}
+		} else {
+			for (; idx < input.size() && input[idx] != '.'; idx++) {
+				if (input[idx] == '"') {
+					return false;
+				}
+				entry += input[idx];
+			}
+		}
+		result.push_back(std::move(entry));
+		if (idx < input.size()) {
+			idx++;
+		}
+	}
+	if (input.empty() || input.back() == '.') {
+		result.emplace_back();
+	}
+	return true;
+}
+
+std::string RenderPath(const std::string &catalog, const std::vector<std::string> &schema_path) {
+	auto result = RenderQuotedIdentifier(catalog);
+	for (auto &part : schema_path) {
+		result += "." + RenderQuotedIdentifier(part);
+	}
+	return result;
+}
+
+//! Whether the catalog has a schema at the (possibly nested) path. Fails for no reason other than a missing catalog.
+bool SchemaExists(Connection &conn, const std::string &catalog, const std::vector<std::string> &schema_path) {
+	std::string path_list;
+	for (auto &part : schema_path) {
+		path_list += (path_list.empty() ? "" : ", ") + SQLString(Lower(part));
+	}
+	auto sql = "WITH RECURSIVE paths(oid, path) AS (SELECT oid, [lower(schema_name)] FROM duckdb_schemas() WHERE "
+	           "lower(database_name) = " +
+	           SQLString(Lower(catalog)) +
+	           " AND parent_schema_oid IS NULL UNION ALL SELECT s.oid, list_append(p.path, lower(s.schema_name)) "
+	           "FROM duckdb_schemas() s JOIN paths p ON s.parent_schema_oid = p.oid) "
+	           "SELECT count(*) FROM paths WHERE path = [" +
+	           path_list + "]";
+	return QueryText(conn, sql) != "0";
+}
+
+//! Resolves a schema argument the way the engine's functions do: an unquoted dotted name prefers a nested schema
+//! path and falls back to a schema named literally like the argument. Returns the schema as a qualified SQL name.
+std::string ResolveSchema(Connection &conn, const std::string &catalog, const std::string &schema_arg) {
+	std::vector<std::vector<std::string>> candidates;
+	std::string parse_error;
+	std::vector<std::string> nested_path;
+	if (!TryParseSchemaPath(schema_arg, nested_path)) {
+		candidates.push_back({schema_arg});
+	} else if (std::any_of(nested_path.begin(), nested_path.end(), [](const std::string &p) { return p.empty(); })) {
+		parse_error = "Failed to parse schema path \"" + schema_arg +
+		              "\" - schema paths cannot contain empty components. Schema names that contain a '.' or a '\"' "
+		              "must be double-quoted (e.g. '\"my.schema\"')";
+		candidates.push_back({schema_arg});
+	} else {
+		bool is_literal = nested_path.size() == 1 && nested_path[0] == schema_arg;
+		candidates.push_back(nested_path);
+		if (!is_literal) {
+			candidates.push_back({schema_arg});
+		}
+	}
+	if (candidates.size() > 1 || !parse_error.empty()) {
+		for (auto &candidate : candidates) {
+			if (SchemaExists(conn, catalog, candidate)) {
+				return RenderPath(catalog, candidate);
+			}
+		}
+		if (!parse_error.empty()) {
+			throw InvalidInputException(parse_error);
+		}
+	}
+	return RenderPath(catalog, candidates[0]);
+}
+
+void SetNoResult(TableFunction::ExecInput &input) {
+	auto chunk = input.GetOutputChunk();
+	for (idx_t col = 0; col < chunk.GetVectorCount(); col++) {
+		chunk.GetVector(col).SetSize(0);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// dbgen
+//===--------------------------------------------------------------------===//
+
+struct DBGenBindData {
 	double sf = 0;
-	Identifier catalog = INVALID_CATALOG;
-	vector<Identifier> schema {DEFAULT_SCHEMA};
-	string suffix;
-	bool overwrite = false;
+	std::optional<std::string> catalog;
+	std::optional<std::string> schema;
+	std::string suffix;
 	uint32_t children = 1;
 	int step = -1;
 };
 
-struct DBGenGlobalState : public GlobalTableFunctionState {
-	bool schema_created = false;
-	atomic<bool> finished {false};
-	mutable mutex generator_lock;
-	unique_ptr<tpch::DBGenGenerator> generator;
+//! A running dbgen call: the generator the scans of __tpch_dbgen_table read from
+struct DBGenRun {
+	std::unique_ptr<tpch::DBGenGenerator> generator;
+	//! Rows of the driving tables generated so far, and in total
+	std::atomic<idx_t> generated_rows {0};
+	idx_t total_rows = 0;
 };
 
-class DBGenYieldTask : public AsyncTask {
-public:
-	void Execute() override {
+//! The running dbgen calls by id, so that the SQL a call runs can refer to its generator
+struct DBGenRunRegistry {
+	std::mutex lock;
+	std::map<int64_t, std::shared_ptr<DBGenRun>> runs;
+	int64_t next_id = 0;
+
+	static DBGenRunRegistry &Get() {
+		static DBGenRunRegistry registry;
+		return registry;
+	}
+
+	int64_t Register(std::shared_ptr<DBGenRun> run) {
+		std::lock_guard<std::mutex> guard(lock);
+		auto id = next_id++;
+		runs.emplace(id, std::move(run));
+		return id;
+	}
+
+	void Unregister(int64_t id) {
+		std::lock_guard<std::mutex> guard(lock);
+		runs.erase(id);
+	}
+
+	std::shared_ptr<DBGenRun> Lookup(int64_t id) {
+		std::lock_guard<std::mutex> guard(lock);
+		auto entry = runs.find(id);
+		return entry == runs.end() ? nullptr : entry->second;
 	}
 };
 
-static AsyncResult DBGenYield() {
-	vector<unique_ptr<AsyncTask>> tasks;
-	tasks.push_back(make_uniq<DBGenYieldTask>());
-	return AsyncResult(std::move(tasks));
+struct DBGenGlobalState {
+	std::shared_ptr<DBGenRun> run;
+	int64_t run_id = -1;
+	//! Per TPC-H table, the qualified name
+	std::vector<std::string> table_names;
+	//! The tables to load, the biggest first, and how many are claimed and loaded
+	std::vector<idx_t> load_order;
+	std::atomic<idx_t> next_table {0};
+	std::atomic<idx_t> loaded_tables {0};
+	std::mutex lock;
+	bool finished = false;
+
+	void Finish() {
+		std::lock_guard<std::mutex> guard(lock);
+		if (run_id >= 0) {
+			DBGenRunRegistry::Get().Unregister(run_id);
+			run_id = -1;
+		}
+		finished = true;
+	}
+
+	bool IsFinished() {
+		std::lock_guard<std::mutex> guard(lock);
+		return finished;
+	}
+
+	~DBGenGlobalState() {
+		if (run_id >= 0) {
+			DBGenRunRegistry::Get().Unregister(run_id);
+		}
+	}
+};
+
+//! The global state of a dbgen call, which is not movable
+struct DBGenGlobalStateHolder {
+	std::unique_ptr<DBGenGlobalState> state;
+};
+
+//! The value of a named argument, which must not be NULL. Omitted arguments carry their default value.
+Value GetNamedArgument(FunctionBindInput &input, const char *name) {
+	auto value = input.GetConstantArgument(*input.FindArg(name));
+	if (value.IsNull()) {
+		throw InvalidInputException("Cannot use NULL as function argument");
+	}
+	return value;
 }
 
-static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                          vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto result = make_uniq<DBGenFunctionData>();
+//! The step argument when the call passes none
+constexpr uint32_t DBGEN_NO_STEP = std::numeric_limits<uint32_t>::max();
 
-	// Set the current catalog and schema.
-	result->catalog = DatabaseManager::GetDefaultDatabase(context);
-	result->schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchemaPath();
-	optional<string> schema_arg;
-
-	for (auto &kv : input.named_parameters) {
-		if (kv.second.IsNull()) {
-			throw BinderException("Cannot use NULL as function argument");
-		}
-		if (kv.first == "sf") {
-			result->sf = DoubleValue::Get(kv.second);
-		} else if (kv.first == "catalog") {
-			result->catalog = Identifier(StringValue::Get(kv.second));
-		} else if (kv.first == "schema") {
-			schema_arg = StringValue::Get(kv.second);
-		} else if (kv.first == "suffix") {
-			result->suffix = StringValue::Get(kv.second);
-		} else if (kv.first == "overwrite") {
-			result->overwrite = BooleanValue::Get(kv.second);
-		} else if (kv.first == "children") {
-			result->children = UIntegerValue::Get(kv.second);
-		} else if (kv.first == "step") {
-			result->step = UIntegerValue::Get(kv.second);
-		}
+void DbgenBind(TableFunction::BindInput &input) {
+	DBGenBindData data;
+	data.sf = GetNamedArgument(input, "sf").Get<double>();
+	auto catalog = std::string(GetNamedArgument(input, "catalog").Get<varchar_t>().view());
+	if (!catalog.empty()) {
+		data.catalog = catalog;
 	}
-	if (result->children != 1 && result->step == -1) {
+	auto schema = std::string(GetNamedArgument(input, "schema").Get<varchar_t>().view());
+	if (!schema.empty()) {
+		data.schema = schema;
+	}
+	data.suffix = std::string(GetNamedArgument(input, "suffix").Get<varchar_t>().view());
+	GetNamedArgument(input, "overwrite");
+	data.children = GetNamedArgument(input, "children").Get<uint32_t>();
+	auto step = GetNamedArgument(input, "step").Get<uint32_t>();
+	if (step != DBGEN_NO_STEP) {
+		data.step = static_cast<int>(step);
+	}
+	if (data.children != 1 && data.step == -1) {
 		throw InvalidInputException("Step must be defined when children are defined");
 	}
-	if (schema_arg) {
-		auto &catalog = Catalog::GetCatalog(context, result->catalog);
-		result->schema = catalog.ResolveSchema(context, *schema_arg).GetSchemaPath();
-	}
-	if (input.binder) {
-		auto &catalog = Catalog::GetCatalog(context, result->catalog);
-		auto &properties = input.binder->GetStatementProperties();
-		DatabaseModificationType modification;
-		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
-		modification |= DatabaseModificationType::INSERT_DATA;
-		properties.RegisterDBModify(catalog, context, modification);
-	}
-	return_types.emplace_back(LogicalType::BOOLEAN);
-	names.emplace_back("Success");
-	return std::move(result);
+	input.AddResultColumn("Success", input.GetContext().GetFactory().ParseType("BOOLEAN"));
+	// the call returns no rows: its threads, one per table being loaded, need not keep an order
+	input.SetOrderPreservation(OrderPreservation::NO_ORDER);
+	input.SetBindData<DBGenBindData>(std::move(data));
 }
 
-unique_ptr<GlobalTableFunctionState> DbgenInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<DBGenGlobalState>();
+//! Creates the table unless it exists, and checks that an existing one has the TPC-H columns
+void CreateTPCHTable(Connection &conn, const tpch::TPCHTableSchema &schema, const std::string &display_name,
+                     const std::string &qualified_name) {
+	std::string sql = "CREATE TABLE IF NOT EXISTS " + qualified_name + " (";
+	for (idx_t i = 0; i < schema.column_count; i++) {
+		sql += (i > 0 ? ", " : "") + RenderQuotedIdentifier(schema.columns[i]) + " " + schema.types[i] + " NOT NULL";
+	}
+	conn.Execute(sql + ")").Drain();
+
+	auto statements = conn.ParseSQL("SELECT * FROM " + qualified_name);
+	auto columns = conn.Bind(statements.Next()).output;
+	auto prefix = "TPC-H table \"" + display_name + "\" has an incompatible schema: ";
+	if (columns.GetFieldCount() != schema.column_count) {
+		throw InvalidInputException(prefix + "expected " + std::to_string(schema.column_count) + " columns but found " +
+		                            std::to_string(columns.GetFieldCount()));
+	}
+	for (idx_t i = 0; i < schema.column_count; i++) {
+		auto name = std::string(columns.GetFieldName(i));
+		if (Lower(name) != schema.columns[i]) {
+			throw InvalidInputException(prefix + "expected column \"" + schema.columns[i] + "\" at position " +
+			                            std::to_string(i) + " but found " + name);
+		}
+		auto type = columns.GetFieldType(i).ToText();
+		if (type != schema.types[i]) {
+			throw InvalidInputException(prefix + "column \"" + name + "\" has type " + type + " but expected " +
+			                            schema.types[i]);
+		}
+	}
 }
 
-static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->Cast<DBGenFunctionData>();
-	auto &state = data_p.global_state->Cast<DBGenGlobalState>();
-	if (state.finished.load()) {
-		data_p.async_result = AsyncResultType::FINISHED;
+void DbgenInitGlobal(TableFunction::InitGlobalInput &input) {
+	auto &data = input.GetBindData<DBGenBindData>();
+	auto &context = input.GetContext();
+	auto state = std::unique_ptr<DBGenGlobalState>(new DBGenGlobalState());
+	// sets up the tables; the exec threads load them through connections of their own
+	auto conn = context.ConnectInTransaction();
+
+	// By default, the tables go to the current schema
+	auto catalog = data.catalog ? *data.catalog : QueryText(conn, "SELECT current_database()");
+	auto schema = data.schema ? *data.schema : QueryText(conn, "SELECT current_schema()");
+	auto target = ResolveSchema(conn, catalog, schema);
+	// several connections may write to DuckDB tables of one transaction at once; other catalogs load one at a time
+	auto catalog_type = QueryText(conn, "SELECT coalesce(any_value(type), '') FROM duckdb_databases() WHERE "
+	                                    "lower(database_name) = " +
+	                                        SQLString(Lower(catalog)));
+	auto load_concurrently = catalog_type == "duckdb";
+	for (idx_t i = 0; i < tpch::TPCH_TABLE_COUNT; i++) {
+		auto &table = tpch::GetTPCHTableSchema(i);
+		auto table_name = std::string(table.name) + data.suffix;
+		state->table_names.push_back(target + "." + RenderQuotedIdentifier(table_name));
+		CreateTPCHTable(conn, table, table_name, state->table_names.back());
+	}
+
+	auto run = std::make_shared<DBGenRun>();
+	run->generator = std::unique_ptr<tpch::DBGenGenerator>(
+	    new tpch::DBGenGenerator(data.sf, static_cast<int>(data.children), data.step));
+	for (idx_t table = 0; table < tpch::TPCH_TABLE_COUNT; table++) {
+		for (auto &item : run->generator->WorkItems(table)) {
+			run->total_rows += item.count;
+		}
+	}
+	// the biggest tables first, so that the small ones fill in at the end
+	std::vector<std::pair<idx_t, idx_t>> table_rows;
+	for (idx_t table = 0; table < tpch::TPCH_TABLE_COUNT; table++) {
+		idx_t rows = 0;
+		for (auto &item : run->generator->WorkItems(table)) {
+			rows += item.count;
+		}
+		if (rows > 0) {
+			table_rows.emplace_back(std::string(tpch::GetTPCHTableSchema(table).name) == "lineitem" ? 4 * rows : rows,
+			                        table);
+		}
+	}
+	std::stable_sort(
+	    table_rows.begin(), table_rows.end(),
+	    [](const std::pair<idx_t, idx_t> &a, const std::pair<idx_t, idx_t> &b) { return a.first > b.first; });
+	for (auto &entry : table_rows) {
+		state->load_order.push_back(entry.second);
+	}
+	state->run = run;
+	state->run_id = DBGenRunRegistry::Get().Register(std::move(run));
+	if (state->load_order.empty()) {
+		state->Finish();
+	}
+	input.SetMaxThreads(load_concurrently ? std::max<idx_t>(state->load_order.size(), 1) : 1);
+	input.SetGlobalState<DBGenGlobalStateHolder>(DBGenGlobalStateHolder {std::move(state)});
+}
+
+//! Loads the tables, one INSERT per table, each on a connection of its own in the transaction of the call. The
+//! threads of the call load different tables at once, and each INSERT generates its table's rows in parallel.
+void DbgenExec(TableFunction::ExecInput &input) {
+	auto &state = *input.GetGlobalState<DBGenGlobalStateHolder>().state;
+	SetNoResult(input);
+	while (true) {
+		auto index = state.next_table++;
+		if (index >= state.load_order.size()) {
+			return;
+		}
+		auto table = state.load_order[index];
+		{
+			// closed before the call returns, so before the transaction ends
+			auto conn = input.GetContext().ConnectInTransaction();
+			conn.Execute("INSERT INTO " + state.table_names[table] + " SELECT * FROM __tpch_dbgen_table(" +
+			             std::to_string(state.run_id) + ", " + std::to_string(table) + ")")
+			    .Drain();
+		}
+		if (++state.loaded_tables == state.load_order.size()) {
+			state.Finish();
+		}
+	}
+}
+
+void DbgenProgress(TableFunction::ProgressInput &input) {
+	auto holder = input.TryGetGlobalState<DBGenGlobalStateHolder>();
+	auto state = holder ? holder->state.get() : nullptr;
+	if (!state) {
+		input.SetProgress(0);
 		return;
 	}
-	if (!state.schema_created) {
-		tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-		auto generator = tpch::CreateDBGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix,
-		                                            data.children, data.step);
-		{
-			lock_guard<mutex> guard(state.generator_lock);
-			state.generator = std::move(generator);
-		}
-		state.schema_created = true;
+	// the engine reports 100 once the call has returned its result
+	if (state->IsFinished()) {
+		input.SetProgress(0.999);
+		return;
 	}
-
-	while (true) {
-		bool finished = false;
-		{
-			lock_guard<mutex> guard(state.generator_lock);
-			finished = !state.generator || state.generator->GenerateNext();
-		}
-		if (finished) {
-			state.finished.store(true);
-			data_p.async_result = AsyncResultType::FINISHED;
-			return;
-		}
-		if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-			data_p.async_result = DBGenYield();
-			return;
-		}
+	auto total = state->run ? state->run->total_rows : 0;
+	if (total == 0) {
+		input.SetProgress(0);
+		return;
 	}
+	auto generated = std::min<idx_t>(state->run->generated_rows, total);
+	input.SetProgress(std::min(static_cast<double>(generated) / static_cast<double>(total), 0.999));
 }
 
-static double DbgenProgress(ClientContext &context, const FunctionData *bind_data,
-                            const GlobalTableFunctionState *global_state) {
-	if (!global_state) {
-		return 0.0;
-	}
-	auto &state = global_state->Cast<DBGenGlobalState>();
-	{
-		lock_guard<mutex> guard(state.generator_lock);
-		if (state.generator) {
-			return state.generator->Progress();
-		}
-	}
-	return state.finished.load() ? 100.0 : 0.0;
-}
+//===--------------------------------------------------------------------===//
+// __tpch_dbgen_table: the rows of one table of a running dbgen call
+//===--------------------------------------------------------------------===//
 
-struct TPCHData : public GlobalTableFunctionState {
-	TPCHData() : offset(0) {
-	}
-	idx_t offset;
+struct DBGenTableBindData {
+	std::shared_ptr<DBGenRun> run;
+	idx_t table;
 };
 
-unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_uniq<TPCHData>();
-	return std::move(result);
+struct DBGenTableGlobalState {
+	std::atomic<idx_t> next_work_item {0};
+};
+
+struct DBGenTableLocalState {
+	std::unique_ptr<tpch::DBGenScanner> scanner;
+	//! The position of the work item: the rows of a table follow the order of its work items
+	idx_t batch_index = 0;
+};
+
+void DBGenTableBind(TableFunction::BindInput &input) {
+	auto run = DBGenRunRegistry::Get().Lookup(input.GetConstantArgument(0).Get<int64_t>());
+	auto table = input.GetConstantArgument(1).Get<int64_t>();
+	if (!run || table < 0 || table >= static_cast<int64_t>(tpch::TPCH_TABLE_COUNT)) {
+		throw InvalidInputException("__tpch_dbgen_table is internal to dbgen");
+	}
+	auto &factory = input.GetContext().GetFactory();
+	auto &schema = tpch::GetTPCHTableSchema(static_cast<idx_t>(table));
+	for (idx_t col = 0; col < schema.column_count; col++) {
+		input.AddResultColumn(schema.columns[col], factory.ParseType(schema.types[col]));
+	}
+	input.SetBindData<DBGenTableBindData>(DBGenTableBindData {std::move(run), static_cast<idx_t>(table)});
 }
 
-struct TPCHQueriesBindData : public TableFunctionData {
+void DBGenTableInitGlobal(TableFunction::InitGlobalInput &input) {
+	auto &data = input.GetBindData<DBGenTableBindData>();
+	input.SetGlobalState<DBGenTableGlobalState>();
+	input.SetMaxThreads(std::max<idx_t>(data.run->generator->WorkItems(data.table).size(), 1));
+}
+
+void DBGenTableInitLocal(TableFunction::InitLocalInput &input) {
+	input.SetLocalState<DBGenTableLocalState>();
+}
+
+void DBGenTableExec(TableFunction::ExecInput &input) {
+	auto &data = input.GetBindData<DBGenTableBindData>();
+	auto &global = input.GetGlobalState<DBGenTableGlobalState>();
+	auto &local = input.GetLocalState<DBGenTableLocalState>();
+	auto &work_items = data.run->generator->WorkItems(data.table);
+	auto chunk = input.GetOutputChunk();
+	while (true) {
+		if (!local.scanner) {
+			auto work_item = global.next_work_item++;
+			if (work_item >= work_items.size()) {
+				SetNoResult(input);
+				return;
+			}
+			local.scanner = std::unique_ptr<tpch::DBGenScanner>(
+			    new tpch::DBGenScanner(*data.run->generator, data.table, work_items[work_item]));
+			local.batch_index = work_item;
+		}
+		data.run->generated_rows += local.scanner->Fill(chunk);
+		if (chunk.GetRowCount() > 0) {
+			return;
+		}
+		local.scanner.reset();
+	}
+}
+
+void DBGenTablePartitionData(TableFunction::PartitionDataInput &input) {
+	input.SetBatchIndex(input.GetLocalState<DBGenTableLocalState>().batch_index);
+}
+
+//===--------------------------------------------------------------------===//
+// tpch_queries, tpch_answers
+//===--------------------------------------------------------------------===//
+
+//! The "sf" argument, taken through **kwargs so that an omitted one can be told from a NULL one
+std::optional<Value> GetScaleFactorKwarg(FunctionBindInput &input, const char *function_name) {
+	auto counts = input.GetArgumentCounts();
+	std::optional<Value> result;
+	for (auto index = counts.NamedOffset() + counts.named_fixed; index < counts.Total(); index++) {
+		auto name = Lower(input.GetArgName(index));
+		if (name != "sf") {
+			throw InvalidInputException(std::string(function_name) + ": unknown named parameter \"" + name + "\"");
+		}
+		result = input.GetConstantArgument(index);
+	}
+	return result;
+}
+
+struct TPCHQueriesBindData {
 	//! Without a scale factor the stored queries are returned unchanged
 	bool has_sf = false;
 	double sf = 1;
 
-	string GetQuery(int query) const {
-		return has_sf ? tpch::DBGenWrapper::GetQuery(query, sf) : tpch::DBGenWrapper::GetQuery(query);
+	bool operator==(const TPCHQueriesBindData &other) const {
+		return has_sf == other.has_sf && (!has_sf || sf == other.sf);
 	}
 };
 
-//! The scale factor is either the positional argument or the named "sf" parameter
-static void BindQueryScaleFactor(TableFunctionBindInput &input, const char *function_name,
-                                 TPCHQueriesBindData &bind_data) {
-	Value sf;
-	if (!input.inputs.empty()) {
-		sf = input.inputs[0];
-		bind_data.has_sf = true;
+struct TPCHScanState {
+	idx_t offset = 0;
+};
+
+void TPCHQueriesBind(TableFunction::BindInput &input) {
+	TPCHQueriesBindData data;
+	auto counts = input.GetArgumentCounts();
+	if (counts.positional_variadic > 1) {
+		throw InvalidInputException("tpch_queries: expected at most one positional argument, the scale factor");
 	}
-	auto entry = input.named_parameters.find("sf");
-	if (entry != input.named_parameters.end()) {
-		if (bind_data.has_sf) {
-			throw BinderException("%s: the scale factor can be given as a positional argument or as \"sf\", not both",
-			                      function_name);
+	std::optional<Value> sf;
+	if (counts.positional_variadic == 1) {
+		sf = input.GetConstantArgument(counts.positional_fixed);
+	}
+	if (auto named_sf = GetScaleFactorKwarg(input, "tpch_queries")) {
+		if (sf) {
+			throw InvalidInputException(
+			    "tpch_queries: the scale factor can be given as a positional argument or as \"sf\", not both");
 		}
-		sf = entry->second;
-		bind_data.has_sf = true;
+		sf = std::move(named_sf);
 	}
-	if (!bind_data.has_sf) {
-		return;
+	if (sf) {
+		if (sf->IsNull()) {
+			throw InvalidInputException("tpch_queries: cannot use NULL as scale factor");
+		}
+		data.has_sf = true;
+		data.sf = sf->Cast(input.GetContext().GetFactory(), input.GetContext().GetFactory().ParseType("DOUBLE"))
+		              .Get<double>();
 	}
-	if (sf.IsNull()) {
-		throw BinderException("%s: cannot use NULL as scale factor", function_name);
-	}
-	bind_data.sf = sf.GetValue<double>();
+	auto &factory = input.GetContext().GetFactory();
+	input.AddResultColumn("query_nr", factory.ParseType("INTEGER"));
+	input.AddResultColumn("query", factory.ParseType("VARCHAR"));
+	input.SetBindData<TPCHQueriesBindData>(data);
 }
 
-static duckdb::unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto result = make_uniq<TPCHQueriesBindData>();
-	BindQueryScaleFactor(input, "tpch_queries", *result);
-
-	names.emplace_back("query_nr");
-	return_types.emplace_back(LogicalType::INTEGER);
-
-	names.emplace_back("query");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	return std::move(result);
+void TPCHScanInit(TableFunction::InitGlobalInput &input) {
+	input.SetGlobalState<TPCHScanState>();
 }
 
-static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = data_p.bind_data->Cast<TPCHQueriesBindData>();
-	auto &data = data_p.global_state->Cast<TPCHData>();
-	idx_t tpch_queries = 22;
-	if (data.offset >= tpch_queries) {
-		// finished returning values
-		return;
+void TPCHQueriesExec(TableFunction::ExecInput &input) {
+	auto &data = input.GetBindData<TPCHQueriesBindData>();
+	auto &state = input.GetGlobalState<TPCHScanState>();
+	auto chunk = input.GetOutputChunk();
+	auto count = std::min<idx_t>(TPCH_QUERY_COUNT - state.offset, chunk.GetCapacity());
+	auto query_nr = chunk.GetVector(0);
+	auto query = chunk.GetVector(1);
+	query_nr.SetSize(count);
+	query.SetSize(count);
+	for (idx_t i = 0; i < count; i++) {
+		auto nr = static_cast<int>(state.offset + i + 1);
+		query_nr.GetDataMutable<int32_t>()[i] = nr;
+		query.AssignStringUnsafe(i, data.has_sf ? tpch::DBGenWrapper::GetQuery(nr, data.sf)
+		                                        : tpch::DBGenWrapper::GetQuery(nr));
 	}
-	idx_t chunk_count = 0;
-
-	// query_nr, INTEGER
-	auto &query_nr = output.data[0];
-	// query, VARCHAR
-	auto &query_col = output.data[1];
-
-	while (data.offset < tpch_queries && chunk_count < STANDARD_VECTOR_SIZE) {
-		auto query = bind_data.GetQuery(data.offset + 1);
-		query_nr.Append(Value::INTEGER((int32_t)data.offset + 1));
-		query_col.Append(Value(query));
-		data.offset++;
-		chunk_count++;
-	}
+	state.offset += count;
 }
 
-static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types,
-                                                            vector<Identifier> &names) {
-	names.emplace_back("query_nr");
-	return_types.emplace_back(LogicalType::INTEGER);
-
-	names.emplace_back("scale_factor");
-	return_types.emplace_back(LogicalType::DOUBLE);
-
-	names.emplace_back("answer");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	return nullptr;
+void TPCHAnswersBind(TableFunction::BindInput &input) {
+	auto &factory = input.GetContext().GetFactory();
+	input.AddResultColumn("query_nr", factory.ParseType("INTEGER"));
+	input.AddResultColumn("scale_factor", factory.ParseType("DOUBLE"));
+	input.AddResultColumn("answer", factory.ParseType("VARCHAR"));
 }
 
-static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.global_state->Cast<TPCHData>();
-	idx_t tpch_queries = 22;
-	vector<double> scale_factors {0.01, 0.1, 1};
-	idx_t total_answers = tpch_queries * scale_factors.size();
-	if (data.offset >= total_answers) {
-		// finished returning values
-		return;
+void TPCHAnswersExec(TableFunction::ExecInput &input) {
+	static constexpr double SCALE_FACTORS[] = {0.01, 0.1, 1};
+	static constexpr idx_t TOTAL_ANSWERS = TPCH_QUERY_COUNT * 3;
+	auto &state = input.GetGlobalState<TPCHScanState>();
+	auto chunk = input.GetOutputChunk();
+	auto count = std::min<idx_t>(TOTAL_ANSWERS - state.offset, chunk.GetCapacity());
+	auto query_nr = chunk.GetVector(0);
+	auto scale_factor = chunk.GetVector(1);
+	auto answer = chunk.GetVector(2);
+	query_nr.SetSize(count);
+	scale_factor.SetSize(count);
+	answer.SetSize(count);
+	for (idx_t i = 0; i < count; i++) {
+		auto offset = state.offset + i;
+		auto query = static_cast<int>(offset % TPCH_QUERY_COUNT) + 1;
+		auto sf = SCALE_FACTORS[offset / TPCH_QUERY_COUNT];
+		query_nr.GetDataMutable<int32_t>()[i] = query;
+		scale_factor.GetDataMutable<double>()[i] = sf;
+		answer.AssignStringUnsafe(i, tpch::DBGenWrapper::GetAnswer(sf, query));
 	}
-	idx_t chunk_count = 0;
-
-	// query_nr, INTEGER
-	auto &query_nr = output.data[0];
-	// scale_factor, DOUBLE
-	auto &scale_factor = output.data[1];
-	// answer, VARCHAR
-	auto &answer_col = output.data[2];
-
-	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
-		idx_t cur_query = data.offset % tpch_queries;
-		idx_t cur_sf = data.offset / tpch_queries;
-		auto answer = tpch::DBGenWrapper::GetAnswer(scale_factors[cur_sf], cur_query + 1);
-		query_nr.Append(Value::INTEGER((int32_t)cur_query + 1));
-		scale_factor.Append(Value::DOUBLE(scale_factors[cur_sf]));
-		answer_col.Append(Value(answer));
-		data.offset++;
-		chunk_count++;
-	}
+	state.offset += count;
 }
 
-static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
-	if (parameters.values[0].IsNull()) {
+//===--------------------------------------------------------------------===//
+// PRAGMA tpch
+//===--------------------------------------------------------------------===//
+
+std::string PragmaTpchQuery(PragmaFunction::QueryInput &input) {
+	auto query_nr = input.GetConstantArgument(0);
+	if (query_nr.IsNull()) {
 		throw InvalidInputException("Cannot use NULL as argument for the TPC-H query number");
 	}
-	auto index = parameters.values[0].GetValue<int32_t>();
-	auto sf_entry = parameters.named_parameters.find("sf");
-	if (sf_entry == parameters.named_parameters.end()) {
-		return tpch::DBGenWrapper::GetQuery(index);
+	auto index = query_nr.Get<int64_t>();
+	if (index <= 0 || index > TPCH_QUERY_COUNT) {
+		throw InvalidInputException("Out of range TPC-H query number " + std::to_string(index));
 	}
-	if (sf_entry->second.IsNull()) {
+	auto sf = GetScaleFactorKwarg(input, "tpch");
+	if (!sf) {
+		return tpch::DBGenWrapper::GetQuery(static_cast<int>(index));
+	}
+	if (sf->IsNull()) {
 		throw InvalidInputException("Cannot use NULL as scale factor for the TPC-H query");
 	}
-	return tpch::DBGenWrapper::GetQuery(index, sf_entry->second.GetValue<double>());
+	return tpch::DBGenWrapper::GetQuery(static_cast<int>(index), sf->Get<double>());
 }
 
-static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
-	dbgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
-		options.Add("sf", LogicalType::DOUBLE)
-		    .Add("overwrite", LogicalType::BOOLEAN)
-		    .Add("catalog", LogicalType::VARCHAR)
-		    .Add("schema", LogicalType::VARCHAR)
-		    .Add("suffix", LogicalType::VARCHAR)
-		    .Add("children", LogicalType::UINTEGER)
-		    .Add("step", LogicalType::UINTEGER);
-	});
-	dbgen_func.call_return_type = StatementReturnType::NOTHING;
-	// creates and fills tables per execution
-	dbgen_func.stability = FunctionStability::VOLATILE;
-	dbgen_func.table_scan_progress = DbgenProgress;
-	loader.RegisterFunction(dbgen_func);
+} // namespace
 
-	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery,
-	                                            FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
-	tpch_func.GetSignature().WithTypedKwargs("options",
-	                                         [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
-	loader.RegisterFunction(tpch_func);
+DUCKDB_CPP_EXTENSION_ENTRYPOINT(Extension &extension, Context &context) {
+	auto &factory = context.GetFactory();
+	auto type = [&](const char *name) {
+		return factory.ParseType(name);
+	};
 
-	// create the TPCH_QUERIES function that returns the queries, optionally parameterized for a scale factor
-	TableFunctionSet tpch_queries_set("tpch_queries");
-	for (auto &arguments : vector<vector<LogicalType>> {{}, {LogicalType::DOUBLE}}) {
-		TableFunction tpch_query_func(arguments, TPCHQueryFunction, TPCHQueryBind, TPCHInit);
-		tpch_query_func.GetSignature().WithTypedKwargs(
-		    "options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
-		tpch_queries_set.AddFunction(tpch_query_func);
-	}
-	loader.RegisterFunction(tpch_queries_set);
+	auto dbgen = TableFunction::Create(factory);
+	dbgen.SetName("dbgen")
+	    .SetBindCallback(DbgenBind)
+	    .SetInitGlobalCallback(DbgenInitGlobal)
+	    .SetExecCallback(DbgenExec)
+	    .SetProgressCallback(DbgenProgress);
+	auto named = [&](FunctionSignature &signature, const char *name, const char *type_name,
+	                 const Value &default_value) {
+		signature.AddParameter(name, type(type_name), default_value, FunctionParameterKind::NAMED_ONLY);
+	};
+	auto dbgen_signature = dbgen.GetSignature();
+	named(dbgen_signature, "sf", "DOUBLE", Value::Create(factory, 0.0));
+	named(dbgen_signature, "overwrite", "BOOLEAN", Value::Create(factory, false));
+	named(dbgen_signature, "catalog", "VARCHAR", Value::Create(factory, varchar_t("")));
+	named(dbgen_signature, "schema", "VARCHAR", Value::Create(factory, varchar_t("")));
+	named(dbgen_signature, "suffix", "VARCHAR", Value::Create(factory, varchar_t("")));
+	named(dbgen_signature, "children", "UINTEGER", Value::Create(factory, uint32_t {1}));
+	named(dbgen_signature, "step", "UINTEGER", Value::Create(factory, DBGEN_NO_STEP));
+	dbgen.GetDocs().SetDescription("Generates the TPC-H tables at the given scale factor");
+	extension.Register(dbgen);
 
-	// create the TPCH_ANSWERS that returns the query result
-	TableFunction tpch_query_answer_func("tpch_answers", {}, TPCHQueryAnswerFunction, TPCHQueryAnswerBind, TPCHInit);
-	loader.RegisterFunction(tpch_query_answer_func);
-}
+	auto dbgen_table = TableFunction::Create(factory);
+	dbgen_table.SetName("__tpch_dbgen_table")
+	    .SetBindCallback(DBGenTableBind)
+	    .SetInitGlobalCallback(DBGenTableInitGlobal)
+	    .SetInitLocalCallback(DBGenTableInitLocal)
+	    .SetExecCallback(DBGenTableExec)
+	    .SetPartitionDataCallback(DBGenTablePartitionData);
+	dbgen_table.GetSignature().AddParameter("run_id", type("BIGINT")).AddParameter("table_index", type("BIGINT"));
+	dbgen_table.GetDocs().SetDescription("Generates the rows of a TPC-H table for dbgen; internal to dbgen");
+	extension.Register(dbgen_table);
 
-// LCOV_EXCL_START
-void TpchExtension::Load(ExtensionLoader &loader) {
-	LoadInternal(loader);
-}
-// LCOV_EXCL_STOP
+	auto queries = TableFunction::Create(factory);
+	queries.SetName("tpch_queries")
+	    .SetBindCallback(TPCHQueriesBind)
+	    .SetInitGlobalCallback(TPCHScanInit)
+	    .SetExecCallback(TPCHQueriesExec)
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
+	queries.GetSignature().AddArgs("scale_factor", type("DOUBLE")).AddKwargs("options", type("DOUBLE"));
+	queries.GetDocs().SetDescription(
+	    "Returns the TPC-H queries, with the substitution parameters of the scale factor if one is given");
+	extension.Register(queries);
 
-std::string TpchExtension::GetQuery(int query) {
-	return tpch::DBGenWrapper::GetQuery(query);
-}
+	auto answers = TableFunction::Create(factory);
+	answers.SetName("tpch_answers")
+	    .SetBindCallback(TPCHAnswersBind)
+	    .SetInitGlobalCallback(TPCHScanInit)
+	    .SetExecCallback(TPCHAnswersExec)
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
+	answers.GetDocs().SetDescription("Returns the answers of the TPC-H queries at scale factors 0.01, 0.1 and 1");
+	extension.Register(answers);
 
-std::string TpchExtension::GetQuery(int query, double sf) {
-	return tpch::DBGenWrapper::GetQuery(query, sf);
-}
-
-std::string TpchExtension::GetAnswer(double sf, int query) {
-	return tpch::DBGenWrapper::GetAnswer(sf, query);
-}
-
-// LCOV_EXCL_START
-std::string TpchExtension::Name() {
-	return "tpch";
-}
-
-std::string TpchExtension::Version() const {
-#ifdef EXT_VERSION_TPCH
-	return EXT_VERSION_TPCH;
-#else
-	return "";
-#endif
-}
-// LCOV_EXCL_STOP
-
-} // namespace duckdb
-
-extern "C" {
-
-DUCKDB_CPP_EXTENSION_ENTRY(tpch, loader) {
-	duckdb::LoadInternal(loader);
-}
+	auto pragma = PragmaFunction::Create(factory);
+	pragma.SetName("tpch").SetQueryCallback(PragmaTpchQuery);
+	pragma.GetSignature()
+	    .AddParameter("query_nr", type("BIGINT"), FunctionParameterKind::POSITIONAL_ONLY)
+	    .AddKwargs("options", type("DOUBLE"));
+	pragma.GetDocs().SetDescription("Runs a TPC-H query");
+	extension.Register(pragma);
 }

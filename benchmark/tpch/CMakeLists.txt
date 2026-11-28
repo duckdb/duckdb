@@ -1,5 +1,3 @@
-include_directories(../../extension/tpch/include)
-
 set(BENCHMARK_SOURCE_FILES startup.cpp)
 
 add_library(duckdb_benchmark_tpch OBJECT ${BENCHMARK_SOURCE_FILES})

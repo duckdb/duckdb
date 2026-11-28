@@ -9,25 +9,17 @@
 
 #pragma once
 
-#include "duckdb.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb_cpp.hpp"
 
-namespace duckdb {
-class ClientContext;
-}
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace tpch {
 
-struct DBGenWrapper {
-	//! Create the TPC-H tables in the given catalog / schema with the given suffix
-	static void CreateTPCHSchema(duckdb::ClientContext &context, const duckdb::Identifier &catalog,
-	                             const duckdb::vector<duckdb::Identifier> &schema, std::string suffix);
-	//! Load the TPC-H data of the given scale factor
-	static void LoadTPCHData(duckdb::ClientContext &context, double sf, const duckdb::Identifier &catalog,
-	                         const duckdb::vector<duckdb::Identifier> &schema, std::string suffix, int children,
-	                         int step);
+using duckdb::cxx::idx_t;
 
+struct DBGenWrapper {
 	//! Gets the specified TPC-H Query number as a string
 	static std::string GetQuery(int query);
 	//! Gets the specified TPC-H Query number with the substitution parameters for the given scale factor
@@ -36,19 +28,63 @@ struct DBGenWrapper {
 	static std::string GetAnswer(double sf, int query);
 };
 
-class DBGenGenerator {
-public:
-	virtual ~DBGenGenerator();
-
-	//! Generate the next batch of data, returning true when generation is complete
-	virtual bool GenerateNext() = 0;
-	//! Returns the progress percentage in [0, 100]
-	virtual double Progress() const = 0;
+//! The schema of one of the eight TPC-H tables
+struct TPCHTableSchema {
+	const char *name;
+	idx_t column_count;
+	const char *const *columns;
+	//! The column types as SQL type names
+	const char *const *types;
 };
 
-duckdb::unique_ptr<DBGenGenerator> CreateDBGenGenerator(duckdb::ClientContext &context, double sf,
-                                                        const duckdb::Identifier &catalog,
-                                                        const duckdb::vector<duckdb::Identifier> &schema,
-                                                        std::string suffix, int children, int step);
+static constexpr idx_t TPCH_TABLE_COUNT = 8;
+
+//! The TPC-H tables, in the order dbgen creates them
+const TPCHTableSchema &GetTPCHTableSchema(idx_t table);
+
+//! A slice of the rows of a table: the rows of a table are those of its work items, in step order
+struct DBGenWorkItem {
+	int children;
+	int step;
+	//! The number of rows of the generator's driving table, e.g. orders for lineitem
+	idx_t count;
+};
+
+//! Splits the generation of a scale factor into work items that can be generated in parallel and in any order
+class DBGenGenerator {
+public:
+	//! Loads the dbgen distributions unless another generator already did: they are process-wide
+	DBGenGenerator(double sf, int children, int step);
+	~DBGenGenerator();
+
+	DBGenGenerator(const DBGenGenerator &) = delete;
+	DBGenGenerator &operator=(const DBGenGenerator &) = delete;
+
+	//! The work items of a table (an index into GetTPCHTableSchema), in step order
+	const std::vector<DBGenWorkItem> &WorkItems(idx_t table) const;
+
+private:
+	friend class DBGenScanner;
+	struct State;
+	std::unique_ptr<State> state;
+};
+
+//! Generates the rows of one work item of one table, chunk by chunk
+class DBGenScanner {
+public:
+	DBGenScanner(const DBGenGenerator &generator, idx_t table, const DBGenWorkItem &item);
+	~DBGenScanner();
+
+	DBGenScanner(const DBGenScanner &) = delete;
+	DBGenScanner &operator=(const DBGenScanner &) = delete;
+
+	//! Fills the chunk with the next rows, and returns the number of rows of the driving table they cover. Leaves the
+	//! chunk empty once the work item is done.
+	idx_t Fill(duckdb::cxx::DataChunk &chunk);
+
+private:
+	struct State;
+	std::unique_ptr<State> state;
+};
 
 } // namespace tpch

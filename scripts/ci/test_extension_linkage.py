@@ -54,7 +54,7 @@ class ExtensionLinkageTest(unittest.TestCase):
             index = json.loads(next(reply.glob("index-*.json")).read_text())
             model = json.loads((reply / index["reply"]["codemodel-v2"]["jsonFile"]).read_text())
             targets = {target["name"] for target in model["configurations"][0]["targets"]}
-            self.assertIn("tpch_loadable_extension", targets)
+            self.assertIn("tpcds_loadable_extension", targets)
             self.assertFalse(
                 targets.intersection(
                     {
@@ -98,13 +98,13 @@ class ExtensionLinkageTest(unittest.TestCase):
             if prebuilt:
                 archives = build / "prebuilt"
                 archives.mkdir()
-                for name in ("duckdb_static", "duckdb_shell", "test_extension", "tpch_extension"):
+                for name in ("duckdb_static", "duckdb_shell", "test_extension", "tpcds_extension"):
                     filename = f"{name}.lib" if sys.platform == "win32" else f"lib{name}.a"
                     (archives / filename).touch()
                 core_archive = "duckdb_static.lib" if sys.platform == "win32" else "libduckdb_static.a"
                 extra_flags = [
                     f"-DPREBUILT_BINARY={archives / core_archive}",
-                    "-DPREBUILT_EXTENSIONS=test;tpch",
+                    "-DPREBUILT_EXTENSIONS=test;tpcds",
                 ]
             result = subprocess.run(
                 [
@@ -116,8 +116,8 @@ class ExtensionLinkageTest(unittest.TestCase):
                     "-G",
                     "Ninja",
                     f"-DCMAKE_BUILD_TYPE={build_type}",
-                    "-DBUILD_EXTENSIONS=tpch",
-                    "-DSTATICALLY_LINK_EXTENSIONS=core_functions;tpch;test",
+                    "-DBUILD_EXTENSIONS=tpcds",
+                    "-DSTATICALLY_LINK_EXTENSIONS=core_functions;tpcds;test",
                     f"-DEXTENSION_STATIC_BUILD={int(static_build)}",
                     f"-DWASM_LOADABLE_EXTENSIONS={int(wasm_source_build)}",
                     f"-DENABLE_SANITIZER={int(sanitized)}",
@@ -160,12 +160,12 @@ class ExtensionLinkageTest(unittest.TestCase):
                     if fragment["role"] == "libraries"
                 )
 
-            tpch_libraries = libraries("tpch_loadable_extension")
-            self.assertIn("tpch_extension", tpch_libraries)
-            self.assertEqual("duckdb_static" in tpch_libraries, static_build, tpch_libraries)
+            tpcds_libraries = libraries("tpcds_loadable_extension")
+            self.assertIn("tpcds_extension", tpcds_libraries)
+            self.assertEqual("duckdb_static" in tpcds_libraries, static_build, tpcds_libraries)
             test_libraries = libraries("test_loadable_extension")
             self.assertEqual("duckdb_static" in test_libraries, static_build, test_libraries)
-            for extension in ("core_functions_extension", "tpch_extension"):
+            for extension in ("core_functions_extension", "tpcds_extension"):
                 self.assertEqual(extension in test_libraries, static_build, test_libraries)
             test_archive = targets["test_extension"]["artifacts"][0]["path"].replace("\\", "/")
             self.assertEqual(test_libraries.replace("\\", "/").count(test_archive), 1, test_libraries)
@@ -173,7 +173,7 @@ class ExtensionLinkageTest(unittest.TestCase):
                 linked = libraries(name)
                 if sys.platform == "win32":
                     self.assertIn("duckdb_static", linked, f"{name}: {linked}")
-                    for extension in ("core_functions_extension", "tpch_extension"):
+                    for extension in ("core_functions_extension", "tpcds_extension"):
                         self.assertIn(extension, linked, f"{name}: {linked}")
                     self.assertNotIn("tools/shell/duckdb.lib", linked.replace("\\", "/"), f"{name}: {linked}")
                 elif name == "duckdb_tests_loadable_extension":
@@ -188,11 +188,11 @@ class ExtensionLinkageTest(unittest.TestCase):
                 linked = libraries("shell").replace("\\", "/")
                 shared_library = targets["duckdb"]["artifacts"][0]["path"].replace("\\", "/")
                 self.assertIn(shared_library, linked)
-                for archive in ("duckdb_static", "core_functions_extension", "tpch_extension", "test_extension"):
+                for archive in ("duckdb_static", "core_functions_extension", "tpcds_extension", "test_extension"):
                     self.assertNotIn(archive, linked)
 
             self.assertIn("test_loadable_extension", dependencies("duckdb_local_extension_repo"))
-            self.assertIn("tpch_loadable_extension", dependencies("duckdb_local_extension_repo"))
+            self.assertIn("tpcds_loadable_extension", dependencies("duckdb_local_extension_repo"))
             if prebuilt:
                 self.assertEqual(targets["duckdb_re2"]["type"], "STATIC_LIBRARY")
                 self.assertIn("duckdb_re2", dependencies("test_loadable_extension"))
@@ -225,7 +225,7 @@ class ExtensionLinkageTest(unittest.TestCase):
                     )
                     self.assertIn("-fsanitize=address", compile_flags, name)
             # Static consumers still need the core archive after their extension archives.
-            for name, extension in (("shell", "tpch"), ("static_link_smoke", "parquet")):
+            for name, extension in (("shell", "tpcds"), ("static_link_smoke", "parquet")):
                 if name == "shell" and shared_shell:
                     continue
                 linked = libraries(name)
