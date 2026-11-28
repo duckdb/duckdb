@@ -12,6 +12,7 @@ add_library_unity(
   wal_checkpoint_unknown_index_type.cpp
   wal_prescan.cpp
   wal_replay_invalid_info.cpp
+  wal_replay_repeated_delete.cpp
   wal_torn_write.cpp)
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_storage>
